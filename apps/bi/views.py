@@ -108,8 +108,15 @@ class ActualizacionBiPage(LoginRequiredMixin, BaseView):
         """
         Maneja la solicitud GET, devolviendo la plantilla de la página del cubo de ventas.
         """
-        context = self.get_context_data(**kwargs)
-        return self.render_to_response(context)
+        database_name = request.session.get("database_name")
+        if not database_name:
+            messages.warning(request, "Debe seleccionar una empresa antes de continuar.")
+            return redirect("home_app:panel_cubo")
+
+        context = self.process_request(request)
+        if "error_message" in context:
+            context = {"error_message": context.get("error")}
+        return render(request, self.template_name, context)
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
