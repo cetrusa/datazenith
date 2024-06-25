@@ -1,3 +1,4 @@
+from django.contrib import messages
 from django.shortcuts import render, redirect
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.auth.decorators import permission_required
@@ -213,6 +214,14 @@ class IncrustarBiPage(LoginRequiredMixin, BaseView):
         return render(request, self.template_name, context)
 
     def get(self, request, *args, **kwargs):
+        """
+        Maneja la solicitud GET, devolviendo la plantilla de la página del cubo de ventas.
+        """
+        database_name = request.session.get("database_name")
+        if not database_name:
+            messages.warning(request, "Debe seleccionar una empresa antes de continuar.")
+            return redirect("home_app:panel_cubo")
+
         context = self.process_request(request)
         if "error_message" in context:
             context = {"error_message": context.get("error")}
