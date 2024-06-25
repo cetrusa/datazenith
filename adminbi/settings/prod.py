@@ -38,6 +38,7 @@ CSRF_TRUSTED_ORIGINS = [
     "http://181.49.241.226:4084",
     "http://interface.amovil.co:4084",
     "http://interface.amovil.co",
+    "https://datazenith.online",
 ]
 
 
@@ -120,13 +121,13 @@ LOGGING = {
 # CELERY_TASK_EAGER_PROPAGATES = True
 
 RQ_QUEUES = {
-    'default': {
-        'HOST': 'redis',
-        'PORT': 6379,
-        'DB': 0,
-        'DEFAULT_TIMEOUT': 360,
+    "default": {
+        "HOST": "redis",
+        "PORT": 6379,
+        "DB": 0,
+        "DEFAULT_TIMEOUT": 360,
     },
 }
 
 
-DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
