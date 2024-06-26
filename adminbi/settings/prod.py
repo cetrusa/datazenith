@@ -23,10 +23,10 @@ if RENDER_EXTERNAL_HOSTNAME:
 # ssl._create_default_https_context = ssl._create_unverified_context
 
 
-DEBUG = True
-SESSION_COOKIE_SECURE = False
+DEBUG = False
+SESSION_COOKIE_SECURE = True
 
-CSRF_COOKIE_SECURE = False
+CSRF_COOKIE_SECURE = True
 
 CSRF_TRUSTED_ORIGINS = [
     "https://interface.amovil.com.co",
@@ -38,7 +38,9 @@ CSRF_TRUSTED_ORIGINS = [
     "http://181.49.241.226:4084",
     "http://interface.amovil.co:4084",
     "http://interface.amovil.co",
-    "https://datazenith.online",
+    "https://datazenith.online:4084",
+    "https://datazenith.online:9191",
+    
 ]
 
 
