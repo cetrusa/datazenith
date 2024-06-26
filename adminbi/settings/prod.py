@@ -39,7 +39,7 @@ CSRF_TRUSTED_ORIGINS = [
     "http://interface.amovil.co:4084",
     "http://interface.amovil.co",
     "https://datazenith.online:4084",
-    "https://datazenith.online:9191",
+    "datazenith.online",
     
 ]
 
