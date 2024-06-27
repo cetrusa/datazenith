@@ -11,6 +11,8 @@ ALLOWED_HOSTS = [
     "181.49.241.226",
     "181.49.241.226:4084",
     "interface.amovil.co",
+    "https://datazenith.online:4084",
+    "datazenith.online",
 ]
 
 RENDER_EXTERNAL_HOSTNAME = get_secret("RENDER_EXTERNAL_HOSTNAME")
@@ -40,7 +42,6 @@ CSRF_TRUSTED_ORIGINS = [
     "http://interface.amovil.co",
     "https://datazenith.online:4084",
     "datazenith.online",
-    
 ]
 
 
