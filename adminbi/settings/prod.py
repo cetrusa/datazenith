@@ -13,12 +13,9 @@ ALLOWED_HOSTS = [
     "interface.amovil.co",
     "datazenith.online",
     "www.datazenith.online",
-    "datazenith.online:4084",
-    "www.datazenith.online:4084",
-    "datazenith.online:9191",
-    "www.datazenith.online:9191",
-    "10.0.61.101:4084",
-    "10.0.61.101:9191",
+    "datazenith.online",
+    "www.datazenith.online",
+    "10.0.61.101",
 ]
 
 RENDER_EXTERNAL_HOSTNAME = get_secret("RENDER_EXTERNAL_HOSTNAME")
