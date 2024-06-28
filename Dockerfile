@@ -2,7 +2,7 @@
 FROM python:3.12
 
 # Crea un usuario y un grupo para ejecutar la aplicación
-RUN groupadd -r datazenithgroup && useradd -r -g datazenithgroup adminuser
+# RUN groupadd -r datazenithgroup && useradd -r -g datazenithgroup adminuser
 
 # Establecemos /code como el directorio de trabajo dentro del contenedor
 WORKDIR /code
@@ -28,16 +28,16 @@ RUN ln -sf /usr/share/zoneinfo/America/Bogota /etc/localtime
 RUN python manage.py collectstatic --no-input
 
 # Cambiamos la propiedad y los permisos de los archivos estáticos
-RUN chown -R adminuser:datazenithgroup /code/static
+# RUN chown -R adminuser:datazenithgroup /code/static
 RUN chmod -R 755 /code/static
 
 # Crea la carpeta media y establece permisos adecuados
 RUN mkdir -p /code/media
-RUN chown -R adminuser:datazenithgroup /code/media
+# RUN chown -R adminuser:datazenithgroup /code/media
 RUN chmod -R 755 /code/media
 
 # Cambiar al usuario no root
-USER adminuser
+# USER adminuser
 
 # Comando para iniciar la aplicación
 CMD ["gunicorn", "--bind", "0.0.0.0:4084", "--timeout", "28800", "adminbi.wsgi:application"]
