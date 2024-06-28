@@ -1,9 +1,6 @@
 # Usamos la imagen oficial de Python 3.12 como imagen base
 FROM python:3.12
 
-# Crea un usuario y un grupo para ejecutar la aplicación
-RUN groupadd -r interfacegroup && useradd -r -g interfacegroup adminuser
-
 # Establecemos /code como el directorio de trabajo dentro del contenedor
 WORKDIR /code
 
@@ -28,16 +25,8 @@ RUN ln -sf /usr/share/zoneinfo/America/Bogota /etc/localtime
 RUN python manage.py collectstatic --no-input
 
 # Cambiamos la propiedad y los permisos de los archivos estáticos
-RUN chown -R adminuser:interfacegroup /code/staticfiles
 RUN chmod -R 755 /code/staticfiles
-
-# Crea la carpeta media y establece permisos adecuados
-RUN mkdir -p /code/mediafiles
-RUN chown -R adminuser:interfacegroup /code/mediafiles
-RUN chmod -R 755 /code/mediafiles
-
-# Cambiar al usuario no root
-USER adminuser
+RUN chmod -R 755 /code/media
 
 # Comando para iniciar la aplicación
 CMD ["gunicorn", "--bind", "0.0.0.0:4084", "--timeout", "28800", "adminbi.wsgi:application"]
