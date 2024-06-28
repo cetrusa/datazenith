@@ -142,23 +142,18 @@ class DownloadFileView(BaseView):
         file_path = request.session.get("file_path")
         file_name = request.session.get("file_name")
 
-        f = None  # Define f fuera del bloque try para que esté disponible en el bloque except
-
         if file_path and file_name:
             try:
                 f = open(file_path, "rb")
                 response = FileResponse(f)
                 response["Content-Disposition"] = f'attachment; filename="{file_name}"'
+                response["Content-Length"] = os.path.getsize(file_path)
                 return response
             except IOError:
-                # Si f ha sido asignado y está abierto, ciérralo.
-                if f:
-                    f.close()
                 messages.error(request, "Error al abrir el archivo")
         else:
             messages.error(request, "Archivo no encontrado")
         return render(request, "home/panel_cubo.html", {"template_name": template_name})
-
 
 class DeleteFileView(BaseView):
     login_url = reverse_lazy("users_app:user-login")
@@ -174,10 +169,9 @@ class DeleteFileView(BaseView):
 
         try:
             os.remove(file_path)
-            # Borra la ruta del archivo y el nombre del archivo de la sesión.
             del request.session["file_path"]
             del request.session["file_name"]
-            return HttpResponseRedirect(reverse(self.template_name))
+            return JsonResponse({"success": True})
         except FileNotFoundError:
             return JsonResponse(
                 {"success": False, "error_message": "El archivo no existe."}
@@ -189,7 +183,6 @@ class DeleteFileView(BaseView):
                     "error_message": f"Error: no se pudo ejecutar el script. Razón: {str(e)}",
                 }
             )
-
 
 class CheckTaskStatusView(BaseView):
     """
