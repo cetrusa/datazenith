@@ -37,7 +37,7 @@ class DataBaseConnection:
             sqlite_engine (object, opcional): Engine de SQLAlchemy para SQLite, si ya existe.
         """
         self.config = config
-        self.engine_mysql_bi = mysql_engine or self.create_engine_mysql("bi")
+        self.engine_mysql_bi = mysql_engine or self.create_engine_mysql("in")
         self.engine_mysql_out = mysql_engine or self.create_engine_mysql("out")
         self.engine_sqlite = sqlite_engine or create_engine("sqlite:///mydata.db")
 
