@@ -6,12 +6,12 @@ services:
     user: adminuser
     command: gunicorn --bind 0.0.0.0:4084 --timeout 28800 adminbi.wsgi:application
     volumes:
-      - .:/code
-      - static_volume:/code/static
+      - ./staticfiles:/code/staticfiles  # Asegúrate de que estos volúmenes apunten a las rutas correctas
+      - ./mediafiles:/code/mediafiles
     ports:
       - "4084:4084"
     environment:
-      - DJANGO_SETTINGS_MODULE
+      - DJANGO_SETTINGS_MODULE=adminbi.settings.prod
       - DB_HOST
     depends_on:
       - redis
@@ -29,6 +29,3 @@ services:
     image: redis:alpine3.16
     ports:
       - "6379:6379"
-
-volumes:
-  static_volume:

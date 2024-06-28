@@ -28,13 +28,13 @@ RUN ln -sf /usr/share/zoneinfo/America/Bogota /etc/localtime
 RUN python manage.py collectstatic --no-input
 
 # Cambiamos la propiedad y los permisos de los archivos estáticos
-RUN chown -R adminuser:interfacegroup /code/static
-RUN chmod -R 755 /code/static
+RUN chown -R adminuser:interfacegroup /code/staticfiles
+RUN chmod -R 755 /code/staticfiles
 
 # Crea la carpeta media y establece permisos adecuados
-RUN mkdir -p /code/media
-RUN chown -R adminuser:interfacegroup /code/media
-RUN chmod -R 755 /code/media
+RUN mkdir -p /code/mediafiles
+RUN chown -R adminuser:interfacegroup /code/mediafiles
+RUN chmod -R 755 /code/mediafiles
 
 # Cambiar al usuario no root
 USER adminuser
