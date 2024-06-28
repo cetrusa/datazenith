@@ -15,13 +15,13 @@ Cubo de Ventas
 <div class="container">
   <!-- Mensajes de alerta -->
   {% if messages %}
-    <div class="alert alert-warning" role="alert">
-      {% for message in messages %}
-        <p>{{ message }}</p>
-      {% endfor %}
-    </div>
+  <div class="alert alert-warning" role="alert">
+    {% for message in messages %}
+    <p>{{ message }}</p>
+    {% endfor %}
+  </div>
   {% endif %}
-  
+
   <div class="card" style="width: 25rem;">
     <div class="card-header text-center">
       <h2>Cubo de Ventas</h2>
@@ -209,8 +209,8 @@ Cubo de Ventas
     setTimeout(function () {
       deleteFile();
       document.getElementById("submitBtn").setAttribute("data-submitted", "false");
-      setTimeout(reloadForm, 1000);
-    }, 1000);
+      setTimeout(reloadForm, 10000);
+    }, 10000);
   });
 </script>
 
