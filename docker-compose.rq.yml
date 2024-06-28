@@ -3,15 +3,14 @@ version: '3.8'
 services:
   web:
     build: .
-    user: root
     command: gunicorn --bind 0.0.0.0:4084 --timeout 28800 adminbi.wsgi:application
     volumes:
-      - .:/code
-      - static_volume:/code/static
+      - ./staticfiles:/code/staticfiles
+      - ./media:/code/media
     ports:
       - "4084:4084"
     environment:
-      - DJANGO_SETTINGS_MODULE
+      - DJANGO_SETTINGS_MODULE=adminbi.settings.prod
       - DB_HOST
     depends_on:
       - redis
@@ -31,4 +30,5 @@ services:
       - "6379:6379"
 
 volumes:
-  static_volume:
+  staticfiles:
+  media:
