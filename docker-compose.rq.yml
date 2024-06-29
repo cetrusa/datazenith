@@ -14,14 +14,11 @@ services:
       - DB_HOST
     depends_on:
       - redis
-    deploy:
-      resources:
-        limits:
-          memory: 1G  # Ajusta el límite de memoria según sea necesario
-          cpus: "1.0"
-        reservations:
-          memory: 512M
-          cpus: "0.5"
+    ulimits:
+      nproc: 65535
+      nofile:
+        soft: 65535
+        hard: 65535
 
   rqworker:
     build: .
