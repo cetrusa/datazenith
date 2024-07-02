@@ -1,4 +1,5 @@
-import os, sys
+import os
+import sys
 from scripts.conexion import Conexion as con
 import json
 import pandas as pd
@@ -16,7 +17,6 @@ logging.basicConfig(
 )
 logging.info("Iniciando Proceso")
 
-
 def get_secret(secret_name, secrets_file="secret.json"):
     try:
         with open(secrets_file) as f:
@@ -27,7 +27,6 @@ def get_secret(secret_name, secrets_file="secret.json"):
     except FileNotFoundError:
         raise ValueError(f"No se encontró el archivo de configuración {secrets_file}.")
 
-
 class ConfigBasic:
     def __init__(self, database_name, user_id=None):
         print("aqui estoy en la clase de config")
@@ -35,7 +34,10 @@ class ConfigBasic:
         self.user_id = user_id  # ID del usuario
         try:
             self.setup_static_page(database_name)
-            self.setup_user_permissions()
+            if self.user_id is not None:
+                self.setup_user_permissions()
+            else:
+                logging.info("user_id is None, skipping user permissions setup")
         except json.JSONDecodeError as e:
             logging.error(f"Error al decodificar JSON: {e}")
         except KeyError as e:
@@ -62,17 +64,22 @@ class ConfigBasic:
         print("terminamos de configurar")
 
     def setup_user_permissions(self):
-        User = get_user_model()
-        user = User.objects.get(id=self.user_id)
-        permissions = UserPermission.objects.filter(user=user, empresa__name=self.config["name"])
+        try:
+            User = get_user_model()
+            user = User.objects.get(id=self.user_id)
+            permissions = UserPermission.objects.filter(user=user, empresa__name=self.config["name"])
 
-        if permissions.exists():
-            permission = permissions.first()
-            self.config["proveedores"] = ast.literal_eval(permission.proveedores) if permission.proveedores else []
-            self.config["macrozonas"] = ast.literal_eval(permission.macrozonas) if permission.macrozonas else []
-        else:
-            self.config["proveedores"] = []
-            self.config["macrozonas"] = []
+            if permissions.exists():
+                permission = permissions.first()
+                self.config["proveedores"] = ast.literal_eval(permission.proveedores) if permission.proveedores else []
+                self.config["macrozonas"] = ast.literal_eval(permission.macrozonas) if permission.macrozonas else []
+            else:
+                self.config["proveedores"] = []
+                self.config["macrozonas"] = []
+        except User.DoesNotExist:
+            logging.error(f"El usuario con id {self.user_id} no existe")
+        except Exception as e:
+            logging.error(f"Error al configurar los permisos de usuario: {e}")
 
     def execute_sql_query(self, sql_query):
         try:
@@ -156,7 +163,7 @@ class ConfigBasic:
             self.config["txPassCorreo"] = df["txPass"].iloc[0]
         else:
             print("No se encontraron configuraciones de Correo.")
-            
+
     def setup_date_config(self):
         date_config = self.fetch_date_config(self.config["nmDt"])
         if not date_config:
@@ -164,7 +171,7 @@ class ConfigBasic:
 
         # Actualiza el diccionario de configuración con los valores de date_config
         self.config.update(date_config)
-        
+
     def fetch_date_config(self, nmDt):
         sql = f"SELECT * FROM powerbi_adm.conf_dt WHERE nmDt = '{nmDt}';"
         df = self.execute_sql_query(sql)

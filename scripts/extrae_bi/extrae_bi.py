@@ -15,7 +15,6 @@ logging.basicConfig(
     filemode="w",
 )
 
-
 class DataBaseConnection:
     """
     Clase para gestionar las conexiones a las bases de datos MySQL y SQLite.
@@ -37,8 +36,8 @@ class DataBaseConnection:
             sqlite_engine (object, opcional): Engine de SQLAlchemy para SQLite, si ya existe.
         """
         self.config = config
-        self.engine_mysql_bi = mysql_engine or self.create_engine_mysql("in")
-        self.engine_mysql_out = mysql_engine or self.create_engine_mysql("out")
+        self.engine_mysql_bi = mysql_engine or self.create_engine_mysql("In")
+        self.engine_mysql_out = mysql_engine or self.create_engine_mysql("Out")
         self.engine_sqlite = sqlite_engine or create_engine("sqlite:///mydata.db")
 
     def create_engine_mysql(self, db_type):
@@ -46,20 +45,19 @@ class DataBaseConnection:
         Crea un engine de SQLAlchemy para una base de datos MySQL.
 
         Args:
-            db_type (str): Tipo de base de datos ('bi' o 'out').
+            db_type (str): Tipo de base de datos ('In' o 'Out').
 
         Returns:
             object: Engine de SQLAlchemy para la base de datos especificada.
         """
         user, password, host, port, database = (
-            self.config.get(f"nmUsr{db_type.capitalize()}"),
-            self.config.get(f"txPass{db_type.capitalize()}"),
-            self.config.get(f"hostServer{db_type.capitalize()}"),
-            self.config.get(f"portServer{db_type.capitalize()}"),
-            self.config.get(f"db{db_type.capitalize()}"),
+            self.config.get(f"nmUsr{db_type}"),
+            self.config.get(f"txPass{db_type}"),
+            self.config.get(f"hostServer{db_type}"),
+            self.config.get(f"portServer{db_type}"),
+            self.config.get(f"db{db_type}"),
         )
         return con.ConexionMariadb3(user, password, host, int(port), database)
-
 
 class ExtraeBI:
     """
@@ -130,12 +128,6 @@ class ExtraeBI:
             )
 
     def procesar_fila(self, fila):
-        """
-        Procesa una fila de resultados de la consulta SQL.
-
-        Args:
-            fila (pd.Series): Fila de resultados de la consulta SQL.
-        """
         self.txTabla = fila["txTabla"]
         self.nmReporte = fila["nmReporte"]
         self.nmProcedure_out = fila["nmProcedure_out"]
@@ -152,9 +144,6 @@ class ExtraeBI:
             )
 
     def procedimiento_a_sql(self):
-        """
-        Ejecuta el procedimiento almacenado y maneja los reintentos en caso de fallos.
-        """
         for intento in range(3):
             try:
                 if self.txSqlExtrae and self.txSqlExtrae != "None":
@@ -181,12 +170,6 @@ class ExtraeBI:
                     time.sleep(5)
 
     def consulta_sql_out_extrae(self):
-        """
-        Ejecuta una consulta SQL en la base de datos de salida con reintentos.
-
-        Returns:
-            pd.DataFrame: Resultado de la consulta SQL.
-        """
         max_retries = 3
         for retry_count in range(max_retries):
             try:
@@ -201,14 +184,8 @@ class ExtraeBI:
                         params={"fi": self.IdtReporteIni, "ff": self.IdtReporteFin},
                     )
                     return resultado
-            except (
-                sqlalchemy.exc.IntegrityError,
-                sqlalchemy.exc.ProgrammingError,
-            ) as e:
-                logging.error(f"Error en consulta SQL: {e}")
-                time.sleep(1)
             except Exception as e:
-                logging.error(f"Error desconocido: {e}")
+                logging.error(f"Error en consulta_sql_out_extrae (Intento {retry_count + 1}/{max_retries}): {e}")
                 time.sleep(1)
         return None
 
@@ -221,10 +198,11 @@ class ExtraeBI:
         """
         try:
             with self.db_connection.engine_mysql_bi.connect() as connection:
-                trans = connection.begin()
+                cursorbi = connection.execution_options(isolation_level="READ COMMITTED")
+                trans = cursorbi.begin()
                 try:
                     sqldelete = text(self.txSql)
-                    result = connection.execute(
+                    result = cursorbi.execute(
                         sqldelete, {"fi": self.IdtReporteIni, "ff": self.IdtReporteFin}
                     )
                     rows_deleted = result.rowcount
@@ -233,20 +211,15 @@ class ExtraeBI:
                         f"Datos borrados correctamente. Filas afectadas: {rows_deleted} {self.txSql}"
                     )
                     return rows_deleted
-                except:
+                except Exception as e:
                     trans.rollback()
+                    logging.error(f"Error en consulta_sql_bi durante el commit: {e}")
                     raise
         except Exception as e:
-            logging.error(f"Error al borrar datos: {e}")
+            logging.error(f"Error al borrar datos en consulta_sql_bi: {e}")
             raise
 
     def insertar_sql(self, resultado_out):
-        """
-        Inserta el resultado de una consulta en la base de datos BI.
-
-        Args:
-            resultado_out (pd.DataFrame): Datos a insertar en la base de datos.
-        """
         with self.db_connection.engine_mysql_bi.connect() as connection:
             cursorbi = connection.execution_options(isolation_level="READ COMMITTED")
             resultado_out.to_sql(
@@ -255,12 +228,6 @@ class ExtraeBI:
             logging.info("Los datos se han insertado correctamente")
 
     def extractor(self):
-        """
-        Inicia el proceso de extracción de datos.
-
-        Returns:
-            dict: Resultado del proceso de extracción.
-        """
         logging.info("Iniciando extractor")
         try:
             txProcedureExtrae = self.config.get("txProcedureExtrae", [])
