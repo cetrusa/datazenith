@@ -80,15 +80,15 @@ Cubo de Ventas
 
 <script>
   document.getElementById("processingModal").style.display = "none";
-  document.getElementById("download_file").className = 'd-none';
-  var csrf_token = document.getElementsByName("csrfmiddlewaretoken")[0].value;
+document.getElementById("download_file").className = 'd-none';
+var csrf_token = document.getElementsByName("csrfmiddlewaretoken")[0].value;
 
-  document.getElementById("submitBtn").addEventListener("click", function (event) {
+document.getElementById("submitBtn").addEventListener("click", function (event) {
     event.preventDefault();
     // Check if a task is already in progress
     if (this.getAttribute("data-submitted") === "true") {
-      alert("Ya hay una tarea en curso.");
-      return;
+        alert("Ya hay una tarea en curso.");
+        return;
     }
 
     this.setAttribute("data-submitted", "true");
@@ -101,41 +101,41 @@ Cubo de Ventas
     xhr.setRequestHeader("X-CSRFToken", csrf_token);
     xhr.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
     xhr.onreadystatechange = function () {
-      if (this.readyState === XMLHttpRequest.DONE) {
-        console.log(this.status, this.responseText);
-        var response = JSON.parse(this.responseText);
-        handleServerResponse(this.status, response);
-      }
+        if (this.readyState === XMLHttpRequest.DONE) {
+            console.log(this.status, this.responseText);
+            var response = JSON.parse(this.responseText);
+            handleServerResponse(this.status, response);
+        }
     };
 
     var database = window.sessionStorage.getItem("database_name");
     var IdtReporteIni = document.getElementById("IdtReporteIni").value;
     var IdtReporteFin = document.getElementById("IdtReporteFin").value;
     xhr.send("database_select=" + encodeURIComponent(database) + "&IdtReporteIni=" + encodeURIComponent(IdtReporteIni) + "&IdtReporteFin=" + encodeURIComponent(IdtReporteFin));
-  });
+});
 
-  // Manejar la respuesta del servidor
-  function handleServerResponse(status, response) {
+// Manejar la respuesta del servidor
+function handleServerResponse(status, response) {
     if (status === 200) {
-      if (typeof response === "object" && "success" in response) {
-        if (response.success) {
-          // Almacena cubo_ventas_task_id en sessionStorage
-          window.sessionStorage.setItem("task_id", response.task_id);
-          // Comprueba el estado de la tarea
-          checkTaskStatus();
+        if (typeof response === "object" && "success" in response) {
+            if (response.success) {
+                // Almacena cubo_ventas_task_id en sessionStorage
+                window.sessionStorage.setItem("task_id", response.task_id);
+                // Comprueba el estado de la tarea
+                checkTaskStatus();
+            } else {
+                alert("Hubo un error en el proceso: " + response.error_message);
+            }
         } else {
-          alert("Hubo un error en el proceso: " + response.error_message);
+            alert("La respuesta del servidor no es un objeto JSON válido");
         }
-      } else {
-        alert("La respuesta del servidor no es un objeto JSON válido");
-      }
     } else {
-      alert("Hubo un error al enviar la solicitud, código de estado: " + status);
+        alert("Hubo un error al enviar la solicitud, código de estado: " + status);
     }
-  }
+}
 
-  // función para revisar estatus de la tarea
-  function checkTaskStatus() {
+// función para revisar estatus de la tarea
+function checkTaskStatus() {
     var task_id = window.sessionStorage.getItem("task_id");
 
     var xhr = new XMLHttpRequest();
@@ -144,84 +144,84 @@ Cubo de Ventas
     xhr.setRequestHeader("X-CSRFToken", csrf_token);
     xhr.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
     xhr.onreadystatechange = function () {
-      if (this.readyState === XMLHttpRequest.DONE) {
-        var response = JSON.parse(this.responseText);
-        handleTaskStatus(this.status, response);
-      }
+        if (this.readyState === XMLHttpRequest.DONE) {
+            var response = JSON.parse(this.responseText);
+            handleTaskStatus(this.status, response);
+        }
     };
     xhr.send("task_id=" + encodeURIComponent(task_id));
-  }
+}
 
-  // Revisar el estado de la tarea
-  function handleTaskStatus(status, response) {
+// Revisar el estado de la tarea
+function handleTaskStatus(status, response) {
     if (status === 200) {
-      if (typeof response === "object" && "status" in response) {
-        if (response.status === "finished") {
-          // La tarea se ha completado, podemos mostrar el resultado al usuario
-          document.getElementById("processingModal").style.display = "none";
-          document.getElementById("download_file").className = 'd-flex';
-          alert("Proceso terminado");
-        } else if (response.status === "failed") {
-          // La tarea falló
-          document.getElementById("processingModal").style.display = "none";
-          alert("Hubo un error en el proceso: " + response.result);
-        } else if (response.status === "queued" || response.status === "deferred" || response.status === "started") {
-          // La tarea aún se está ejecutando, verifica el estado de nuevo después de un tiempo
-          setTimeout(checkTaskStatus, 20000);
+        if (typeof response === "object" && "status" in response) {
+            if (response.status === "finished") {
+                // La tarea se ha completado, podemos mostrar el resultado al usuario
+                document.getElementById("processingModal").style.display = "none";
+                document.getElementById("download_file").className = 'd-flex';
+                alert("Proceso terminado");
+            } else if (response.status === "failed") {
+                // La tarea falló
+                document.getElementById("processingModal").style.display = "none";
+                alert("Hubo un error en el proceso: " + response.result);
+            } else if (response.status === "queued" || response.status === "deferred" || response.status === "started") {
+                // La tarea aún se está ejecutando, verifica el estado de nuevo después de un tiempo
+                setTimeout(checkTaskStatus, 20000);
+            } else {
+                alert("Estado desconocido de la tarea: " + response.status);
+            }
         } else {
-          alert("Estado desconocido de la tarea: " + response.status);
+            alert("La respuesta del servidor no es un objeto JSON válido");
         }
-      } else {
-        alert("La respuesta del servidor no es un objeto JSON válido");
-      }
     } else {
-      alert("Hubo un error al comprobar el estado de la tarea, código de estado: " + status);
+        alert("Hubo un error al comprobar el estado de la tarea, código de estado: " + status);
     }
-  }
+}
 
-  // Función para borrar el archivo después de descargarlo
-  function deleteFile() {
+// Función para borrar el archivo después de descargarlo
+function deleteFile() {
     // Realiza una llamada a una vista en Django que se encargue de borrar el archivo
     fetch("{% url 'home_app:delete_file' %}", {
-      method: 'POST',
-      headers: {
-        "X-CSRFToken": csrf_token,
-        "Content-Type": "application/x-www-form-urlencoded"
-      }
+        method: 'POST',
+        headers: {
+            "X-CSRFToken": csrf_token,
+            "Content-Type": "application/x-www-form-urlencoded"
+        }
     })
     .then(response => {
-      if (response.ok) {
-        console.log('File deleted successfully.');
-      } else {
-        console.error('Failed to delete file.');
-      }
+        if (response.ok) {
+            console.log('File deleted successfully.');
+        } else {
+            console.error('Failed to delete file.');
+        }
     })
     .catch(error => {
-      console.error('Error:', error);
+        console.error('Error:', error);
     });
-  }
+}
 
-  // Función para recargar el formulario después de borrar el archivo
-  function reloadForm() {
+// Función para recargar el formulario después de borrar el archivo
+function reloadForm() {
     location.reload();
-  }
+}
 
-  // Ejecuta las funciones después de descargar el archivo
-  document.getElementById("download_file").addEventListener("click", function () {
+// Ejecuta las funciones después de descargar el archivo
+document.getElementById("download_file").addEventListener("click", function () {
     var link = this;
-
-    document.getElementById("download_file").className = 'd-none';
     link.onclick = function () {
-      return false;
+        return false;
     };
 
     setTimeout(function () {
-      // Esperar un tiempo adicional antes de intentar eliminar el archivo
-      deleteFile();
-      document.getElementById("submitBtn").setAttribute("data-submitted", "false");
-      setTimeout(reloadForm, 5000);
+        // Esperar un tiempo adicional antes de intentar eliminar el archivo
+        deleteFile().then(() => {
+            document.getElementById("submitBtn").setAttribute("data-submitted", "false");
+            setTimeout(reloadForm, 1000);  // Ajuste del tiempo de espera para recargar la página
+        });
     }, 20000);  // Aumentar el tiempo de espera total
-  });
+});
+
 </script>
 
 
