@@ -593,17 +593,7 @@ class PlanoPage(LoginRequiredMixin, BaseView):
 
 
 class ActualizacionPage(LoginRequiredMixin, BaseView):
-    """
-    Vista para la página de generación de actualización de información.
-
-    Esta vista maneja la solicitud del usuario para generar la actualización de la base de datos,
-    iniciando una tarea en segundo plano y devolviendo el ID de dicha tarea.
-    """
-
-    # Nombre de la plantilla a utilizar para renderizar la vista
     template_name = "home/actualizacion.html"
-
-    # URL para redirigir en caso de que el usuario no esté autenticado
     login_url = reverse_lazy("users_app:user-login")
 
     @method_decorator(registrar_auditoria)
@@ -611,19 +601,9 @@ class ActualizacionPage(LoginRequiredMixin, BaseView):
         permission_required("permisos.actualizar_base", raise_exception=True)
     )
     def dispatch(self, request, *args, **kwargs):
-        """
-        Método para despachar la solicitud, aplicando decoradores de auditoría y
-        permisos requeridos.
-        """
         return super().dispatch(request, *args, **kwargs)
 
     def post(self, request, *args, **kwargs):
-        """
-        Maneja la solicitud POST para iniciar el proceso de generación de la actualización de la base de datos.
-
-        Recoge los datos del formulario, valida la entrada y, si es válida,
-        inicia una tarea asincrónica para generar la actualización de la base de datos.
-        """
         request.session["template_name"] = self.template_name
         database_name = request.POST.get("database_select")
         IdtReporteIni = request.POST.get("IdtReporteIni")
@@ -640,21 +620,17 @@ class ActualizacionPage(LoginRequiredMixin, BaseView):
 
         try:
             task = extrae_bi_task.delay(database_name, IdtReporteIni, IdtReporteFin)
-            # Guardamos el ID de la tarea en la sesión del usuario
             request.session["task_id"] = task.id
             return JsonResponse(
                 {
                     "success": True,
                     "task_id": task.id,
                 }
-            )  # Devuelve el ID de la tarea al frontend
+            )
         except Exception as e:
             return JsonResponse({"success": False, "error_message": f"Error: {str(e)}"})
 
     def get(self, request, *args, **kwargs):
-        """
-        Maneja la solicitud GET, devolviendo la plantilla de la página del cubo de ventas.
-        """
         database_name = request.session.get("database_name")
         if not database_name:
             messages.warning(request, "Debe seleccionar una empresa antes de continuar.")
@@ -664,15 +640,9 @@ class ActualizacionPage(LoginRequiredMixin, BaseView):
         return self.render_to_response(context)
 
     def get_context_data(self, **kwargs):
-        """
-        Obtiene el contexto necesario para la plantilla.
-
-        :return: Contexto que incluye la URL del formulario y los filtros de permisos.
-        """
         context = super().get_context_data(**kwargs)
         context["form_url"] = "home_app:actualizacion"
 
-        # Obtener permisos de macrozona y proveedor para el usuario
         user_id = self.request.user.id
         database_name = self.request.session.get("database_name")
         if database_name:

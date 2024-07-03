@@ -235,13 +235,14 @@ def plano_task(database_name, IdtReporteIni, IdtReporteFin):
         return {"success": False, "error_message": error_msg}
 
 
-@job("default", timeout=3600)
+@job("default", timeout=1800)
 def extrae_bi_task(database_name, IdtReporteIni, IdtReporteFin):
     try:
         logging.info("Iniciando proceso de extracción BI")
-        extrae_bi = Extrae_Bi(database_name, IdtReporteIni, IdtReporteFin)
-        print("listo para procesar")
-        resultado = extrae_bi.extractor()
+        extractor = Extrae_Bi(database_name, IdtReporteIni, IdtReporteFin)
+        resultado = extractor.extractor()
+        logging.info(f"Proceso de extracción BI finalizado: {resultado}")
+
         if resultado.get("success"):
             return {"success": True}
         else:
