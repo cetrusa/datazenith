@@ -28,10 +28,10 @@ if RENDER_EXTERNAL_HOSTNAME:
 # ssl._create_default_https_context = ssl._create_unverified_context
 
 
-DEBUG = True
-SESSION_COOKIE_SECURE = False
+DEBUG = False
+SESSION_COOKIE_SECURE = True
 
-CSRF_COOKIE_SECURE = False
+CSRF_COOKIE_SECURE = True
 
 CSRF_TRUSTED_ORIGINS = [
     "https://interface.amovil.com.co",
