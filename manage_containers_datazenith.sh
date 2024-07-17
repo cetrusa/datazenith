@@ -1,10 +1,24 @@
 #!/bin/bash
 
-# Detener contenedores específicos
-docker stop datazenith_rqworker_1 datazenith_web_1 datazenith_redis_1
+# Agregar Docker Compose al PATH
+export PATH=$PATH:/usr/local/bin
 
-# Eliminar contenedores específicos
-docker rm datazenith_rqworker_1 datazenith_web_1 datazenith_redis_1
+# Función para detener y eliminar un contenedor si está en ejecución
+stop_and_remove_container() {
+    CONTAINER_NAME=$1
+    if [ "$(docker ps -q -f name=$CONTAINER_NAME)" ]; then
+        echo "Deteniendo y eliminando el contenedor $CONTAINER_NAME..."
+        docker stop $CONTAINER_NAME
+        docker rm $CONTAINER_NAME
+    else
+        echo "El contenedor $CONTAINER_NAME no está en ejecución."
+    fi
+}
+
+# Detener y eliminar contenedores específicos
+stop_and_remove_container datazenith_rqworker_1
+stop_and_remove_container datazenith_web_1
+stop_and_remove_container datazenith_redis_1
 
 # Limpiar el sistema Docker sin confirmación
 docker system prune -f
