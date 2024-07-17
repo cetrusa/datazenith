@@ -16,18 +16,19 @@ from scripts.extrae_bi.cargue_plano_tsol import (
     CarguePlano,
 )  # Asegúrate de importar tu clase CarguePlano
 
-
 @job("default", timeout=3600)
-def cubo_ventas_task(database_name, IdtReporteIni, IdtReporteFin, user_id,report_id):
+def cubo_ventas_task(database_name, IdtReporteIni, IdtReporteFin, user_id, report_id):
     try:
         logging.info("Iniciando proceso de CuboVentas")
-        cubo_ventas = CuboVentas(database_name, IdtReporteIni, IdtReporteFin, user_id,report_id)
+        cubo_ventas = CuboVentas(database_name, IdtReporteIni, IdtReporteFin, user_id, report_id)
         resultado = cubo_ventas.procesar_datos()
         logging.info(f"Proceso de CuboVentas finalizado: {resultado}")
 
         if isinstance(resultado, dict):
             if "success" in resultado and resultado["success"]:
                 if "file_path" in resultado and "file_name" in resultado:
+                    # Agregamos los datos a la respuesta
+                    resultado['data'] = cubo_ventas.get_data()
                     return resultado
                 else:
                     logging.error(
@@ -47,9 +48,6 @@ def cubo_ventas_task(database_name, IdtReporteIni, IdtReporteFin, user_id,report
         error_msg = f"Excepción al ejecutar cubo_ventas_task: {e}"
         logging.error(error_msg)
         return {"success": False, "error_message": error_msg}
-
-
-
 @job("default", timeout=3600)
 def interface_task(database_name, IdtReporteIni, IdtReporteFin):
     try:

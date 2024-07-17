@@ -341,3 +341,15 @@ class CuboVentas:
             "file_path": self.file_path,
             "file_name": self.archivo_cubo_ventas,
         }
+
+
+    def get_data(self):
+        table_name = f"my_table_{self.database_name}_{self.reporte_id}"
+        with self.engine_sqlite.connect() as connection:
+            df = pd.read_sql_query(f"SELECT * FROM {table_name}", connection)
+            headers = df.columns.tolist()
+            rows = df.values.tolist()
+        return {
+            "headers": headers,
+            "rows": rows
+        }

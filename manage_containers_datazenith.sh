@@ -16,7 +16,7 @@ cd /var/www/datazenith
 rm -f mydata.db
 
 # Activar el entorno virtual de Python
-source ../venv/bin/activate
+source /venv/bin/activate
 
 # Levantar los servicios con docker-compose
 docker-compose -f docker-compose.rq.yml up -d --build
