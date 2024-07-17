@@ -32,5 +32,8 @@ rm -f mydata.db
 # Activar el entorno virtual de Python
 source venv/bin/activate
 
+# Establecer un tiempo de espera más alto para Docker Compose
+export COMPOSE_HTTP_TIMEOUT=600
+
 # Levantar los servicios con docker-compose
 docker-compose -f docker-compose.rq.yml up -d --build
