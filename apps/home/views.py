@@ -209,14 +209,12 @@ class CheckTaskStatusView(BaseView):
             if job.is_finished:
                 return self.handle_finished_job(request, job)
             elif job.is_failed:
-                return JsonResponse({"error": "Task execution failed"}, status=500)
+                return JsonResponse({"status": "failed", "result": job.result}, status=500)
             else:
                 return JsonResponse({"status": job.get_status()})
 
         except NoSuchJobError:
             return JsonResponse({"status": "notfound", "error": "Task not found"})
-        
-
 
     def handle_finished_job(self, request, job):
         """
@@ -230,16 +228,21 @@ class CheckTaskStatusView(BaseView):
         if resultado is None:
             return JsonResponse({"error": "Task finished with no result"}, status=500)
 
-        # Si el resultado fue exitoso pero no incluye los detalles del archivo, continúa de todas formas
-        if resultado.get("success"):
-            response_data = {"status": "finished", "result": resultado}
+        response_data = {"status": "finished", "result": resultado}
 
+        # Si el resultado fue exitoso, agregamos los detalles necesarios
+        if resultado.get("success"):
             # Solo agrega file_path y file_name a la sesión si están presentes
             if "file_path" in resultado and "file_name" in resultado:
                 request.session["file_path"] = resultado["file_path"]
                 request.session["file_name"] = resultado["file_name"]
                 # Podrías querer incluir también esta información en la respuesta
                 response_data.update({"file_path": resultado["file_path"], "file_name": resultado["file_name"]})
+
+            # Agregar datos de tabla a la sesión si están presentes
+            if "data" in resultado:
+                request.session["data_headers"] = resultado["data"]["headers"]
+                request.session["data_rows"] = resultado["data"]["rows"]
 
             return JsonResponse(response_data)
 
@@ -293,7 +296,7 @@ class CuboPage(LoginRequiredMixin, BaseView):
 
         try:
             report_id = 1 # CUBO DE VENTAS
-            task = cubo_ventas_task.delay(database_name, IdtReporteIni, IdtReporteFin, user_id,report_id)
+            task = cubo_ventas_task.delay(database_name, IdtReporteIni, IdtReporteFin, user_id, report_id)
             request.session["task_id"] = task.id
             return JsonResponse({"success": True, "task_id": task.id})
         except Exception as e:
@@ -311,6 +314,7 @@ class CuboPage(LoginRequiredMixin, BaseView):
             return redirect("home_app:panel_cubo")
 
         context = self.get_context_data(**kwargs)
+        context['data'] = None
         return self.render_to_response(context)
 
     def get_context_data(self, **kwargs):
@@ -331,6 +335,24 @@ class CuboPage(LoginRequiredMixin, BaseView):
             context["macrozonas"] = config.config.get('macrozonas', [])
 
         return context
+
+    def get_data_from_task(self, request):
+        """
+        Obtiene los datos de la tarea almacenados en la sesión.
+        """
+        task_id = request.session.get("task_id")
+        if not task_id:
+            return None
+
+        connection = get_connection()
+        try:
+            job = Job.fetch(task_id, connection=connection)
+            if job.is_finished and job.result:
+                return job.result.get("data", None)
+        except NoSuchJobError:
+            return None
+
+
     
 class ProveedorPage(LoginRequiredMixin, BaseView):
     """

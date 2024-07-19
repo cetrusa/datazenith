@@ -22,7 +22,7 @@ Cubo de Ventas
   </div>
   {% endif %}
 
-  <div class="card" style="width: 25rem;">
+  <div id="cardContainer" class="card" style="width: 25rem;">
     <div class="card-header text-center">
       <h2>Cubo de Ventas</h2>
     </div>
@@ -57,7 +57,7 @@ Cubo de Ventas
 
     <br>
     <br>
-    {% include 'includes/download_file.html' %}
+    <a id="download_file" class="btn btn-secondary d-none" href="#" download>Descargar Archivo</a>
   </div>
   <!-- Este es el Modal -->
   <div class="modal" id="processingModal">
@@ -74,9 +74,24 @@ Cubo de Ventas
   </div>
   <!-- final del modal -->
 </div>
+
+<div class="container mt-4">
+  <div id="dataContainer" style="display: none;">
+    <table id="dataTable" class="table table-striped table-bordered table-hover table-responsive">
+      <thead class="thead-dark">
+        <tr id="dataHeaders"></tr>
+      </thead>
+      <tbody id="dataRows"></tbody>
+    </table>
+  </div>
+</div>
+
 {% endblock window %}
 
 {% block script %}
+<script src="https://cdn.datatables.net/1.11.3/js/jquery.dataTables.min.js"></script>
+<script src="https://cdn.datatables.net/1.11.3/js/dataTables.bootstrap5.min.js"></script>
+<link rel="stylesheet" href="https://cdn.datatables.net/1.11.3/css/dataTables.bootstrap5.min.css">
 
 <script>
   document.getElementById("processingModal").style.display = "none";
@@ -158,8 +173,13 @@ Cubo de Ventas
         if (response.status === "finished") {
           // La tarea se ha completado, podemos mostrar el resultado al usuario
           document.getElementById("processingModal").style.display = "none";
+          document.getElementById("cardContainer").style.display = "none";
+          document.getElementById("dataContainer").style.display = "block";
+          populateDataTable(response.result.data); // Asegúrate de que `response.result.data` contiene los datos
+
           document.getElementById("download_file").className = 'd-flex';
-          alert("Proceso terminado");
+          document.getElementById("download_file").setAttribute("href", response.result.file_path);
+          document.getElementById("download_file").innerText = "Descargar archivo: " + response.result.file_name;
         } else if (response.status === "failed") {
           // La tarea falló
           document.getElementById("processingModal").style.display = "none";
@@ -178,6 +198,54 @@ Cubo de Ventas
     }
   }
 
+  function populateDataTable(data) {
+    var headers = data.headers;
+    var rows = data.rows;
+
+    var headerRow = document.getElementById('dataHeaders');
+    headerRow.innerHTML = '';
+    headers.forEach(function (header) {
+      var th = document.createElement('th');
+      th.innerText = header;
+      headerRow.appendChild(th);
+    });
+
+    var tableBody = document.getElementById('dataRows');
+    tableBody.innerHTML = '';
+    rows.forEach(function (row) {
+      var tr = document.createElement('tr');
+      row.forEach(function (cell) {
+        var td = document.createElement('td');
+        td.innerText = cell;
+        tr.appendChild(td);
+      });
+      tableBody.appendChild(tr);
+    });
+
+    $('#dataTable').DataTable({
+      destroy: true,
+      paging: true,
+      scrollY: "500px",
+      scrollX: true,
+      scrollCollapse: true,
+      pageLength: 10,
+      lengthMenu: [[10, 25, 50, 100], [10, 25, 50, 100]],
+      language: {
+        paginate: {
+          first: "Primero",
+          last: "Último",
+          next: "Siguiente",
+          previous: "Anterior"
+        },
+        lengthMenu: "Mostrar _MENU_ registros por página",
+        info: "Mostrando página _PAGE_ de _PAGES_",
+        search: "Buscar:",
+        infoFiltered: "(filtrado de _MAX_ registros totales)",
+        infoEmpty: "No hay registros disponibles",
+        zeroRecords: "No se encontraron registros coincidentes"
+      }
+    });
+  }
 
   // Función para borrar el archivo después de descargarlo
   function deleteFile() {
@@ -194,10 +262,12 @@ Cubo de Ventas
     };
     xhr.send();
   }
+
   // Función para recargar el formulario después de borrar el archivo
   function reloadForm() {
     location.reload();
   }
+
   // Ejecuta las funciones después de descargar el archivo
   document.getElementById("download_file").addEventListener("click", function () {
     var link = this;
@@ -213,9 +283,4 @@ Cubo de Ventas
     }, 1000);
   });
 </script>
-
-
-
-
-
 {% endblock script %}

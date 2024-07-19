@@ -27,13 +27,13 @@ def cubo_ventas_task(database_name, IdtReporteIni, IdtReporteFin, user_id, repor
         if isinstance(resultado, dict):
             if "success" in resultado and resultado["success"]:
                 if "file_path" in resultado and "file_name" in resultado:
-                    # Agregamos los datos a la respuesta
-                    resultado['data'] = cubo_ventas.get_data()
+                    # Obtener los datos de la tabla antes de eliminarla
+                    data = cubo_ventas.get_data()
+                    # Agregar los datos a la respuesta
+                    resultado['data'] = data
                     return resultado
                 else:
-                    logging.error(
-                        "El resultado de CuboVentas no incluye file_path o file_name"
-                    )
+                    logging.error("El resultado de CuboVentas no incluye file_path o file_name")
             else:
                 logging.error("El proceso de CuboVentas no fue exitoso")
         else:
@@ -48,6 +48,10 @@ def cubo_ventas_task(database_name, IdtReporteIni, IdtReporteFin, user_id, repor
         error_msg = f"Excepción al ejecutar cubo_ventas_task: {e}"
         logging.error(error_msg)
         return {"success": False, "error_message": error_msg}
+
+    
+    
+
 @job("default", timeout=3600)
 def interface_task(database_name, IdtReporteIni, IdtReporteFin):
     try:
