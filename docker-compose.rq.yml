@@ -12,6 +12,8 @@ services:
     environment:
       - DJANGO_SETTINGS_MODULE=adminbi.settings.prod
       - DB_HOST
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
     depends_on:
       - redis
     ulimits:
@@ -25,6 +27,10 @@ services:
     command: python manage.py rqworker default
     volumes:
       - .:/code
+    environment:
+      - DJANGO_SETTINGS_MODULE=adminbi.settings.prod
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
     depends_on:
       - web
       - redis
