@@ -173,48 +173,70 @@ class DataBaseConnection:
 
 Base = declarative_base()
 
-class FactVentasItems(Base):
-    __tablename__ = "fact_ventas_items"
-    
+
+class FactFacturas(Base):
+    __tablename__ = "fact_facturas"
     empresa = Column(String(30), primary_key=True)
-    tipo_documento = Column(String(30), primary_key=True)
-    zona_id = Column(String(30))
-    cliente_id = Column(String(30))
-    fecha_factura = Column(Date)
-    fecha_planilla = Column(Date)
-    fecha_cierre_planilla = Column(Date)
-    factura_prefijo = Column(String(30), primary_key=True, default=' ')
-    factura_id = Column(String(30), primary_key=True)
+    cliente_id = Column(String(30), primary_key=True)
+    zona_id = Column(String(30), primary_key=True)
+    fecha_factura = Column(Date, nullable=False)
+    factura_id = Column(String(30), nullable=False, unique=True)
+    vlrbruto = Column(Float)
     planilla_id = Column(String(30))
     pedido_id = Column(String(30))
-    ordencompra_id = Column(String(30))
+    ordcompra_id = Column(String(30))
+    # Definir índices si es necesario
+    # relationships si es necesario
+
+
+class FactFacturasItems(Base):
+    __tablename__ = "fact_facturas_items"
+    empresa = Column(String(30), primary_key=True)
+    factura_id = Column(
+        String(30), ForeignKey("fact_facturas.factura_id"), primary_key=True
+    )
     producto_id = Column(String(10), primary_key=True)
     nro_linea = Column(String(10), primary_key=True)
     bodega_id = Column(String(10), primary_key=True)
     tplinea_id = Column(String(1), primary_key=True)
     virtual_id = Column(String(10))
-    cantidad = Column(Float, default=0)
-    costo_unitario = Column(Float, default=0)
+    cant = Column(Float, default=0)
+    costo = Column(Float, default=0)
     vlrbruto = Column(Float, default=0)
-    por_iva = Column(Float)
-    valor_iva = Column(Float)
-    descuentos = Column(Float)
-    consumo = Column(Float)
-    nota_id = Column(Integer)
-    motivo_id = Column(String(10))
-    motivo_descripcion = Column(String(50))
-    afecta_venta = Column(String(10))
-    formapago_id = Column(String(10))
-    formapago_nombre = Column(String(50))
-    ruta_id = Column(String(10))
-    ruta_nombre = Column(String(50))
-    placa_vehiculo = Column(String(10))
-    transportador_id = Column(String(10))
-    transportador_nombre = Column(String(50))
-    auxiliar1_id = Column(String(10))
-    auxiliar1_nombre = Column(String(50))
-    auxiliar2_id = Column(String(10))
-    auxiliar2_nombre = Column(String(50))
+    # relationships si es necesario
+
+
+class FactNotasCredito(Base):
+    __tablename__ = "fact_notas_credito"
+    empresa = Column(String(30), primary_key=True)
+    cliente_id = Column(String(30), primary_key=True)
+    zona_id = Column(String(30), primary_key=True)
+    fecha_factura = Column(Date, nullable=False)
+    factura_id = Column(String(30), primary_key=True, nullable=False, unique=True)
+    vlrbruto = Column(Float)
+    planilla_id = Column(String(30))
+    pedido_id = Column(String(30))
+    ordcompra_id = Column(String(30))
+    # Definir índices si es necesario
+    # relationships si es necesario
+
+
+class FactNotasCreditoItems(Base):
+    __tablename__ = "fact_notas_credito_items"
+    empresa = Column(String(30), primary_key=True)
+    factura_id = Column(
+        String(30), ForeignKey("fact_notas_credito.factura_id"), primary_key=True
+    )
+    producto_id = Column(String(10), primary_key=True)
+    nro_linea = Column(String(10), primary_key=True)
+    bodega_id = Column(String(10), primary_key=True)
+    tplinea_id = Column(String(1), primary_key=True)
+    virtual_id = Column(String(10))
+    cant = Column(Float, default=0)
+    costo = Column(Float, default=0)
+    vlrbruto = Column(Float, default=0)
+    # relationships si es necesario
+
 
 class TmpInfoVentas(Base):
     __tablename__ = "tmp_infoventas"
@@ -466,7 +488,59 @@ class CargueInfoVentas:
             fin = time.time()
             tiempo_transcurrido = fin - inicio
             print(f"Tiempo transcurrido en insertar_registros_ignore: {tiempo_transcurrido} segundos.")
-            session.close()    
+            session.close()
+
+    # def filtrar_nuevos_registros(self, modelo, data_to_insert, session):
+    #     claves_unicas = [
+    #         columna.name
+    #         for columna in modelo.__table__.columns
+    #         if columna.primary_key or columna.unique
+    #     ]
+    #     todos_nuevos_registros = []  # Acumula nuevos registros de todos los batches
+
+    #     for batch in self.chunk_data(data_to_insert, batch_size=50000):
+    #         # Asegúrate de que cada clave exista en cada registro del batch
+    #         # Esto es crítico para evitar KeyError
+    #         batch = [
+    #             record
+    #             for record in batch
+    #             if all(key in record for key in claves_unicas)
+    #         ]
+
+    #         if (
+    #             not batch
+    #         ):  # Si el batch está vacío después de filtrar, continúa con el siguiente
+    #             continue
+
+    #         # Consulta para encontrar registros existentes
+    #         existing_records_query = (
+    #             session.query(modelo)
+    #             .filter(
+    #                 tuple_(*[getattr(modelo, key) for key in claves_unicas]).in_(
+    #                     [
+    #                         tuple(record[key] for key in claves_unicas)
+    #                         for record in batch
+    #                     ]
+    #                 )
+    #             )
+    #             .all()
+    #         )
+    #         existing_records = {
+    #             self.construct_key(record, claves_unicas)
+    #             for record in existing_records_query
+    #         }
+
+    #         # Filtra los registros nuevos
+    #         nuevos_registros = [
+    #             record
+    #             for record in batch
+    #             if self.construct_key(record, claves_unicas) not in existing_records
+    #         ]
+    #         todos_nuevos_registros.extend(nuevos_registros)
+
+    #     return todos_nuevos_registros
+    
+        
 
     def filtrar_nuevos_registros(self, modelo, data_to_insert, session):
         # Obtener las claves únicas del modelo

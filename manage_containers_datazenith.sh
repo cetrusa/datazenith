@@ -10,8 +10,11 @@ stop_and_remove_container() {
         echo "Deteniendo y eliminando el contenedor $CONTAINER_NAME..."
         docker stop $CONTAINER_NAME
         docker rm $CONTAINER_NAME
+    elif [ "$(docker ps -a -q -f name=$CONTAINER_NAME)" ]; then
+        echo "Eliminando el contenedor detenido $CONTAINER_NAME..."
+        docker rm $CONTAINER_NAME
     else
-        echo "El contenedor $CONTAINER_NAME no está en ejecución."
+        echo "El contenedor $CONTAINER_NAME no existe."
     fi
 }
 
@@ -33,7 +36,7 @@ rm -f mydata.db
 source venv/bin/activate
 
 # Establecer un tiempo de espera más alto para Docker Compose
-export COMPOSE_HTTP_TIMEOUT=600
+export COMPOSE_HTTP_TIMEOUT=200
 
 # Levantar los servicios con docker-compose
 docker-compose -f docker-compose.rq.yml up -d --build

@@ -46,7 +46,7 @@ class DataBaseConnection:
 
     def execute_query_mysql(self, query, chunksize=None):
         # Usar el engine correctamente
-        with self.create_engine_mysql.connect() as connection:
+        with self.create_engine_mysql().connect() as connection:
             cursor = connection.execution_options(isolation_level="READ COMMITTED")
             return pd.read_sql_query(query, cursor, chunksize=chunksize)
 
@@ -55,7 +55,7 @@ class DataBaseConnection:
         with self.engine_sqlite.connect() as connection:
             return connection.execute(sql, params)
 
-    def execute_query_mysql_chunked(self, query, table_name, chunksize=50000,params=None):
+    def execute_query_mysql_chunked(self, query, table_name, chunksize=50000, params=None):
         try:
             # Primero, elimina la tabla si ya existe
             self.eliminar_tabla_sqlite(table_name)
@@ -63,7 +63,7 @@ class DataBaseConnection:
             with self.engine_mysql.connect() as connection:
                 cursor = connection.execution_options(isolation_level="READ COMMITTED")
 
-                for chunk in pd.read_sql_query(query, con=cursor, chunksize=chunksize,params=params):
+                for chunk in pd.read_sql_query(query, con=cursor, chunksize=chunksize, params=params):
                     chunk.to_sql(
                         name=table_name,
                         con=self.engine_sqlite,
@@ -92,19 +92,20 @@ class DataBaseConnection:
 
 
 class CuboVentas:
-    def __init__(self, database_name, IdtReporteIni, IdtReporteFin,user_id,reporte_id):
+    def __init__(self, database_name, IdtReporteIni, IdtReporteFin, user_id, reporte_id):
         self.database_name = database_name
         self.IdtReporteIni = IdtReporteIni
         self.IdtReporteFin = IdtReporteFin
+        self.user_id = user_id  # ID del usuario
         self.reporte_id = reporte_id  # ID del reporte para Cubo de Ventas
-        self.configurar(database_name,user_id)
+        self.configurar(database_name, user_id)
         
         self.file_path = None
         self.archivo_cubo_ventas = None
 
-    def configurar(self, database_name,user_id):
+    def configurar(self, database_name, user_id):
         try:
-            config_basic = ConfigBasic(database_name,user_id)
+            config_basic = ConfigBasic(database_name, user_id)
             self.config = config_basic.config
             self.proveedores = self.config.get('proveedores', [])
             self.macrozonas = self.config.get('macrozonas', [])
@@ -145,7 +146,7 @@ class CuboVentas:
             self.guardar_datos_excel_xlsxwriter2(table_name, hoja, wb)
 
     def generar_nombre_archivo(self, hoja, ext=".xlsx"):
-        self.archivo_cubo_ventas = f"{hoja}_{self.database_name.upper()}_de_{self.IdtReporteIni}_a_{self.IdtReporteFin}{ext}"
+        self.archivo_cubo_ventas = f"{hoja}_{self.database_name.upper()}_de_{self.IdtReporteIni}_a_{self.IdtReporteFin}_user_{self.user_id}{ext}"
         self.file_path = os.path.join("media", self.archivo_cubo_ventas)
         return self.archivo_cubo_ventas, self.file_path
 
@@ -294,10 +295,10 @@ class CuboVentas:
         try:
             sqlout = self.generate_sqlout()
             print(sqlout)
-            table_name = f"my_table_{self.database_name}_{hoja}"
-            params = {"fi": self.IdtReporteIni, "ff": self.IdtReporteFin,"empresa":self.database_name.upper()}
+            table_name = f"my_table_{self.database_name}_{self.user_id}_{hoja}"
+            params = {"fi": self.IdtReporteIni, "ff": self.IdtReporteFin, "empresa": self.database_name.upper()}
             total_records = self.db_connection.execute_query_mysql_chunked(
-                query=sqlout, table_name=table_name,params=params
+                query=sqlout, table_name=table_name, params=params
             )
 
             print(f"Total de registros: {total_records}")
@@ -344,7 +345,7 @@ class CuboVentas:
 
 
     def get_data(self):
-        table_name = f"my_table_{self.database_name}_{self.reporte_id}"
+        table_name = f"my_table_{self.database_name}_{self.user_id}_{self.reporte_id}"
         with self.engine_sqlite.connect() as connection:
             df = pd.read_sql_query(f"SELECT * FROM {table_name}", connection)
             headers = df.columns.tolist()
