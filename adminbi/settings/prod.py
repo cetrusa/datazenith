@@ -28,7 +28,7 @@ if RENDER_EXTERNAL_HOSTNAME:
 # ssl._create_default_https_context = ssl._create_unverified_context
 
 
-DEBUG = True
+DEBUG = False
 SESSION_COOKIE_SECURE = True
 
 CSRF_COOKIE_SECURE = True
@@ -143,3 +143,4 @@ RQ_QUEUES = {
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 FILE_UPLOAD_MAX_MEMORY_SIZE = 104857600  # 100 MB
 DATA_UPLOAD_MAX_MEMORY_SIZE = 104857600  # 100 MB
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
