@@ -28,7 +28,7 @@ if RENDER_EXTERNAL_HOSTNAME:
 # ssl._create_default_https_context = ssl._create_unverified_context
 
 
-DEBUG = True
+DEBUG = False
 SESSION_COOKIE_SECURE = True
 
 CSRF_COOKIE_SECURE = True
