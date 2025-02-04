@@ -8,7 +8,7 @@ ALLOWED_HOSTS = [
     "127.0.0.1",
     "localhost",
     "localhost:4085",
-    "181.49.241.226",
+    "104.21.34.249",
     "181.49.241.226:4084",
     "interface.amovil.co",
     "datazenith.online",
