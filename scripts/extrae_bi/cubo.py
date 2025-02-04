@@ -1,3 +1,5 @@
+# scripts/extrae_bi/cubo.py
+
 import os
 import pandas as pd
 from sqlalchemy import create_engine, text
@@ -20,7 +22,24 @@ logging.basicConfig(
 )
 
 class DataBaseConnection:
+    """
+    Clase para manejar conexiones a bases de datos MySQL y SQLite.
+
+    Atributos:
+        config (dict): Configuración para las conexiones a las bases de datos.
+        engine_mysql (sqlalchemy.engine.base.Engine): Motor SQLAlchemy para la base de datos MySQL.
+        engine_sqlite (sqlalchemy.engine.base.Engine): Motor SQLAlchemy para la base de datos SQLite.
+    """
+
     def __init__(self, config, mysql_engine=None, sqlite_engine=None):
+        """
+        Inicializa la instancia de DataBaseConnection con la configuración proporcionada.
+
+        Args:
+            config (dict): Configuración para las conexiones a las bases de datos.
+            mysql_engine (sqlalchemy.engine.base.Engine, opcional): Motor SQLAlchemy para la base de datos MySQL.
+            sqlite_engine (sqlalchemy.engine.base.Engine, opcional): Motor SQLAlchemy para la base de datos SQLite.
+        """
         self.config = config
         self.engine_mysql = mysql_engine if mysql_engine else self.create_engine_mysql()
         print(f"MySQL engine: {self.engine_mysql}")
@@ -28,6 +47,12 @@ class DataBaseConnection:
         print(f"SQLite engine: {self.engine_sqlite}")
 
     def create_engine_mysql(self):
+        """
+        Crea un motor SQLAlchemy para la conexión a la base de datos MySQL.
+
+        Returns:
+            sqlalchemy.engine.base.Engine: Motor SQLAlchemy para la base de datos MySQL.
+        """
         user, password, host, port, database = (
             self.config.get("nmUsrIn"),
             self.config.get("txPassIn"),
@@ -40,15 +65,47 @@ class DataBaseConnection:
         )
 
     def execute_query_mysql(self, query, chunksize=None):
+        """
+        Ejecuta una consulta SQL en la base de datos MySQL.
+
+        Args:
+            query (str): Consulta SQL a ejecutar.
+            chunksize (int, opcional): Tamaño del fragmento para la consulta.
+
+        Returns:
+            pd.DataFrame: Resultados de la consulta.
+        """
         with self.create_engine_mysql().connect() as connection:
             cursor = connection.execution_options(isolation_level="READ COMMITTED")
             return pd.read_sql_query(query, cursor, chunksize=chunksize)
 
     def execute_sql_sqlite(self, sql, params=None):
+        """
+        Ejecuta una consulta SQL en la base de datos SQLite.
+
+        Args:
+            sql (str): Consulta SQL a ejecutar.
+            params (dict, opcional): Parámetros para la consulta.
+
+        Returns:
+            sqlalchemy.engine.ResultProxy: Resultados de la consulta.
+        """
         with self.engine_sqlite.connect() as connection:
             return connection.execute(sql, params)
 
     def execute_query_mysql_chunked(self, query, table_name, chunksize=50000, params=None):
+        """
+        Ejecuta una consulta SQL en la base de datos MySQL y guarda los resultados en una tabla SQLite en fragmentos.
+
+        Args:
+            query (str): Consulta SQL a ejecutar.
+            table_name (str): Nombre de la tabla en SQLite donde se almacenarán los resultados.
+            chunksize (int, opcional): Tamaño del fragmento para la consulta.
+            params (dict, opcional): Parámetros para la consulta.
+
+        Returns:
+            int: Número total de registros almacenados en la tabla SQLite.
+        """
         try:
             self.eliminar_tabla_sqlite(table_name)
             with self.engine_mysql.connect() as connection:
@@ -81,14 +138,48 @@ class DataBaseConnection:
             raise
 
     def eliminar_tabla_sqlite(self, table_name):
+        """
+        Elimina una tabla en la base de datos SQLite si existe.
+
+        Args:
+            table_name (str): Nombre de la tabla a eliminar.
+        """
         sql = text(f"DROP TABLE IF EXISTS {table_name}")
         with self.engine_sqlite.connect() as connection:
             connection.execute(sql)
         print(f"Table {table_name} deleted successfully")
 
-
 class CuboVentas:
+    """
+    Clase para manejar el proceso de creación de cubos de ventas.
+
+    Atributos:
+        database_name (str): Nombre de la base de datos.
+        IdtReporteIni (str): Fecha de inicio del reporte.
+        IdtReporteFin (str): Fecha de fin del reporte.
+        user_id (int): ID del usuario.
+        reporte_id (int): ID del reporte.
+        config (dict): Configuración para las conexiones a las bases de datos.
+        proveedores (list): Lista de proveedores.
+        macrozonas (list): Lista de macrozonas.
+        db_connection (DataBaseConnection): Objeto de conexión a bases de datos.
+        engine_sqlite (sqlalchemy.engine.base.Engine): Motor SQLAlchemy para la base de datos SQLite.
+        engine_mysql (sqlalchemy.engine.base.Engine): Motor SQLAlchemy para la base de datos MySQL.
+        file_path (str): Ruta del archivo generado.
+        archivo_cubo_ventas (str): Nombre del archivo generado.
+    """
+
     def __init__(self, database_name, IdtReporteIni, IdtReporteFin, user_id, reporte_id):
+        """
+        Inicializa la instancia de CuboVentas.
+
+        Args:
+            database_name (str): Nombre de la base de datos.
+            IdtReporteIni (str): Fecha de inicio del reporte.
+            IdtReporteFin (str): Fecha de fin del reporte.
+            user_id (int): ID del usuario.
+            reporte_id (int): ID del reporte.
+        """
         self.database_name = database_name
         self.IdtReporteIni = IdtReporteIni
         self.IdtReporteFin = IdtReporteFin
@@ -100,6 +191,16 @@ class CuboVentas:
         self.archivo_cubo_ventas = None
 
     def configurar(self, database_name, user_id):
+        """
+        Configura las conexiones a las bases de datos y establece las variables de entorno necesarias.
+
+        Args:
+            database_name (str): Nombre de la base de datos.
+            user_id (int): ID del usuario.
+
+        Raises:
+            Exception: Propaga cualquier excepción que ocurra durante la configuración.
+        """
         try:
             config_basic = ConfigBasic(database_name, user_id)
             self.config = config_basic.config
@@ -114,6 +215,15 @@ class CuboVentas:
             raise
 
     def generate_sqlout(self):
+        """
+        Genera la consulta SQL para obtener los datos del reporte.
+
+        Returns:
+            sqlalchemy.sql.elements.TextClause: Consulta SQL generada.
+
+        Raises:
+            ValueError: Si no se encuentra el reporte con el ID especificado.
+        """
         try:
             reporte = Reporte.objects.get(pk=self.reporte_id)
             base_sql = reporte.sql_text
@@ -136,6 +246,16 @@ class CuboVentas:
             raise ValueError(f"Reporte con ID {self.reporte_id} no encontrado")
         
     def guardar_datos(self, table_name, file_path, hoja, total_records, wb):
+        """
+        Guarda los datos en un archivo según el número total de registros.
+
+        Args:
+            table_name (str): Nombre de la tabla en SQLite donde se almacenan los datos.
+            file_path (str): Ruta del archivo generado.
+            hoja (str): Nombre de la hoja en el archivo.
+            total_records (int): Número total de registros en la tabla.
+            wb (openpyxl.Workbook): Libro de trabajo de Excel.
+        """
         if total_records > 1000000:
             self.guardar_datos_csv(table_name, file_path)
         elif total_records > 250000:
@@ -144,6 +264,16 @@ class CuboVentas:
             self.guardar_datos_excel_xlsxwriter2(table_name, hoja, wb)
 
     def generar_nombre_archivo(self, hoja, ext=".xlsx"):
+        """
+        Genera el nombre del archivo y la ruta para guardar los datos.
+
+        Args:
+            hoja (str): Nombre de la hoja en el archivo.
+            ext (str, opcional): Extensión del archivo. Por defecto es ".xlsx".
+
+        Returns:
+            tuple: Nombre del archivo y ruta del archivo.
+        """
         self.archivo_cubo_ventas = f"{hoja}_{self.database_name.upper()}_de_{self.IdtReporteIni}_a_{self.IdtReporteFin}_user_{self.user_id}{ext}"
         self.file_path = os.path.join("media", self.archivo_cubo_ventas)
         print(f"Generated file path: {self.file_path}")
@@ -151,6 +281,13 @@ class CuboVentas:
         return self.archivo_cubo_ventas, self.file_path
 
     def guardar_datos_csv(self, table_name, file_path):
+        """
+        Guarda los datos en un archivo CSV.
+
+        Args:
+            table_name (str): Nombre de la tabla en SQLite donde se almacenan los datos.
+            file_path (str): Ruta del archivo CSV generado.
+        """
         chunksize = 50000  # Define el tamaño de cada bloque de datos
 
         with self.engine_sqlite.connect() as connection:
@@ -162,6 +299,14 @@ class CuboVentas:
         logging.debug(f"CSV file {file_path} generated successfully")
 
     def guardar_datos_excel_xlsxwriter(self, table_name, file_path, hoja):
+        """
+        Guarda los datos en un archivo Excel usando xlsxwriter.
+
+        Args:
+            table_name (str): Nombre de la tabla en SQLite donde se almacenan los datos.
+            file_path (str): Ruta del archivo Excel generado.
+            hoja (str): Nombre de la hoja en el archivo.
+        """
         chunksize = 50000
 
         with pd.ExcelWriter(file_path, engine="xlsxwriter") as writer:
@@ -186,6 +331,14 @@ class CuboVentas:
                     logging.debug(f"Next startrow: {startrow}")
 
     def guardar_datos_excel_xlsxwriter2(self, table_name, hoja, wb):
+        """
+        Guarda los datos en un archivo Excel usando openpyxl.
+
+        Args:
+            table_name (str): Nombre de la tabla en SQLite donde se almacenan los datos.
+            hoja (str): Nombre de la hoja en el archivo.
+            wb (openpyxl.Workbook): Libro de trabajo de Excel.
+        """
         chunksize = 50000
 
         ws = wb.create_sheet(title=hoja)
@@ -203,6 +356,14 @@ class CuboVentas:
                 ws.append(cells)
 
     def guardar_datos_excel_openpyxl(self, table_name, file_path, hoja):
+        """
+        Guarda los datos en un archivo Excel completo usando openpyxl.
+
+        Args:
+            table_name (str): Nombre de la tabla en SQLite donde se almacenan los datos.
+            file_path (str): Ruta del archivo Excel generado.
+            hoja (str): Nombre de la hoja en el archivo.
+        """
         chunksize = 50000
 
         wb = Workbook(write_only=True)
@@ -225,12 +386,30 @@ class CuboVentas:
         logging.debug(f"Excel file {file_path} generated successfully")
 
     def guardar_datos_excel_completo(self, table_name, file_path, hoja):
+        """
+        Guarda todos los datos en un archivo Excel completo.
+
+        Args:
+            table_name (str): Nombre de la tabla en SQLite donde se almacenan los datos.
+            file_path (str): Ruta del archivo Excel generado.
+            hoja (str): Nombre de la hoja en el archivo.
+        """
         with pd.ExcelWriter(file_path, engine="openpyxl") as writer:
             with self.engine_sqlite.connect() as connection:
                 df = pd.read_sql_table(table_name, con=connection)
                 df.to_excel(writer, index=False, sheet_name=hoja)
 
     def procesar_hoja(self, hoja, wb):
+        """
+        Procesa los datos para una hoja específica.
+
+        Args:
+            hoja (str): Nombre de la hoja a procesar.
+            wb (openpyxl.Workbook): Libro de trabajo de Excel.
+
+        Returns:
+            dict or bool: Diccionario con información de éxito o False si ocurre un error.
+        """
         try:
             sqlout = self.generate_sqlout()
             print(f"SQL Output: {sqlout}")
@@ -265,6 +444,12 @@ class CuboVentas:
             }
 
     def procesar_datos(self):
+        """
+        Procesa los datos para el cubo de ventas y guarda los resultados en un archivo.
+
+        Returns:
+            dict: Diccionario con información de éxito o error.
+        """
         wb = Workbook(write_only=True)
         reporte = Reporte.objects.get(pk=self.reporte_id)
         hoja = reporte.nombre
@@ -285,6 +470,12 @@ class CuboVentas:
         }
 
     def get_data(self):
+        """
+        Obtiene los datos procesados del cubo de ventas.
+
+        Returns:
+            dict: Diccionario con encabezados y filas de los datos.
+        """
         reporte = Reporte.objects.get(pk=self.reporte_id)
         table_name = f"my_table_{self.database_name}_{self.user_id}_{reporte.nombre}"
         with self.engine_sqlite.connect() as connection:

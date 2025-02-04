@@ -221,24 +221,88 @@ class Api_PowerBi:
         report_id = self.config.get("report_id_powerbi")
         return report_id
 
-    def generate_embed_token(self, report_id):
-        access_id = self.request_access_token_refresh()
+    def generate_embed_token(self):
+        """
+        Genera el token de incrustación usando usuario y contraseña,
+        igual que se hace para refresh, pero en vez de llamar al endpoint de refresh,
+        llama al endpoint GenerateToken.
+        """
+        try:
+            # 1. Obtener el token de Azure AD con usuario y contraseña
+            username = self.config.get("nmUsrPowerbi")  # tu usuario
+            password = self.config.get("txPassPowerbi")  # tu contraseña
+            tenant_id = get_secret("TENANT_ID")
+            client_id = get_secret("CLIENT_ID")
 
-        # Reemplaza con el ID del grupo de trabajo en Power BI donde se encuentra el informe
-        workspace_id = get_secret("GROUP_ID")
+            authority_url = f"https://login.microsoftonline.com/{tenant_id}"
+            scopes = ["https://analysis.windows.net/powerbi/api/.default"]
 
-        endpoint = f"https://api.powerbi.com/v1.0/myorg/groups/{workspace_id}/reports/{report_id}/GenerateToken"
-        headers = {
-            "Authorization": f"Bearer " + access_id,
-            "Content-Type": "application/json",
-        }
-        payload = {"accessLevel": "View"}
-        response = requests.post(endpoint, headers=headers, json=payload)
+            public_app = msal.PublicClientApplication(
+                client_id, authority=authority_url
+            )
+            token_response = public_app.acquire_token_by_username_password(
+                username=username, password=password, scopes=scopes
+            )
 
-        if response.status_code == 200:
-            return response.json()["token"]
-        else:
-            raise Exception("No se pudo generar el token de incrustación.")
+            if "access_token" not in token_response:
+                raise Exception(
+                    f"Error en token_response: {token_response.get('error_description')}"
+                )
+
+            user_access_token = token_response["access_token"]
+
+            # 2. Llamar a la API para GenerateToken
+            workspace_id = self.config.get("group_id_powerbi")
+            report_id = self.config.get("report_id_powerbi")
+            endpoint = f"https://api.powerbi.com/v1.0/myorg/groups/{workspace_id}/reports/{report_id}/GenerateToken"
+
+            headers = {
+                "Authorization": f"Bearer {user_access_token}",
+                "Content-Type": "application/json",
+            }
+            payload = {"accessLevel": "View"}
+
+            response = requests.post(endpoint, headers=headers, json=payload)
+            if response.status_code == 200:
+                return response.json().get("token")
+            else:
+                msg = (
+                    f"Error al generar token: {response.status_code} - {response.text}"
+                )
+                print(msg)
+                return {"error": msg}
+
+        except Exception as e:
+            print(f"Excepción en generate_embed_token: {e}")
+            return {"error": str(e)}
+
+    # def generate_embed_token(self):
+    #     try:
+    #         access_id = self.request_access_token_refresh()
+    #         if not access_id:
+    #             logging.error("No se pudo obtener el token de acceso.")
+    #             return {"error": "No se pudo obtener el token de acceso."}
+
+    #         workspace_id = self.config.get("group_id_powerbi")
+    #         report_id = self.get_report_id()
+    #         endpoint = f"https://api.powerbi.com/v1.0/myorg/groups/{workspace_id}/reports/{report_id}/GenerateToken"
+
+    #         headers = {
+    #             "Authorization": f"Bearer {access_id}",
+    #             "Content-Type": "application/json",
+    #         }
+    #         payload = {"accessLevel": "View"}
+
+    #         response = requests.post(endpoint, headers=headers, json=payload)
+
+    #         if response.status_code == 200:
+    #             return response.json().get("token", None)
+    #         else:
+    #             logging.error(f"Error al generar token: {response.status_code} - {response.text}")
+    #             return {"error": f"Error al generar token: {response.text}"}
+    #     except Exception as e:
+    #         logging.error(f"Excepción en generate_embed_token: {e}")
+    #         return {"error": f"Excepción en generate_embed_token: {str(e)}"}
 
     def get_status_history(self):
         access_id = self.request_access_token_refresh()

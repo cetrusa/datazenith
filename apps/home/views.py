@@ -35,7 +35,8 @@ from django_rq import get_connection
 
 from django.views.generic import TemplateView
 from apps.users.views import BaseView
-
+import logging
+logger = logging.getLogger(__name__)
 
 class HomePanelCuboPage(LoginRequiredMixin, BaseView):
     template_name = "home/panel_cubo.html"
@@ -134,7 +135,7 @@ class HomePanelInterfacePage(LoginRequiredMixin, BaseView):
         context["form_url"] = "home_app:panel_interface"
         return context
 
-class DownloadFileView(BaseView):
+class DownloadFileView(View):
     login_url = reverse_lazy("users_app:user-login")
 
     def get(self, request):
@@ -155,7 +156,7 @@ class DownloadFileView(BaseView):
             messages.error(request, "Archivo no encontrado")
         return render(request, "home/panel_cubo.html", {"template_name": template_name})
 
-class DeleteFileView(BaseView):
+class DeleteFileView(View):
     login_url = reverse_lazy("users_app:user-login")
 
     def post(self, request):
@@ -253,6 +254,7 @@ class CheckTaskStatusView(BaseView):
 
 
 
+
 class CuboPage(LoginRequiredMixin, BaseView):
     """
     Vista para la página de generación del Cubo de Ventas.
@@ -336,22 +338,21 @@ class CuboPage(LoginRequiredMixin, BaseView):
 
         return context
 
-    def get_data_from_task(self, request):
-        """
-        Obtiene los datos de la tarea almacenados en la sesión.
-        """
-        task_id = request.session.get("task_id")
-        if not task_id:
-            return None
+    # def get_data_from_task(self, request):
+    #     """
+    #     Obtiene los datos de la tarea almacenados en la sesión.
+    #     """
+    #     task_id = request.session.get("task_id")
+    #     if not task_id:
+    #         return None
 
-        connection = get_connection()
-        try:
-            job = Job.fetch(task_id, connection=connection)
-            if job.is_finished and job.result:
-                return job.result.get("data", None)
-        except NoSuchJobError:
-            return None
-
+    #     connection = get_connection()
+    #     try:
+    #         job = Job.fetch(task_id, connection=connection)
+    #         if job.is_finished and job.result:
+    #             return job.result.get("data", None)
+    #     except NoSuchJobError:
+    #         return None
 
     
 class ProveedorPage(LoginRequiredMixin, BaseView):

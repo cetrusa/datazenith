@@ -11,6 +11,7 @@ urlpatterns = [
         views.HomePanelCuboPage.as_view(),
         name="panel_cubo",
     ),
+    
     path(
         "panel_bi/",
         views.HomePanelBiPage.as_view(),

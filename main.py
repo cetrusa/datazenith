@@ -38,6 +38,7 @@ def get_secret(secret_name, secrets_file="secret.json"):
     except FileNotFoundError:
         raise ValueError(f"No se encontró el archivo de configuración {secrets_file}.")
 
+
 class DataBaseConnection:
     def __init__(self, config, mysql_engine=None, sqlite_engine=None):
         self.config = config
@@ -78,8 +79,8 @@ class DataBaseConnection:
         return con.ConexionMariadb3(
             str(user), str(password), str(host), int(port), str(database)
         )
-        
-        
+
+
 class Inicio:
     def __init__(self):
         if getattr(sys, "frozen", False):
@@ -93,10 +94,10 @@ class Inicio:
             )
         elif __file__:
             self.dir_actual = os.path.dirname(__file__)
-            self.name = str("distrivision_aws")
+            self.name = str("distritiendas_aws")
             self.dir_actual = str("puentemes")
             self.nmDt = self.dir_actual
-            
+
         self.configurar(self.name)
 
     def configurar(self, database_name):
@@ -114,7 +115,7 @@ class Inicio:
         except Exception as e:
             logging.error(f"Error al inicializar Actualización: {e}")
             raise
-    
+
     def correo_config(self):
         sql = text("SELECT * FROM powerbi_adm.conf_tipo WHERE nbTipo = '6';")
         # print(sql)
@@ -149,8 +150,12 @@ class Inicio:
             # La consulta SQL para obtener IdtReporteIni y IdtReporteFin
             sql_report_date_ini = text(txDtIni)
             sql_report_date_fin = text(txDtFin)
-            report_date_df_ini = self.config_basic.execute_sql_query(sql_report_date_ini)
-            report_date_df_fin = self.config_basic.execute_sql_query(sql_report_date_fin)
+            report_date_df_ini = self.config_basic.execute_sql_query(
+                sql_report_date_ini
+            )
+            report_date_df_fin = self.config_basic.execute_sql_query(
+                sql_report_date_fin
+            )
             if not report_date_df_ini.empty and not report_date_df_fin.empty:
                 self.IdtReporteIni = report_date_df_ini["IdtReporteIni"].iloc[0]
                 self.IdtReporteFin = report_date_df_fin["IdtReporteFin"].iloc[0]

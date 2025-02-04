@@ -156,6 +156,24 @@ rsa_key.pub
 .idea
 mydata.db
 mydata.db
+cargueinfoventas.txt
+difusion.txt
+difusionerror.txt
+docker-compose.local.yml
+Dockerfile-local
+InstalarExeFinal-actualizar-Insert.json
+InstalarExeFinal-con-Excel-compi.json
+log.txt
+logExtractor.txt
+logo_amovil.ico
+main_actualiza_insert.py
+main_carguecostos.py
+main_cargueinfoventas.py
+main.py
+requirements copy.txt
+requirements._funcionaltxt
+requirements312.txt
+
 # pytype static type analyzer
 .pytype/
 # Large Files

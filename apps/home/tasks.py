@@ -4,7 +4,7 @@ from scripts.config import ConfigBasic
 from scripts.extrae_bi.cargue_zip import CargueZip
 from scripts.extrae_bi.interface import InterfaceContable
 from scripts.extrae_bi.plano import InterfacePlano
-from scripts.extrae_bi.extrae_bi_call import Extrae_Bi
+from scripts.extrae_bi.extrae_bi import Extrae_Bi
 from scripts.StaticPage import StaticPage
 import logging
 
@@ -16,28 +16,36 @@ from scripts.extrae_bi.cargue_plano_tsol import (
     CarguePlano,
 )  # Asegúrate de importar tu clase CarguePlano
 
+logger = logging.getLogger(__name__)
+
+
 @job("default", timeout=3600)
 def cubo_ventas_task(database_name, IdtReporteIni, IdtReporteFin, user_id, report_id):
     try:
-        logging.info("Iniciando proceso de CuboVentas")
-        cubo_ventas = CuboVentas(database_name, IdtReporteIni, IdtReporteFin, user_id, report_id)
+        logger.info("Iniciando proceso de CuboVentas")
+        cubo_ventas = CuboVentas(
+            database_name, IdtReporteIni, IdtReporteFin, user_id, report_id
+        )
         resultado = cubo_ventas.procesar_datos()
-        logging.info(f"Proceso de CuboVentas finalizado: {resultado}")
+        logger.info(f"Proceso de CuboVentas finalizado: {resultado}")
 
         if isinstance(resultado, dict):
             if "success" in resultado and resultado["success"]:
                 if "file_path" in resultado and "file_name" in resultado:
-                    # Obtener los datos de la tabla antes de eliminarla
                     data = cubo_ventas.get_data()
-                    # Agregar los datos a la respuesta
-                    resultado['data'] = data
+                    resultado["data"] = data
+                    logger.info(
+                        f"Datos generados: Headers - {data['headers']}, Rows - {len(data['rows'])}"
+                    )
                     return resultado
                 else:
-                    logging.error("El resultado de CuboVentas no incluye file_path o file_name")
+                    logger.error(
+                        "El resultado de CuboVentas no incluye file_path o file_name"
+                    )
             else:
-                logging.error("El proceso de CuboVentas no fue exitoso")
+                logger.error("El proceso de CuboVentas no fue exitoso")
         else:
-            logging.error("El resultado de CuboVentas no tiene el formato esperado")
+            logger.error("El resultado de CuboVentas no tiene el formato esperado")
 
         return {
             "success": False,
@@ -46,11 +54,9 @@ def cubo_ventas_task(database_name, IdtReporteIni, IdtReporteFin, user_id, repor
 
     except Exception as e:
         error_msg = f"Excepción al ejecutar cubo_ventas_task: {e}"
-        logging.error(error_msg)
+        logger.error(error_msg)
         return {"success": False, "error_message": error_msg}
 
-    
-    
 
 @job("default", timeout=3600)
 def interface_task(database_name, IdtReporteIni, IdtReporteFin):
