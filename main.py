@@ -94,8 +94,8 @@ class Inicio:
             )
         elif __file__:
             self.dir_actual = os.path.dirname(__file__)
-            self.name = str("distritiendas_aws")
-            self.dir_actual = str("puentemes")
+            self.name = str("levapan")
+            self.dir_actual = str("personalizado7")
             self.nmDt = self.dir_actual
 
         self.configurar(self.name)
