@@ -2,6 +2,7 @@ import paramiko
 import logging
 import os
 from dotenv import load_dotenv
+import time
 
 # Cargar variables de entorno desde el archivo .env
 load_dotenv()
@@ -16,26 +17,22 @@ PORT = 22
 USERNAME = "admon"
 PASSWORD = os.getenv("SSH_PASSWORD")  # Utiliza la variable de entorno cargada
 
-# Comandos a ejecutar
-CHMOD_COMMAND = 'sudo -S chmod +x /var/www/datazenith/manage_data_datazenith.sh'
-COMMAND = "sudo -S /var/www/datazenith/manage_data_datazenith.sh"
+# Comandos a ejecutar (sin pedir contraseña)
+CHMOD_COMMAND = "sudo -n chmod +x /var/www/datazenith/manage_data_datazenith.sh"
+COMMAND = "sudo -n /var/www/datazenith/manage_data_datazenith.sh"
 
 def execute_ssh_command(host, port, username, password, command):
     ssh = paramiko.SSHClient()
     ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+
     try:
-        # Conectar al servidor SSH
         ssh.connect(host, port=port, username=username, password=password)
         logger.info(f"Conexión establecida con {host}:{port} como {username}")
 
-        # Ejecutar el comando
-        logger.info(f"Ejecutando comando: {command}")
+        # Ejecutar comando sin perfil de usuario cargado
         stdin, stdout, stderr = ssh.exec_command(command)
-        stdin.write(password + '\n')
-        stdin.flush()
-        stdout.channel.recv_exit_status()  # Espera a que el comando termine
-        
-        # Leer y registrar la salida
+
+        # Leer la salida
         out = stdout.read().decode('utf-8')
         err = stderr.read().decode('utf-8')
 
@@ -54,8 +51,9 @@ def execute_ssh_command(host, port, username, password, command):
         ssh.close()
         logger.info("Conexión SSH cerrada")
 
-# Ejecutar los comandos necesarios
+# Ejecutar comandos
 logger.info("Cambiando permisos del script")
 execute_ssh_command(HOST, PORT, USERNAME, PASSWORD, CHMOD_COMMAND)
+
 logger.info("Ejecutando el script de administración de datos")
 execute_ssh_command(HOST, PORT, USERNAME, PASSWORD, COMMAND)
