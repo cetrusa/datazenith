@@ -3,7 +3,7 @@ import logging
 from scripts.extrae_bi.cargue_infoventas import CargueInfoVentas
 
 def main():
-    database_name = "distrijass"
+    database_name = "powerbi_distrijass"
     IdtReporteIni = "2024-06-01"
     IdtReporteFin = "2024-06-30"
     user_id = None  # O el ID del usuario si es necesario

@@ -36,7 +36,9 @@ from django_rq import get_connection
 from django.views.generic import TemplateView
 from apps.users.views import BaseView
 import logging
+
 logger = logging.getLogger(__name__)
+
 
 class HomePanelCuboPage(LoginRequiredMixin, BaseView):
     template_name = "home/panel_cubo.html"
@@ -86,7 +88,8 @@ class HomePanelBiPage(LoginRequiredMixin, BaseView):
         context = super().get_context_data(**kwargs)
         context["form_url"] = "home_app:panel_bi"
         return context
-    
+
+
 class HomePanelActualizacionPage(LoginRequiredMixin, BaseView):
     template_name = "home/panel_actualizacion.html"
 
@@ -110,7 +113,8 @@ class HomePanelActualizacionPage(LoginRequiredMixin, BaseView):
         context = super().get_context_data(**kwargs)
         context["form_url"] = "home_app:panel_actualizacion"
         return context
-    
+
+
 class HomePanelInterfacePage(LoginRequiredMixin, BaseView):
     template_name = "home/panel_interface.html"
 
@@ -135,6 +139,7 @@ class HomePanelInterfacePage(LoginRequiredMixin, BaseView):
         context["form_url"] = "home_app:panel_interface"
         return context
 
+
 class DownloadFileView(View):
     login_url = reverse_lazy("users_app:user-login")
 
@@ -155,6 +160,7 @@ class DownloadFileView(View):
         else:
             messages.error(request, "Archivo no encontrado")
         return render(request, "home/panel_cubo.html", {"template_name": template_name})
+
 
 class DeleteFileView(View):
     login_url = reverse_lazy("users_app:user-login")
@@ -185,6 +191,7 @@ class DeleteFileView(View):
                 }
             )
 
+
 class CheckTaskStatusView(BaseView):
     """
     Vista para comprobar el estado de una tarea asincrónica y recuperar su resultado.
@@ -210,7 +217,9 @@ class CheckTaskStatusView(BaseView):
             if job.is_finished:
                 return self.handle_finished_job(request, job)
             elif job.is_failed:
-                return JsonResponse({"status": "failed", "result": job.result}, status=500)
+                return JsonResponse(
+                    {"status": "failed", "result": job.result}, status=500
+                )
             else:
                 return JsonResponse({"status": job.get_status()})
 
@@ -238,7 +247,12 @@ class CheckTaskStatusView(BaseView):
                 request.session["file_path"] = resultado["file_path"]
                 request.session["file_name"] = resultado["file_name"]
                 # Podrías querer incluir también esta información en la respuesta
-                response_data.update({"file_path": resultado["file_path"], "file_name": resultado["file_name"]})
+                response_data.update(
+                    {
+                        "file_path": resultado["file_path"],
+                        "file_name": resultado["file_name"],
+                    }
+                )
 
             # Agregar datos de tabla a la sesión si están presentes
             if "data" in resultado:
@@ -251,8 +265,6 @@ class CheckTaskStatusView(BaseView):
         return JsonResponse(
             {"error": "Task completed but result is not as expected"}, status=500
         )
-
-
 
 
 class CuboPage(LoginRequiredMixin, BaseView):
@@ -297,8 +309,10 @@ class CuboPage(LoginRequiredMixin, BaseView):
             )
 
         try:
-            report_id = 1 # CUBO DE VENTAS
-            task = cubo_ventas_task.delay(database_name, IdtReporteIni, IdtReporteFin, user_id, report_id)
+            report_id = 1  # CUBO DE VENTAS
+            task = cubo_ventas_task.delay(
+                database_name, IdtReporteIni, IdtReporteFin, user_id, report_id
+            )
             request.session["task_id"] = task.id
             return JsonResponse({"success": True, "task_id": task.id})
         except Exception as e:
@@ -312,11 +326,13 @@ class CuboPage(LoginRequiredMixin, BaseView):
         """
         database_name = request.session.get("database_name")
         if not database_name:
-            messages.warning(request, "Debe seleccionar una empresa antes de continuar.")
+            messages.warning(
+                request, "Debe seleccionar una empresa antes de continuar."
+            )
             return redirect("home_app:panel_cubo")
 
         context = self.get_context_data(**kwargs)
-        context['data'] = None
+        context["data"] = None
         return self.render_to_response(context)
 
     def get_context_data(self, **kwargs):
@@ -333,8 +349,8 @@ class CuboPage(LoginRequiredMixin, BaseView):
         database_name = self.request.session.get("database_name")
         if database_name:
             config = ConfigBasic(database_name, user_id)
-            context["proveedores"] = config.config.get('proveedores', [])
-            context["macrozonas"] = config.config.get('macrozonas', [])
+            context["proveedores"] = config.config.get("proveedores", [])
+            context["macrozonas"] = config.config.get("macrozonas", [])
 
         return context
 
@@ -354,7 +370,7 @@ class CuboPage(LoginRequiredMixin, BaseView):
     #     except NoSuchJobError:
     #         return None
 
-    
+
 class ProveedorPage(LoginRequiredMixin, BaseView):
     """
     Vista para la página de generación del Cubo de Ventas.
@@ -397,8 +413,10 @@ class ProveedorPage(LoginRequiredMixin, BaseView):
             )
 
         try:
-            report_id = 2 # PROVEEDORES
-            task = cubo_ventas_task.delay(database_name, IdtReporteIni, IdtReporteFin, user_id,report_id)
+            report_id = 2  # PROVEEDORES
+            task = cubo_ventas_task.delay(
+                database_name, IdtReporteIni, IdtReporteFin, user_id, report_id
+            )
             request.session["task_id"] = task.id
             return JsonResponse({"success": True, "task_id": task.id})
         except Exception as e:
@@ -412,7 +430,9 @@ class ProveedorPage(LoginRequiredMixin, BaseView):
         """
         database_name = request.session.get("database_name")
         if not database_name:
-            messages.warning(request, "Debe seleccionar una empresa antes de continuar.")
+            messages.warning(
+                request, "Debe seleccionar una empresa antes de continuar."
+            )
             return redirect("home_app:panel_cubo")
 
         context = self.get_context_data(**kwargs)
@@ -432,8 +452,8 @@ class ProveedorPage(LoginRequiredMixin, BaseView):
         database_name = self.request.session.get("database_name")
         if database_name:
             config = ConfigBasic(database_name, user_id)
-            context["proveedores"] = config.config.get('proveedores', [])
-            context["macrozonas"] = config.config.get('macrozonas', [])
+            context["proveedores"] = config.config.get("proveedores", [])
+            context["macrozonas"] = config.config.get("macrozonas", [])
 
         return context
 
@@ -504,7 +524,9 @@ class InterfacePage(LoginRequiredMixin, BaseView):
         """
         database_name = request.session.get("database_name")
         if not database_name:
-            messages.warning(request, "Debe seleccionar una empresa antes de continuar.")
+            messages.warning(
+                request, "Debe seleccionar una empresa antes de continuar."
+            )
             return redirect("home_app:panel_cubo")
 
         context = self.get_context_data(**kwargs)
@@ -524,8 +546,8 @@ class InterfacePage(LoginRequiredMixin, BaseView):
         database_name = self.request.session.get("database_name")
         if database_name:
             config = ConfigBasic(database_name, user_id)
-            context["proveedores"] = config.config.get('proveedores', [])
-            context["macrozonas"] = config.config.get('macrozonas', [])
+            context["proveedores"] = config.config.get("proveedores", [])
+            context["macrozonas"] = config.config.get("macrozonas", [])
 
         return context
 
@@ -589,7 +611,9 @@ class PlanoPage(LoginRequiredMixin, BaseView):
         """
         database_name = request.session.get("database_name")
         if not database_name:
-            messages.warning(request, "Debe seleccionar una empresa antes de continuar.")
+            messages.warning(
+                request, "Debe seleccionar una empresa antes de continuar."
+            )
             return redirect("home_app:panel_cubo")
 
         context = self.get_context_data(**kwargs)
@@ -609,8 +633,8 @@ class PlanoPage(LoginRequiredMixin, BaseView):
         database_name = self.request.session.get("database_name")
         if database_name:
             config = ConfigBasic(database_name, user_id)
-            context["proveedores"] = config.config.get('proveedores', [])
-            context["macrozonas"] = config.config.get('macrozonas', [])
+            context["proveedores"] = config.config.get("proveedores", [])
+            context["macrozonas"] = config.config.get("macrozonas", [])
 
         return context
 
@@ -656,7 +680,9 @@ class ActualizacionPage(LoginRequiredMixin, BaseView):
     def get(self, request, *args, **kwargs):
         database_name = request.session.get("database_name")
         if not database_name:
-            messages.warning(request, "Debe seleccionar una empresa antes de continuar.")
+            messages.warning(
+                request, "Debe seleccionar una empresa antes de continuar."
+            )
             return redirect("home_app:panel_cubo")
 
         context = self.get_context_data(**kwargs)
@@ -670,8 +696,8 @@ class ActualizacionPage(LoginRequiredMixin, BaseView):
         database_name = self.request.session.get("database_name")
         if database_name:
             config = ConfigBasic(database_name, user_id)
-            context["proveedores"] = config.config.get('proveedores', [])
-            context["macrozonas"] = config.config.get('macrozonas', [])
+            context["proveedores"] = config.config.get("proveedores", [])
+            context["macrozonas"] = config.config.get("macrozonas", [])
 
         return context
 
@@ -704,7 +730,9 @@ class PruebaPage(LoginRequiredMixin, BaseView):
         """
         database_name = request.session.get("database_name")
         if not database_name:
-            messages.warning(request, "Debe seleccionar una empresa antes de continuar.")
+            messages.warning(
+                request, "Debe seleccionar una empresa antes de continuar."
+            )
             return redirect("home_app:panel_cubo")
 
         context = self.get_context_data(**kwargs)
@@ -724,7 +752,95 @@ class PruebaPage(LoginRequiredMixin, BaseView):
         database_name = self.request.session.get("database_name")
         if database_name:
             config = ConfigBasic(database_name, user_id)
-            context["proveedores"] = config.config.get('proveedores', [])
-            context["macrozonas"] = config.config.get('macrozonas', [])
+            context["proveedores"] = config.config.get("proveedores", [])
+            context["macrozonas"] = config.config.get("macrozonas", [])
+
+        return context
+
+
+class AmovildeskPage(LoginRequiredMixin, BaseView):
+    """
+    Vista para la página de generación del Cubo de Ventas.
+
+    Esta vista maneja la solicitud del usuario para generar un cubo de ventas,
+    iniciando una tarea en segundo plano y devolviendo el ID de dicha tarea.
+    """
+
+    template_name = "home/cubo.html"
+    login_url = reverse_lazy("users_app:user-login")
+
+    @method_decorator(registrar_auditoria)
+    @method_decorator(permission_required("permisos.cubo", raise_exception=True))
+    def dispatch(self, request, *args, **kwargs):
+        """
+        Método para despachar la solicitud, aplicando decoradores de auditoría y permisos requeridos.
+        """
+        return super().dispatch(request, *args, **kwargs)
+
+    def post(self, request, *args, **kwargs):
+        """
+        Maneja la solicitud POST para iniciar el proceso de generación del cubo de ventas.
+
+        Recoge los datos del formulario, valida la entrada y, si es válida,
+        inicia una tarea asincrónica para generar el cubo de ventas.
+        """
+        database_name = request.POST.get("database_select")
+        IdtReporteIni = request.POST.get("IdtReporteIni")
+        IdtReporteFin = request.POST.get("IdtReporteFin")
+        user_id = request.user.id
+        request.session["template_name"] = self.template_name
+
+        if not all([database_name, IdtReporteIni, IdtReporteFin]):
+            return JsonResponse(
+                {
+                    "success": False,
+                    "error_message": "Se debe seleccionar la base de datos y las fechas.",
+                },
+                status=400,
+            )
+
+        try:
+            report_id = 3  # AMOVILDESK
+            task = cubo_ventas_task.delay(
+                database_name, IdtReporteIni, IdtReporteFin, user_id, report_id
+            )
+            request.session["task_id"] = task.id
+            return JsonResponse({"success": True, "task_id": task.id})
+        except Exception as e:
+            return JsonResponse(
+                {"success": False, "error_message": f"Error: {str(e)}"}, status=500
+            )
+
+    def get(self, request, *args, **kwargs):
+        """
+        Maneja la solicitud GET, devolviendo la plantilla de la página del cubo de ventas.
+        """
+        database_name = request.session.get("database_name")
+        if not database_name:
+            messages.warning(
+                request, "Debe seleccionar una empresa antes de continuar."
+            )
+            return redirect("home_app:panel_cubo")
+
+        context = self.get_context_data(**kwargs)
+        context["data"] = None
+        return self.render_to_response(context)
+
+    def get_context_data(self, **kwargs):
+        """
+        Obtiene el contexto necesario para la plantilla.
+
+        :return: Contexto que incluye la URL del formulario y los filtros de permisos.
+        """
+        context = super().get_context_data(**kwargs)
+        context["form_url"] = "home_app:cubo"
+
+        # Obtener permisos de macrozona y proveedor para el usuario
+        user_id = self.request.user.id
+        database_name = self.request.session.get("database_name")
+        if database_name:
+            config = ConfigBasic(database_name, user_id)
+            context["proveedores"] = config.config.get("proveedores", [])
+            context["macrozonas"] = config.config.get("macrozonas", [])
 
         return context
