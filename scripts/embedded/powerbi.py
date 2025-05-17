@@ -7,6 +7,7 @@ import json
 
 logger = logging.getLogger(__name__)
 
+
 # Cargar secretos, por ejemplo TENANT_ID, CLIENT_ID
 # Ajusta este método según tu forma de manejar secret.json
 def get_secret(secret_name, secrets_file="secret.json"):
@@ -18,6 +19,7 @@ def get_secret(secret_name, secrets_file="secret.json"):
         msg = f"La variable {secret_name} no existe o 'secret.json' no se encontró."
         logger.error(msg)
         raise ImproperlyConfigured(msg)
+
 
 class PbiEmbedServiceUserPwd:
     """Servicio para incrustar un reporte de Power BI usando usuario y contraseña (User Owns Data)."""
@@ -31,16 +33,59 @@ class PbiEmbedServiceUserPwd:
         self.client_id = get_secret("CLIENT_ID")
 
         # 3. Credenciales de Power BI (usuario y contraseña) desde tu config
-        self.username = self.config.get("nmUsrPowerbi")     # e.g. "usuario@tenant.onmicrosoft.com"
-        self.password = self.config.get("txPassPowerbi")    # la contraseña
+        # Intenta obtener desde config, sino desde secret.json
+        self.username = self.config.get("nmUsrPowerbi")
+        if not self.username:
+            logger.warning(
+                "nmUsrPowerbi no encontrado en config, usando POWER_BI_USER de secret.json"
+            )
+            self.username = get_secret("POWER_BI_USER")
+
+        self.password = self.config.get("txPassPowerbi")
+        if not self.password:
+            logger.warning(
+                "txPassPowerbi no encontrado en config, usando POWER_BI_PASS de secret.json"
+            )
+            self.password = get_secret("POWER_BI_PASS")
 
         # 4. workspaceId (group_id) y reportId
         self.workspace_id = self.config.get("group_id_powerbi")
+        if not self.workspace_id:
+            logger.warning(
+                "group_id_powerbi no encontrado en config, usando GROUP_ID de secret.json"
+            )
+            self.workspace_id = get_secret("GROUP_ID")
+
         self.report_id = self.config.get("report_id_powerbi")
 
         # Asegurarnos de que existan
-        if not all([self.username, self.password, self.tenant_id, self.client_id, self.workspace_id, self.report_id]):
-            raise ImproperlyConfigured("Faltan credenciales o IDs requeridos para Power BI")
+        if not all(
+            [
+                self.username,
+                self.password,
+                self.tenant_id,
+                self.client_id,
+                self.workspace_id,
+                self.report_id,
+            ]
+        ):
+            missing_fields = []
+            if not self.username:
+                missing_fields.append("username")
+            if not self.password:
+                missing_fields.append("password")
+            if not self.tenant_id:
+                missing_fields.append("tenant_id")
+            if not self.client_id:
+                missing_fields.append("client_id")
+            if not self.workspace_id:
+                missing_fields.append("workspace_id")
+            if not self.report_id:
+                missing_fields.append("report_id")
+
+            error_msg = f"Faltan credenciales o IDs requeridos para Power BI: {', '.join(missing_fields)}"
+            logger.error(error_msg)
+            raise ImproperlyConfigured(error_msg)
 
         # 5. Generamos el token de Azure AD (este es el token 'user_access_token')
         self.access_token = self.acquire_user_token()
@@ -48,7 +93,7 @@ class PbiEmbedServiceUserPwd:
         # 6. Cabeceras para llamar a la Power BI API
         self.headers = {
             "Content-Type": "application/json",
-            "Authorization": f"Bearer {self.access_token}"
+            "Authorization": f"Bearer {self.access_token}",
         }
 
     def acquire_user_token(self):
@@ -57,15 +102,18 @@ class PbiEmbedServiceUserPwd:
         scopes = ["https://analysis.windows.net/powerbi/api/.default"]
 
         try:
-            public_app = msal.PublicClientApplication(self.client_id, authority=authority_url)
+            public_app = msal.PublicClientApplication(
+                self.client_id, authority=authority_url
+            )
             token_response = public_app.acquire_token_by_username_password(
-                username=self.username,
-                password=self.password,
-                scopes=scopes
+                username=self.username, password=self.password, scopes=scopes
             )
 
             if "access_token" not in token_response:
-                error_desc = token_response.get("error_description", "No se pudo obtener el token con user/password.")
+                error_desc = token_response.get(
+                    "error_description",
+                    "No se pudo obtener el token con user/password.",
+                )
                 raise Exception(f"Error en acquire_user_token: {error_desc}")
 
             return token_response["access_token"]
@@ -86,7 +134,9 @@ class PbiEmbedServiceUserPwd:
             dataset_id = data.get("datasetId")
 
             if not embed_url or not dataset_id:
-                raise Exception("No se pudo obtener 'embedUrl' o 'datasetId' del reporte.")
+                raise Exception(
+                    "No se pudo obtener 'embedUrl' o 'datasetId' del reporte."
+                )
 
             # 2. Generar el token de incrustación (embed token)
             embed_token = self.generate_embed_token(self.report_id, dataset_id)
@@ -110,13 +160,9 @@ class PbiEmbedServiceUserPwd:
 
         # En el payload podemos incluir datasets, reports, etc. de forma más completa.
         payload = {
-            "datasets": [
-                {"id": dataset_id}
-            ],
-            "reports": [
-                {"id": report_id}
-            ],
-            "accessLevel": "View"
+            "datasets": [{"id": dataset_id}],
+            "reports": [{"id": report_id}],
+            "accessLevel": "View",
         }
 
         try:

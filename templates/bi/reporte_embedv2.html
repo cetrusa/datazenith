@@ -5,7 +5,7 @@
 <script src="https://microsoft.github.io/PowerBI-JavaScript/demo/node_modules/powerbi-client/dist/powerbi.js"></script>
 {% endblock style %}
 
-{% block title %}Power BI Embedded sample{% endblock title %}
+{% block title %}BI Embedded{% endblock title %}
 {% block barra_lateral %}
 {% include 'includes/left_sidebar_bi.html' %}
 {% endblock barra_lateral %}
@@ -16,66 +16,62 @@
 <p>{{ error_message }}</p>
 {% else %}
 <script type="text/javascript">
-$(function () {
-    var reportContainer = $("#reportContainer").get(0);
+    $(function () {
+        var reportContainer = $("#reportContainer").get(0);
 
-    // Initialize iframe for embedding report
-    powerbi.bootstrap(reportContainer, { type: "report" });
+        // Initialize iframe for embedding report
+        powerbi.bootstrap(reportContainer, { type: "report" });
 
-    var models = window["powerbi-client"].models;
-    var reportLoadConfig = {
-        type: "report",
-        tokenType: models.TokenType.Embed,
+        var models = window["powerbi-client"].models;
+        var reportLoadConfig = {
+            type: "report",
+            tokenType: models.TokenType.Embed,
 
-        // Enable this setting to remove gray shoulders from embedded report
-        // settings: {
-        //     background: models.BackgroundType.Transparent
-        // }
-    };
+            // Enable this setting to remove gray shoulders from embedded report
+            // settings: {
+            //     background: models.BackgroundType.Transparent
+            // }
 
-    // Obtén la información de incrustación del contexto de la plantilla de Django
-    let embedData = {
-        accessToken: "{{ EMBED_ACCESS_TOKEN }}",
-        reportConfig: [{
-            embedUrl: "{{ EMBED_URL }}",
-            reportId: "{{ REPORT_ID }}"
-        }],
-        tokenExpiry: "{{ TOKEN_EXPIRY }}"
-    };
+            // Enable these settings to hide filter pane and/or page navigation
+            // settings: {
+            //     filterPaneEnabled: false,
+            //     navContentPaneEnabled: true
+            // }
 
-    reportLoadConfig.accessToken = embedData.accessToken;
-    reportLoadConfig.embedUrl = embedData.reportConfig[0].embedUrl;
+            accessToken: "{{EMBED_ACCESS_TOKEN}}",
+            embedUrl: "{{EMBED_URL}}",
+            id: "{{REPORT_ID}}",
+            permissions: models.Permissions.All,
+            settings: {
+                filterPaneEnabled: false
+            }
+        };
 
-    // Use the token expiry to regenerate Embed token for seamless end user experience
-    // Refer https://aka.ms/RefreshEmbedToken
-    tokenExpiry = embedData.tokenExpiry;
+        // Embed BI report
+        var report = powerbi.embed(reportContainer, reportLoadConfig);
 
-    // Embed Power BI report when Access token and Embed URL are available
-    var report = powerbi.embed(reportContainer, reportLoadConfig);
+        // Clear any other loaded handler events
+        report.off("loaded");
 
-    // Triggers when a report schema is successfully loaded
-    report.on("loaded", function () {
-        console.log("Report load successful")
+        // Report.on will add an event handler
+        report.on("loaded", function () {
+            console.log("Reporte BI cargado");
+        });
+
+        // Report.off removes a given event handler if it exists
+        report.off("error");
+
+        report.on("error", function (event) {
+            console.log(event.detail);
+        });
+
+        report.off("rendered");
+
+        // Report.on will add an event handler
+        report.on("rendered", function () {
+            console.log("Reporte renderizado");
+        });
     });
-
-    // Triggers when a report is successfully embedded in UI
-    report.on("rendered", function () {
-        console.log("Report render successful")
-    });
-
-    // Clear any other error handler event
-    report.off("error");
-
-    // Below patch of code is for handling errors that occur during embedding
-    report.on("error", function (event) {
-        var errorMsg = event.detail;
-
-        // Use errorMsg variable to log error in any destination of choice
-        console.error(errorMsg);
-        return;
-    });
-});
-
 </script>
 {% endif %}
 {% endblock window %}

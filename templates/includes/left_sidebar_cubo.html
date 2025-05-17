@@ -27,7 +27,20 @@
         </a>
       </li>
       {% endif %}
-      
+      {% if perms.permisos.amovildesk %}
+      <li class="nav-item">
+        <a class="nav-link text-white align-middle px-0" href="{% url 'home_app:amovildesk'%}">
+          <i class="fas fa-tablet-alt me-2"></i> <span class="ms-1 d-none d-sm-inline">Inf. Amovildesk</span>
+        </a>
+      </li>
+      {% endif %}
+      {% if perms.permisos.reportes %}
+      <li class="nav-item">
+        <a class="nav-link text-white align-middle px-0" href="{% url 'home_app:reporteador' %}">
+          <i class="fas fa-file-alt me-2"></i> <span class="ms-1 d-none d-sm-inline">Reporteador</span>
+        </a>
+      </li>
+      {% endif %}
       <!-- Agrega más elementos de menú aquí según sea necesario -->
     </ul>
 

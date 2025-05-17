@@ -1,21 +1,30 @@
 from django.db import models
 from django.conf import settings
+from django.utils.translation import gettext_lazy as _
 from apps.permisos.models import ConfEmpresas
 from django.contrib.auth.models import AbstractBaseUser, PermissionsMixin
 from .managers import UserManager
 
+
 class UserPermission(models.Model):
-    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, verbose_name='Usuario')
-    empresa = models.ForeignKey(ConfEmpresas, on_delete=models.CASCADE, verbose_name='Empresa')
-    proveedores = models.TextField(blank=True, verbose_name='Proveedores')  # Almacenar como texto
-    macrozonas = models.TextField( blank=True, verbose_name='Macrozonas') 
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, verbose_name="Usuario"
+    )
+    empresa = models.ForeignKey(
+        ConfEmpresas, on_delete=models.CASCADE, verbose_name="Empresa"
+    )
+    proveedores = models.TextField(
+        blank=True, verbose_name="Proveedores"
+    )  # Almacenar como texto
+    macrozonas = models.TextField(blank=True, verbose_name="Macrozonas")
 
     class Meta:
-        verbose_name = 'Permiso de Usuario'
-        verbose_name_plural = 'Permisos de Usuario'
+        verbose_name = "Permiso de Usuario"
+        verbose_name_plural = "Permisos de Usuario"
 
     def __str__(self):
-        return f'{self.user.username} - {self.empresa.nmEmpresa}'
+        return f"{self.user.username} - {self.empresa.nmEmpresa}"
+
 
 class User(AbstractBaseUser, PermissionsMixin):
     GENDER_CHOISES = (
@@ -40,6 +49,29 @@ class User(AbstractBaseUser, PermissionsMixin):
     is_active = models.BooleanField(default=False, verbose_name="Activo")
     is_superuser = models.BooleanField(default=False, verbose_name="Superusuario")
 
+    # Nuevos campos para 2FA
+    totp_secret = models.CharField(
+        _("TOTP Secret"),
+        max_length=255,
+        blank=True,
+        null=True,
+        help_text=_("Clave secreta para la autenticación de dos factores"),
+    )
+    two_factor_enabled = models.BooleanField(
+        _("2FA Habilitado"),
+        default=False,
+        help_text=_("Indica si la autenticación de dos factores está habilitada"),
+    )
+    last_login_ip = models.GenericIPAddressField(
+        _("Última IP de inicio de sesión"), blank=True, null=True
+    )
+    session_security = models.JSONField(
+        _("Seguridad de sesión"),
+        default=dict,
+        blank=True,
+        help_text=_("Datos de seguridad de sesión como dispositivos conocidos"),
+    )
+
     USERNAME_FIELD = "username"
     REQUIRED_FIELDS = ["email"]
 
@@ -61,6 +93,7 @@ class User(AbstractBaseUser, PermissionsMixin):
             + " - "
             + self.email
         )
+
     @classmethod
     def cod_validation(cls, id_user, codigo):
         try:
@@ -69,9 +102,11 @@ class User(AbstractBaseUser, PermissionsMixin):
         except cls.DoesNotExist:
             return False
 
+
 class UserProfile(models.Model):
     user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
     conf_empresas = models.ManyToManyField(ConfEmpresas)
+
 
 class RegistroAuditoria(models.Model):
     usuario = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)

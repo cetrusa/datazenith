@@ -82,6 +82,55 @@ Actualización
   document.getElementById("processingModal").style.display = "none";
   var csrf_token = document.getElementsByName("csrfmiddlewaretoken")[0].value;
 
+  // Al cargar la página, verificar si hay procesos pendientes
+  document.addEventListener("DOMContentLoaded", function () {
+    console.log("Verificando tareas pendientes al cargar la página");
+
+    // Comprobar si hay una tarea de DB pendiente
+    var dbTaskId = window.sessionStorage.getItem("db_task_id");
+    if (dbTaskId) {
+      console.log("Hay una tarea de DB pendiente:", dbTaskId);
+
+      // Preguntar al usuario si desea continuar monitoreando la tarea
+      if (confirm("Detectamos una actualización de Base de Datos pendiente. ¿Desea continuar monitoreando su progreso?")) {
+        document.getElementById("submitBtn").setAttribute("data-submitted", "true");
+        document.getElementById("processingModal").style.display = "flex";
+        showMessage("database");
+        checkTaskStatus("FormActualizacion", "db_task_id");
+      } else {
+        // Si el usuario no quiere continuar, limpiar la tarea
+        window.sessionStorage.removeItem("db_task_id");
+        document.getElementById("submitBtn").setAttribute("data-submitted", "false");
+      }
+    }
+
+    // Comprobar si hay una tarea de BI pendiente
+    var biTaskId = window.sessionStorage.getItem("bi_task_id");
+    if (biTaskId) {
+      console.log("Hay una tarea de BI pendiente:", biTaskId);
+
+      // Solo preguntar si no hay ya una tarea de DB siendo monitoreada
+      if (!dbTaskId || !document.getElementById("submitBtn").getAttribute("data-submitted") === "true") {
+        if (confirm("Detectamos una actualización de BI pendiente. ¿Desea continuar monitoreando su progreso?")) {
+          document.getElementById("submitBtnPowerBi").setAttribute("data-submitted", "true");
+          document.getElementById("processingModal").style.display = "flex";
+          showMessage("powerbi");
+          checkTaskStatus("myFormPowerBi", "bi_task_id");
+        } else {
+          // Si el usuario no quiere continuar, limpiar la tarea
+          window.sessionStorage.removeItem("bi_task_id");
+          document.getElementById("submitBtnPowerBi").setAttribute("data-submitted", "false");
+        }
+      }
+    }
+
+    // Si hay una tarea antigua usando el key task_id, limpiarla
+    if (window.sessionStorage.getItem("task_id")) {
+      console.log("Eliminando tarea antigua con key task_id");
+      window.sessionStorage.removeItem("task_id");
+    }
+  });
+
   // Evento click para Base de Datos
   document.getElementById("submitBtn").addEventListener("click", function (event) {
     event.preventDefault();
@@ -94,7 +143,7 @@ Actualización
     this.setAttribute("data-submitted", "true");
     document.getElementById("processingModal").style.display = "flex";
     showMessage("database");
-    submitForm("{% url 'home_app:actualizacion' %}", "FormActualizacion");
+    submitForm("{% url 'home_app:actualizacion' %}", "FormActualizacion", "db_task_id");
   });
 
   // Evento click para PowerBi
@@ -109,7 +158,7 @@ Actualización
     this.setAttribute("data-submitted", "true");
     document.getElementById("processingModal").style.display = "flex";
     showMessage("powerbi");
-    submitForm("{% url 'bi_app:actualizacion_bi' %}", "myFormPowerBi");
+    submitForm("{% url 'bi_app:actualizacion_bi' %}", "myFormPowerBi", "bi_task_id");
   });
 
   function showMessage(type) {
@@ -121,8 +170,13 @@ Actualización
     }
   }
 
-  function submitForm(url, formId) {
+  function submitForm(url, formId, taskIdKey) {
     document.getElementById("processingModal").style.display = "flex";
+
+    // Depuración para identificar el problema
+    console.log("Enviando formulario a URL:", url);
+    console.log("Usando formulario con ID:", formId);
+    console.log("Almacenando task_id con clave:", taskIdKey);
 
     // Realiza la solicitud AJAX al servidor
     var xhr = new XMLHttpRequest();
@@ -132,41 +186,54 @@ Actualización
     xhr.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
     xhr.onreadystatechange = function () {
       if (this.readyState === XMLHttpRequest.DONE) {
-        // document.getElementById("processingModal").style.display = "none";
-        console.log(this.status, this.responseText);
-        var response = JSON.parse(this.responseText);
-        handleServerResponse(this.status, response);
+        console.log("Respuesta recibida, estado:", this.status);
+        console.log("Respuesta:", this.responseText);
+        try {
+          var response = JSON.parse(this.responseText);
+          handleServerResponse(this.status, response, formId, taskIdKey);
+        } catch (e) {
+          console.error("Error al procesar respuesta:", e);
+          document.getElementById("processingModal").style.display = "none";
+          alert("Error al procesar la respuesta del servidor.");
+          document.getElementById(formId === "FormActualizacion" ? "submitBtn" : "submitBtnPowerBi").setAttribute("data-submitted", "false");
+        }
       }
     };
     var database = window.sessionStorage.getItem("database_name");
-    var formData = new FormData(document.getElementById(formId));
-    formData.append("database_select", encodeURIComponent(database));
-    xhr.send(new URLSearchParams(formData).toString());
+    xhr.send("database_select=" + encodeURIComponent(database));
   }
 
   // Manejar la respuesta del servidor
-  function handleServerResponse(status, response) {
+  function handleServerResponse(status, response, formId, taskIdKey) {
     if (status === 200) {
       if (typeof response === "object" && "success" in response) {
         if (response.success) {
-          // Almacena interface_task_id en sessionStorage
-          window.sessionStorage.setItem("task_id", response.task_id);
+          // Almacena task_id en sessionStorage
+          window.sessionStorage.setItem(taskIdKey, response.task_id);
+          console.log("Tarea iniciada con ID:", response.task_id);
           // Comprueba el estado de la tarea
-          checkTaskStatus();
+          checkTaskStatus(formId, taskIdKey);
         } else {
+          document.getElementById("processingModal").style.display = "none";
           alert("Hubo un error en el proceso: " + response.error_message);
+          document.getElementById(formId === "FormActualizacion" ? "submitBtn" : "submitBtnPowerBi").setAttribute("data-submitted", "false");
         }
       } else {
+        document.getElementById("processingModal").style.display = "none";
         alert("La respuesta del servidor no es un objeto JSON válido");
+        document.getElementById(formId === "FormActualizacion" ? "submitBtn" : "submitBtnPowerBi").setAttribute("data-submitted", "false");
       }
     } else {
+      document.getElementById("processingModal").style.display = "none";
       alert("Hubo un error al enviar la solicitud, código de estado: " + status);
+      document.getElementById(formId === "FormActualizacion" ? "submitBtn" : "submitBtnPowerBi").setAttribute("data-submitted", "false");
     }
   }
 
   // función para revisar estatus de la tarea
-  function checkTaskStatus() {
-    var task_id = window.sessionStorage.getItem("task_id");
+  function checkTaskStatus(formId, taskIdKey) {
+    var task_id = window.sessionStorage.getItem(taskIdKey);
+    console.log("Verificando estado de tarea:", task_id, "para formulario:", formId);
 
     var xhr = new XMLHttpRequest();
     xhr.responseType = "text";
@@ -175,36 +242,56 @@ Actualización
     xhr.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
     xhr.onreadystatechange = function () {
       if (this.readyState === XMLHttpRequest.DONE) {
-        var response = JSON.parse(this.responseText);
-        handleTaskStatus(this.status, response);
+        try {
+          var response = JSON.parse(this.responseText);
+          handleTaskStatus(this.status, response, formId, taskIdKey);
+        } catch (e) {
+          console.error("Error al procesar respuesta de estado:", e);
+          document.getElementById("processingModal").style.display = "none";
+          alert("Error al procesar la respuesta del servidor.");
+          document.getElementById(formId === "FormActualizacion" ? "submitBtn" : "submitBtnPowerBi").setAttribute("data-submitted", "false");
+        }
       }
     };
     xhr.send("task_id=" + encodeURIComponent(task_id));
   }
 
   // Revisar el estado de la tarea
-  function handleTaskStatus(status, response) {
+  function handleTaskStatus(status, response, formId, taskIdKey) {
     if (status === 200) {
       if (typeof response === "object" && "status" in response) {
         if (response.status === "finished") {
           // La tarea se ha completado, podemos mostrar el resultado al usuario
           document.getElementById("processingModal").style.display = "none";
           alert("Proceso terminado");
+          // Resetear el estado del botón
+          document.getElementById(formId === "FormActualizacion" ? "submitBtn" : "submitBtnPowerBi").setAttribute("data-submitted", "false");
         } else if (response.status === "failed") {
           // La tarea falló
           document.getElementById("processingModal").style.display = "none";
           alert("Hubo un error en el proceso: " + response.result);
+          // Resetear el estado del botón
+          document.getElementById(formId === "FormActualizacion" ? "submitBtn" : "submitBtnPowerBi").setAttribute("data-submitted", "false");
         } else if (response.status === "queued" || response.status === "deferred" || response.status === "started") {
           // La tarea aún se está ejecutando, verifica el estado de nuevo después de un tiempo
-          setTimeout(checkTaskStatus, 20000);
+          setTimeout(function () { checkTaskStatus(formId, taskIdKey); }, 20000);
         } else {
+          document.getElementById("processingModal").style.display = "none";
           alert("Estado desconocido de la tarea: " + response.status);
+          // Resetear el estado del botón
+          document.getElementById(formId === "FormActualizacion" ? "submitBtn" : "submitBtnPowerBi").setAttribute("data-submitted", "false");
         }
       } else {
+        document.getElementById("processingModal").style.display = "none";
         alert("La respuesta del servidor no es un objeto JSON válido");
+        // Resetear el estado del botón
+        document.getElementById(formId === "FormActualizacion" ? "submitBtn" : "submitBtnPowerBi").setAttribute("data-submitted", "false");
       }
     } else {
+      document.getElementById("processingModal").style.display = "none";
       alert("Hubo un error al comprobar el estado de la tarea, código de estado: " + status);
+      // Resetear el estado del botón
+      document.getElementById(formId === "FormActualizacion" ? "submitBtn" : "submitBtnPowerBi").setAttribute("data-submitted", "false");
     }
   }
 </script>

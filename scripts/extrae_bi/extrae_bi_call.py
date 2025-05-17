@@ -196,18 +196,112 @@ class Extrae_Bi:
         finally:
             logging.info("Finalizado el procedimiento de ejecución SQL.")
 
-    def insertar_sql(self, resultado_out, txTabla):
-        with self.engine_mysql_bi.connect() as connectionin:
-            cursorbi = connectionin.execution_options(isolation_level="READ COMMITTED")
-            resultado_out.to_sql(
-                name=txTabla,
-                con=cursorbi,
-                if_exists="append",
-                index=False,
-                index_label=None,
+    def insertar_sql(self, df):
+        """Inserta los datos en la base de datos de BI evitando duplicados"""
+        try:
+            with self.engine_mysql_bi.connect() as connection:
+                cursorbi = connection.execution_options(
+                    isolation_level="READ COMMITTED"
+                )
+                registros_a_insertar = len(df)
+                logging.info(
+                    f"Intentando insertar {registros_a_insertar} registros en {self.txTabla}"
+                )
+
+                # Verificar si la tabla tiene clave primaria o campos únicos para prevenir duplicados
+                primary_keys = self.obtener_claves_primarias(self.txTabla)
+
+                if primary_keys:
+                    # Si hay claves primarias, podemos usar INSERT IGNORE o REPLACE INTO
+                    # Convertir DataFrame a lista de diccionarios para inserción manual
+                    records = df.to_dict("records")
+
+                    # Usar INSERT IGNORE para evitar duplicados si existe primary key
+                    self.insertar_con_ignore(records, self.txTabla, cursorbi)
+
+                    logging.info(
+                        f"Se insertaron registros en {self.txTabla} usando INSERT IGNORE"
+                    )
+                else:
+                    # Si no hay claves primarias, intentar eliminar duplicados en memoria
+                    logging.warning(
+                        f"No se encontraron claves primarias en {self.txTabla}. Eliminando duplicados en DataFrame."
+                    )
+                    # Intentar eliminar duplicados si no hay clave primaria (menos eficiente)
+                    if len(df) > 0:
+                        df_sin_duplicados = df.drop_duplicates()
+                        if len(df_sin_duplicados) < len(df):
+                            logging.info(
+                                f"Se eliminaron {len(df) - len(df_sin_duplicados)} duplicados antes de insertar"
+                            )
+
+                        df_sin_duplicados.to_sql(
+                            name=self.txTabla,
+                            con=cursorbi,
+                            if_exists="append",
+                            index=False,
+                        )
+                    else:
+                        logging.warning(
+                            f"DataFrame vacío, no se insertará en {self.txTabla}"
+                        )
+
+                logging.info(f"Proceso de inserción completado para {self.txTabla}")
+
+        except Exception as e:
+            logging.error(f"Error al insertar datos en {self.txTabla}: {e}")
+            raise
+
+    def obtener_claves_primarias(self, tabla):
+        """Obtiene las claves primarias de una tabla"""
+        query = text(
+            f"""
+            SELECT COLUMN_NAME
+            FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE
+            WHERE TABLE_SCHEMA = '{self.config.get("dbBi")}' 
+            AND TABLE_NAME = '{tabla}'
+            AND CONSTRAINT_NAME = 'PRIMARY';
+        """
+        )
+
+        try:
+            with self.engine_mysql_bi.connect() as connection:
+                resultado = connection.execute(query)
+                return [row[0] for row in resultado.fetchall()]
+        except Exception as e:
+            logging.error(f"Error obteniendo claves primarias de {tabla}: {e}")
+            return []
+
+    def insertar_con_ignore(self, records, tabla, connection):
+        """Inserta registros usando INSERT IGNORE para evitar duplicados"""
+        if not records:
+            logging.warning(f"No hay registros para insertar en {tabla}")
+            return
+
+        try:
+            # Obtener los nombres de columnas del primer registro
+            columns = list(records[0].keys())
+
+            # Construir la consulta INSERT IGNORE
+            placeholders = ", ".join([":" + col for col in columns])
+            columns_str = ", ".join(columns)
+
+            insert_query = text(
+                f"INSERT IGNORE INTO {tabla} ({columns_str}) VALUES ({placeholders})"
             )
-            # logging.getLogger('sqlalchemy.engine').setLevel(logging.INFO)
-            return logging.info("los datos se han insertado correctamente")
+
+            # Ejecutar la inserción por lotes para mejorar rendimiento
+            batch_size = 1000
+            for i in range(0, len(records), batch_size):
+                batch = records[i : i + batch_size]
+                connection.execute(insert_query, batch)
+                logging.info(
+                    f"Insertado lote {i//batch_size + 1} de {(len(records)-1)//batch_size + 1} en {tabla}"
+                )
+
+        except Exception as e:
+            logging.error(f"Error en insertar_con_ignore para {tabla}: {e}")
+            raise
 
     def consulta_sql_out(
         self, nmProcedure_out, IdtReporteIni, IdtReporteFin, nmReporte

@@ -58,10 +58,10 @@ THIRD_PARTY_APPS = (
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
+    "django.contrib.sessions.middleware.SessionMiddleware",  # Primero SessionMiddleware
     "django_session_timeout.middleware.SessionTimeoutMiddleware",
-    "django.middleware.csrf.CsrfViewMiddleware",
-    "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
+    "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
@@ -77,8 +77,13 @@ SESSION_EXPIRE_SECONDS = 7200  # Expire despues de 2 horas
 SESSION_EXPIRE_AFTER_LAST_ACTIVITY = (
     True  # Invalide la sesión después de la actividad más reciente/última
 )
-SESSION_TIMEOUT_REDIRECT = "login/"  # Add your URL
-SESSION_EXPIRE_AT_BROWSER_CLOSE = True  # Invalid session
+SESSION_TIMEOUT_REDIRECT = "users_app:user-login"  # Redirect to the named URL
+SESSION_EXPIRE_AT_BROWSER_CLOSE = (
+    False  # Mantener sesión activa incluso al cerrar el navegador
+)
+SESSION_SAVE_EVERY_REQUEST = (
+    True  # Guardar la sesión en cada solicitud para mantener su frescura
+)
 
 
 RECAPTCHA_PUBLIC_KEY = "6LeffTwlAAAAAKYsF2RHBuWmMxSMYLo7DvWb_szY"

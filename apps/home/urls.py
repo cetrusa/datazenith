@@ -11,7 +11,6 @@ urlpatterns = [
         views.HomePanelCuboPage.as_view(),
         name="panel_cubo",
     ),
-    
     path(
         "panel_bi/",
         views.HomePanelBiPage.as_view(),
@@ -49,7 +48,7 @@ urlpatterns = [
     ),
     path(
         "actualizacion/",
-        views.ActualizacionPage.as_view(),
+        views.ActualizacionBdPage.as_view(),
         name="actualizacion",
     ),
     path(
@@ -57,16 +56,23 @@ urlpatterns = [
         views.PlanoPage.as_view(),
         name="plano",
     ),
-    path(
-        "prueba/",
-        views.PruebaPage.as_view(),
-        name="prueba",
-    ),
     path("download_file/", views.DownloadFileView.as_view(), name="download_file"),
     path("delete_file/", views.DeleteFileView.as_view(), name="delete_file"),
     path(
         "check-task-status/",
         views.CheckTaskStatusView.as_view(),
         name="check_task_status",
+    ),
+    path("amovildesk/", views.AmovildeskPage.as_view(), name="amovildesk"),
+    path("reporte-list/", views.ReporteListView.as_view(), name="reporte_list"),
+    path(
+        "reporteador/data/",
+        views.ReporteadorDataAjaxView.as_view(),
+        name="reporteador_data_ajax",
+    ),
+    path(
+        "reporteador/",
+        views.ReporteadorPage.as_view(),
+        name="reporteador",
     ),
 ]

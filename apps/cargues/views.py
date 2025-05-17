@@ -24,7 +24,7 @@ from django.http import request
 from scripts.extrae_bi.cargue_zip import CargueZip
 
 
-class UploadZipView(LoginRequiredMixin, BaseView):
+class UploadZipView(BaseView):
     template_name = "cargues/cargue.html"
     login_url = reverse_lazy("users_app:user-login")
 
@@ -124,7 +124,7 @@ class UploadZipView(LoginRequiredMixin, BaseView):
         return context
 
 
-class UploadPlanoFilesView(LoginRequiredMixin, BaseView):
+class UploadPlanoFilesView(BaseView):
     template_name = "cargues/cargue_planos_tsol.html"
     login_url = reverse_lazy("users_app:user-login")
 

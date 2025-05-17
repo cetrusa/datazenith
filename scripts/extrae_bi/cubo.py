@@ -1,153 +1,20 @@
 # scripts/extrae_bi/cubo.py
-
 import os
 import pandas as pd
-from sqlalchemy import create_engine, text
-from openpyxl import Workbook
-from openpyxl.cell.cell import WriteOnlyCell
+import time
+import gc
 import logging
-from scripts.StaticPage import StaticPage
+import uuid
+from sqlalchemy import create_engine, text, bindparam
+from sqlalchemy.exc import SQLAlchemyError
+from openpyxl import Workbook
 from scripts.conexion import Conexion as con
 from scripts.config import ConfigBasic
-import ast
-import xlsxwriter
 from apps.home.models import Reporte
+import psutil
 
-# Configuración del logging
-logging.basicConfig(
-    filename="logCubo.txt",
-    level=logging.DEBUG,
-    format="%(asctime)s %(message)s",
-    filemode="w",
-)
+logger = logging.getLogger(__name__)
 
-class DataBaseConnection:
-    """
-    Clase para manejar conexiones a bases de datos MySQL y SQLite.
-
-    Atributos:
-        config (dict): Configuración para las conexiones a las bases de datos.
-        engine_mysql (sqlalchemy.engine.base.Engine): Motor SQLAlchemy para la base de datos MySQL.
-        engine_sqlite (sqlalchemy.engine.base.Engine): Motor SQLAlchemy para la base de datos SQLite.
-    """
-
-    def __init__(self, config, mysql_engine=None, sqlite_engine=None):
-        """
-        Inicializa la instancia de DataBaseConnection con la configuración proporcionada.
-
-        Args:
-            config (dict): Configuración para las conexiones a las bases de datos.
-            mysql_engine (sqlalchemy.engine.base.Engine, opcional): Motor SQLAlchemy para la base de datos MySQL.
-            sqlite_engine (sqlalchemy.engine.base.Engine, opcional): Motor SQLAlchemy para la base de datos SQLite.
-        """
-        self.config = config
-        self.engine_mysql = mysql_engine if mysql_engine else self.create_engine_mysql()
-        print(f"MySQL engine: {self.engine_mysql}")
-        self.engine_sqlite = sqlite_engine if sqlite_engine else create_engine("sqlite:///mydata.db")
-        print(f"SQLite engine: {self.engine_sqlite}")
-
-    def create_engine_mysql(self):
-        """
-        Crea un motor SQLAlchemy para la conexión a la base de datos MySQL.
-
-        Returns:
-            sqlalchemy.engine.base.Engine: Motor SQLAlchemy para la base de datos MySQL.
-        """
-        user, password, host, port, database = (
-            self.config.get("nmUsrIn"),
-            self.config.get("txPassIn"),
-            self.config.get("hostServerIn"),
-            self.config.get("portServerIn"),
-            self.config.get("dbBi"),
-        )
-        return con.ConexionMariadb3(
-            str(user), str(password), str(host), int(port), str(database)
-        )
-
-    def execute_query_mysql(self, query, chunksize=None):
-        """
-        Ejecuta una consulta SQL en la base de datos MySQL.
-
-        Args:
-            query (str): Consulta SQL a ejecutar.
-            chunksize (int, opcional): Tamaño del fragmento para la consulta.
-
-        Returns:
-            pd.DataFrame: Resultados de la consulta.
-        """
-        with self.create_engine_mysql().connect() as connection:
-            cursor = connection.execution_options(isolation_level="READ COMMITTED")
-            return pd.read_sql_query(query, cursor, chunksize=chunksize)
-
-    def execute_sql_sqlite(self, sql, params=None):
-        """
-        Ejecuta una consulta SQL en la base de datos SQLite.
-
-        Args:
-            sql (str): Consulta SQL a ejecutar.
-            params (dict, opcional): Parámetros para la consulta.
-
-        Returns:
-            sqlalchemy.engine.ResultProxy: Resultados de la consulta.
-        """
-        with self.engine_sqlite.connect() as connection:
-            return connection.execute(sql, params)
-
-    def execute_query_mysql_chunked(self, query, table_name, chunksize=50000, params=None):
-        """
-        Ejecuta una consulta SQL en la base de datos MySQL y guarda los resultados en una tabla SQLite en fragmentos.
-
-        Args:
-            query (str): Consulta SQL a ejecutar.
-            table_name (str): Nombre de la tabla en SQLite donde se almacenarán los resultados.
-            chunksize (int, opcional): Tamaño del fragmento para la consulta.
-            params (dict, opcional): Parámetros para la consulta.
-
-        Returns:
-            int: Número total de registros almacenados en la tabla SQLite.
-        """
-        try:
-            self.eliminar_tabla_sqlite(table_name)
-            with self.engine_mysql.connect() as connection:
-                cursor = connection.execution_options(isolation_level="READ COMMITTED")
-                table_created = False
-                for chunk in pd.read_sql_query(query, con=cursor, chunksize=chunksize, params=params):
-                    chunk.to_sql(
-                        name=table_name,
-                        con=self.engine_sqlite,
-                        if_exists="append",
-                        index=False,
-                    )
-                    if not table_created:
-                        table_created = True
-                        print(f"Table {table_name} created successfully")
-
-                if not table_created:
-                    raise Exception(f"Table {table_name} was not created")
-
-                with self.engine_sqlite.connect() as connection:
-                    total_records = connection.execute(
-                        text(f"SELECT COUNT(*) FROM {table_name}")
-                    ).fetchone()[0]
-                print(f"Total records in {table_name}: {total_records}")
-                return total_records
-
-        except Exception as e:
-            print(f"Error al ejecutar el query: {e}")
-            logging.error(f"Error al ejecutar el query: {e}")
-            raise
-
-    def eliminar_tabla_sqlite(self, table_name):
-        """
-        Elimina una tabla en la base de datos SQLite si existe.
-
-        Args:
-            table_name (str): Nombre de la tabla a eliminar.
-        """
-        sql = text(f"DROP TABLE IF EXISTS {table_name}")
-        with self.engine_sqlite.connect() as connection:
-            connection.execute(sql)
-        print(f"Table {table_name} deleted successfully")
 
 class CuboVentas:
     """
@@ -162,332 +29,734 @@ class CuboVentas:
         config (dict): Configuración para las conexiones a las bases de datos.
         proveedores (list): Lista de proveedores.
         macrozonas (list): Lista de macrozonas.
-        db_connection (DataBaseConnection): Objeto de conexión a bases de datos.
         engine_sqlite (sqlalchemy.engine.base.Engine): Motor SQLAlchemy para la base de datos SQLite.
         engine_mysql (sqlalchemy.engine.base.Engine): Motor SQLAlchemy para la base de datos MySQL.
         file_path (str): Ruta del archivo generado.
         archivo_cubo_ventas (str): Nombre del archivo generado.
+        progress_callback (callable): Función para reportar el progreso.
     """
 
-    def __init__(self, database_name, IdtReporteIni, IdtReporteFin, user_id, reporte_id):
+    def __init__(
+        self,
+        database_name,
+        IdtReporteIni,
+        IdtReporteFin,
+        user_id,
+        reporte_id,
+        progress_callback=None,  # Añadido callback
+    ):
         """
         Inicializa la instancia de CuboVentas.
 
         Args:
-            database_name (str): Nombre de la base de datos.
-            IdtReporteIni (str): Fecha de inicio del reporte.
-            IdtReporteFin (str): Fecha de fin del reporte.
-            user_id (int): ID del usuario.
-            reporte_id (int): ID del reporte.
+            database_name (str): Nombre de la base de datos MySQL/MariaDB.
+            IdtReporteIni (str): Fecha de inicio del reporte (YYYY-MM-DD).
+            IdtReporteFin (str): Fecha de fin del reporte (YYYY-MM-DD).
+            user_id (int): ID del usuario que solicita el reporte.
+            reporte_id (int): ID del objeto Reporte que contiene la consulta base.
+            progress_callback (callable, opcional): Función para reportar progreso.
+                                                   Debe aceptar (stage, progress_percent, current_rec, total_rec).
         """
         self.database_name = database_name
         self.IdtReporteIni = IdtReporteIni
         self.IdtReporteFin = IdtReporteFin
-        self.user_id = user_id  # ID del usuario
-        self.reporte_id = reporte_id  # ID del reporte para Cubo de Ventas
-        self.configurar(database_name, user_id)
-        
+        self.user_id = user_id
+        self.reporte_id = reporte_id
+        self.progress_callback = progress_callback
+        self.start_time = time.time()  # Para calcular tiempo total
+
+        # Estado interno
+        self.config = {}
+        self.proveedores = []
+        self.macrozonas = []
+        self.engine_mysql = None
+        self.engine_sqlite = None
+        self.sqlite_table_name = f"cubo_{self.database_name}_{self.user_id}_{uuid.uuid4().hex[:8]}"  # Tabla temporal única
         self.file_path = None
-        self.archivo_cubo_ventas = None
+        self.file_name = None
+        self.total_records_processed = 0
+        self.total_records_estimate = 0
 
-    def configurar(self, database_name, user_id):
-        """
-        Configura las conexiones a las bases de datos y establece las variables de entorno necesarias.
+        logger.info(
+            f"Inicializando CuboVentas: DB={database_name}, ReporteID={reporte_id}, UserID={user_id}"
+        )
+        self._update_progress("Inicializando", 1)
 
-        Args:
-            database_name (str): Nombre de la base de datos.
-            user_id (int): ID del usuario.
-
-        Raises:
-            Exception: Propaga cualquier excepción que ocurra durante la configuración.
-        """
         try:
-            config_basic = ConfigBasic(database_name, user_id)
-            self.config = config_basic.config
-            self.proveedores = self.config.get('proveedores', [])
-            self.macrozonas = self.config.get('macrozonas', [])
-            self.db_connection = DataBaseConnection(config=self.config)
-            self.engine_sqlite = self.db_connection.engine_sqlite
-            self.engine_mysql = self.db_connection.engine_mysql
+            self._configurar_conexiones()
+            self._create_sqlite_engine()
         except Exception as e:
-            print(f"Error al inicializar CuboVentas: {e}")
-            logging.error(f"Error al inicializar CuboVentas: {e}")
+            logger.error(
+                f"Error crítico durante la inicialización de CuboVentas: {e}",
+                exc_info=True,
+            )
+            self._update_progress(f"Error inicialización: {e}", 100)
+            # Propagar la excepción para que la tarea Celery falle correctamente
             raise
 
-    def generate_sqlout(self):
+    def _update_progress(
+        self, stage, progress_percent, current_rec=None, total_rec=None
+    ):
+        """Llama al callback de progreso si está definido."""
+        if self.progress_callback:
+            try:
+                total = (
+                    total_rec if total_rec is not None else self.total_records_estimate
+                )
+                current = (
+                    current_rec
+                    if current_rec is not None
+                    else self.total_records_processed
+                )
+                # Asegurar que el progreso esté entre 0 y 100
+                safe_progress = max(0, min(100, int(progress_percent)))
+                self.progress_callback(stage, safe_progress, current, total)
+                logger.debug(
+                    f"Progreso: {stage} - {safe_progress}% ({current:,}/{total:,})"
+                )
+            except Exception as e:
+                logger.warning(f"Error al llamar progress_callback: {e}", exc_info=True)
+        else:
+            logger.debug(f"Progreso (sin callback): {stage} - {progress_percent}%")
+
+    def _configurar_conexiones(self):
+        """Configura las conexiones a las bases de datos."""
+        self._update_progress("Configurando conexiones", 2)
+        logger.info("Configurando conexiones...")
+        try:
+            config_basic = ConfigBasic(self.database_name, self.user_id)
+            self.config = config_basic.config
+            self.proveedores = self.config.get("proveedores", [])
+            self.macrozonas = self.config.get("macrozonas", [])
+
+            # Validar configuración de conexión MySQL/MariaDB
+            required_keys = [
+                "nmUsrIn",
+                "txPassIn",
+                "hostServerIn",
+                "portServerIn",
+                "dbBi",
+            ]
+            if not all(self.config.get(key) for key in required_keys):
+                raise ValueError(
+                    "Configuración de conexión a MySQL/MariaDB incompleta."
+                )
+
+            self.engine_mysql = con.ConexionMariadb3(
+                str(self.config["nmUsrIn"]),
+                str(self.config["txPassIn"]),
+                str(self.config["hostServerIn"]),
+                int(self.config["portServerIn"]),
+                str(self.config["dbBi"]),
+            )
+            logger.info("Conexión a MySQL/MariaDB configurada.")
+        except Exception as e:
+            logger.error(f"Error al configurar conexiones: {e}", exc_info=True)
+            raise  # Propagar para fallo claro
+
+    def _create_sqlite_engine(self):
+        """Crea y optimiza el motor SQLAlchemy para SQLite."""
+        self._update_progress("Configurando BD temporal", 3)
+        logger.info("Creando y optimizando motor SQLite...")
+        try:
+            # Usar archivo temporal único en 'media' si es posible, o en memoria
+            # sqlite_path = os.path.join("media", f"temp_{self.sqlite_table_name}.db")
+            # os.makedirs(os.path.dirname(sqlite_path), exist_ok=True)
+            # self.engine_sqlite = create_engine(f"sqlite:///{sqlite_path}", ...)
+            # O usar en memoria si el dataset cabe y es más rápido:
+            self.engine_sqlite = create_engine("sqlite:///:memory:")
+
+            # Aplicar optimizaciones PRAGMA (con precaución)
+            with self.engine_sqlite.connect() as conn:
+                conn.execute(
+                    text("PRAGMA journal_mode = MEMORY;")
+                )  # Más rápido para temp, riesgo bajo
+                conn.execute(
+                    text("PRAGMA synchronous = OFF;")
+                )  # Más rápido, riesgo bajo para temp
+                conn.execute(text("PRAGMA cache_size = -100000;"))  # ~100MB cache
+                conn.execute(text("PRAGMA temp_store = MEMORY;"))
+                # conn.execute(text("PRAGMA page_size = 8192;")) # Puede ayudar, pero probar
+                # conn.execute(text("PRAGMA mmap_size = 1073741824;")) # 1GB mmap, si aplica
+            logger.info("Motor SQLite creado y optimizado.")
+        except Exception as e:
+            logger.error(f"Error creando motor SQLite: {e}", exc_info=True)
+            raise
+
+    def _generate_sql_query(self):
         """
-        Genera la consulta SQL para obtener los datos del reporte.
+        Genera la consulta SQL principal usando parámetros seguros.
 
         Returns:
-            sqlalchemy.sql.elements.TextClause: Consulta SQL generada.
+            tuple: (sqlalchemy.sql.elements.TextClause, dict) Consulta SQL y parámetros.
 
         Raises:
-            ValueError: Si no se encuentra el reporte con el ID especificado.
+            ValueError: Si el reporte no se encuentra o la consulta base es inválida.
         """
+        self._update_progress("Generando consulta SQL", 5)
+        logger.info(f"Generando consulta SQL para Reporte ID: {self.reporte_id}")
         try:
             reporte = Reporte.objects.get(pk=self.reporte_id)
             base_sql = reporte.sql_text
-            
-            if self.config.get('proveedores'):
-                proveedores_list = ', '.join(map(lambda x: f"'{x}'", self.config['proveedores']))
-                base_sql += f" AND idProveedor IN ({proveedores_list})"
-            if self.config.get('macrozonas'):
-                macrozonas_list = ', '.join(map(lambda x: f"'{x}'", self.config['macrozonas']))
-                base_sql += f" AND macrozona_id IN ({macrozonas_list})"
-            
-            base_sql += ";"
-            print(f"Generated SQL: {base_sql}")
-            logging.debug(f"Generated SQL: {base_sql}")
-            
-            return text(base_sql)
+            if not base_sql:
+                raise ValueError(
+                    f"El Reporte ID {self.reporte_id} no tiene texto SQL definido."
+                )
+
+            logger.debug(f"Consulta base obtenida:\n{base_sql}")
+
+            params = {
+                "fi": self.IdtReporteIni,
+                "ff": self.IdtReporteFin,
+                "empresa": self.database_name.upper(),  # Asumiendo que :empresa es un valor
+            }
+            if self.reporte_id != 2:
+                # Si es el reporte es diferente de 2, no hay filtros adicionales
+                final_sql_text = text(base_sql)
+                return final_sql_text, params
+            else:
+                # Construir cláusulas WHERE adicionales para filtros
+                where_clauses = []
+                if self.proveedores:
+                    # Usar IN con parámetros múltiples si SQLAlchemy lo soporta bien, o construir dinámicamente
+                    # Forma segura con parámetros individuales para evitar límites:
+                    prov_params = {}
+                    prov_placeholders = []
+                    for i, prov in enumerate(self.proveedores):
+                        param_name = f"prov_{i}"
+                        prov_params[param_name] = prov
+                        prov_placeholders.append(f":{param_name}")
+                    if prov_placeholders:
+                        where_clauses.append(
+                            f"idProveedor IN ({', '.join(prov_placeholders)})"
+                        )
+                        params.update(prov_params)
+                    logger.info(f"Aplicando filtro de proveedores: {self.proveedores}")
+
+                if self.macrozonas:
+                    # Similar para macrozonas
+                    macro_params = {}
+                    macro_placeholders = []
+                    for i, macro in enumerate(self.macrozonas):
+                        param_name = f"macro_{i}"
+                        macro_params[param_name] = macro
+                        macro_placeholders.append(f":{param_name}")
+                    if macro_placeholders:
+                        where_clauses.append(
+                            f"macrozona_id IN ({', '.join(macro_placeholders)})"
+                        )  # Ajustar nombre de columna si es diferente
+                        params.update(macro_params)
+                    logger.info(f"Aplicando filtro de macrozonas: {self.macrozonas}")
+
+                # Integrar cláusulas WHERE adicionales de forma segura
+                # Esto asume que la consulta base NO termina con WHERE o GROUP BY/ORDER BY/LIMIT
+                # Se necesita una forma robusta de insertar los filtros.
+                # Opción 1: Marcador específico en la consulta base (ej: -- FILTERS_HERE)
+                if "-- FILTERS_HERE" in base_sql and where_clauses:
+                    filter_sql = " AND " + " AND ".join(where_clauses)
+                    final_sql = base_sql.replace("-- FILTERS_HERE", filter_sql)
+                                # Opción 2: Añadir siempre al final (menos robusto si hay GROUP BY/ORDER BY)
+                elif where_clauses:
+                    # Intentar añadir antes de GROUP BY, ORDER BY, LIMIT si existen
+                    # Esta parte es compleja y depende de la estructura de base_sql
+                    # Solución simple (puede fallar): añadir antes del ';' si existe
+                    parts = base_sql.split(";")
+                    if len(parts) > 1:
+                        parts[0] += " AND " + " AND ".join(where_clauses)
+                        final_sql = ";".join(parts)
+                    else:
+                        final_sql = base_sql + " AND " + " AND ".join(where_clauses)
+                else:
+                    # Si no hay where_clauses, usar la consulta base tal cual
+                    final_sql = base_sql
+            # Asegurar que la consulta final use los parámetros :fi, :ff, :empresa, etc.
+            # Asegurar que la consulta final use los parámetros :fi, :ff, :empresa, etc.
+            # No hacer replace aquí, pasar `params` a execute.
+            final_sql_text = text(final_sql)
+            print(f"Consulta SQL generada:\n{final_sql_text}")
+
+            logger.info("Consulta SQL final generada.")
+            logger.debug(f"SQL Final (sin parámetros reemplazados):\n{final_sql_text}")
+            logger.debug(f"Parámetros: {params}")
+
+            return final_sql_text, params
+
         except Reporte.DoesNotExist:
-            print(f"Reporte con ID {self.reporte_id} no encontrado")
-            logging.error(f"Reporte con ID {self.reporte_id} no encontrado")
-            raise ValueError(f"Reporte con ID {self.reporte_id} no encontrado")
-        
-    def guardar_datos(self, table_name, file_path, hoja, total_records, wb):
-        """
-        Guarda los datos en un archivo según el número total de registros.
+            logger.error(f"Reporte con ID {self.reporte_id} no encontrado.")
+            raise ValueError(f"Reporte con ID {self.reporte_id} no encontrado.")
+        except Exception as e:
+            logger.error(f"Error generando consulta SQL: {e}", exc_info=True)
+            raise
 
-        Args:
-            table_name (str): Nombre de la tabla en SQLite donde se almacenan los datos.
-            file_path (str): Ruta del archivo generado.
-            hoja (str): Nombre de la hoja en el archivo.
-            total_records (int): Número total de registros en la tabla.
-            wb (openpyxl.Workbook): Libro de trabajo de Excel.
-        """
-        if total_records > 1000000:
-            self.guardar_datos_csv(table_name, file_path)
-        elif total_records > 250000:
-            self.guardar_datos_excel_xlsxwriter2(table_name, hoja, wb)
-        else:
-            self.guardar_datos_excel_xlsxwriter2(table_name, hoja, wb)
+    def _estimate_total_records(self, query, params):
+        """Estima el número total de registros ejecutando un COUNT(*)."""
+        # Esta función es opcional y puede ser costosa.
+        # Se podría intentar parsear la query original y reemplazar SELECT ... FROM por SELECT COUNT(*) FROM
+        # O simplemente ejecutarla si no es demasiado lenta.
+        # Por ahora, la omitimos para simplificar y evitar sobrecarga.
+        self.total_records_estimate = 0  # Indicar que no hay estimación
+        logger.info("Estimación de registros totales omitida.")
+        return 0
 
-    def generar_nombre_archivo(self, hoja, ext=".xlsx"):
-        """
-        Genera el nombre del archivo y la ruta para guardar los datos.
+    def _execute_query_to_sqlite(self, query, params, chunksize=10000):
+        """Ejecuta la consulta MySQL y guarda los resultados en SQLite en chunks."""
+        stage_name = "Extrayendo datos de MySQL"
+        self._update_progress(stage_name, 10)
+        logger.info(
+            f"Iniciando extracción de datos a SQLite ({self.sqlite_table_name}). Chunksize={chunksize}"
+        )
 
-        Args:
-            hoja (str): Nombre de la hoja en el archivo.
-            ext (str, opcional): Extensión del archivo. Por defecto es ".xlsx".
+        total_processed = 0
+        start_extract_time = time.time()
+        first_chunk = True
 
-        Returns:
-            tuple: Nombre del archivo y ruta del archivo.
-        """
-        self.archivo_cubo_ventas = f"{hoja}_{self.database_name.upper()}_de_{self.IdtReporteIni}_a_{self.IdtReporteFin}_user_{self.user_id}{ext}"
-        self.file_path = os.path.join("media", self.archivo_cubo_ventas)
-        print(f"Generated file path: {self.file_path}")
-        logging.debug(f"Generated file path: {self.file_path}")
-        return self.archivo_cubo_ventas, self.file_path
+        try:
+            with self.engine_mysql.connect() as mysql_conn, self.engine_sqlite.connect() as sqlite_conn, sqlite_conn.begin():  # Transacción SQLite
 
-    def guardar_datos_csv(self, table_name, file_path):
-        """
-        Guarda los datos en un archivo CSV.
+                # Ejecutar consulta principal en MySQL
+                result_proxy = mysql_conn.execute(query, params)
+                columns = result_proxy.keys()  # Obtener nombres de columnas
 
-        Args:
-            table_name (str): Nombre de la tabla en SQLite donde se almacenan los datos.
-            file_path (str): Ruta del archivo CSV generado.
-        """
-        chunksize = 50000  # Define el tamaño de cada bloque de datos
+                while True:
+                    fetch_start = time.time()
+                    rows = result_proxy.fetchmany(chunksize)
+                    fetch_time = time.time() - fetch_start
+                    if not rows:
+                        logger.info("No hay más filas para procesar desde MySQL.")
+                        break
 
-        with self.engine_sqlite.connect() as connection:
-            for chunk in pd.read_sql_query(
-                f"SELECT * FROM {table_name}", self.engine_sqlite, chunksize=chunksize
-            ):
-                chunk.to_csv(file_path, mode="a", index=False)
-        print(f"CSV file {file_path} generated successfully")
-        logging.debug(f"CSV file {file_path} generated successfully")
+                    process_start = time.time()
+                    df_chunk = pd.DataFrame(rows, columns=columns)
 
-    def guardar_datos_excel_xlsxwriter(self, table_name, file_path, hoja):
-        """
-        Guarda los datos en un archivo Excel usando xlsxwriter.
+                    # Crear tabla en el primer chunk
+                    if first_chunk:
+                        logger.info(
+                            f"Creando tabla SQLite '{self.sqlite_table_name}' con {len(columns)} columnas."
+                        )
+                        df_chunk.to_sql(
+                            name=self.sqlite_table_name,
+                            con=sqlite_conn,
+                            if_exists="replace",  # Reemplazar si existe (limpieza)
+                            index=False,
+                            method=None,  # Dejar que SQLAlchemy decida (usará multi por defecto)
+                        )
+                        first_chunk = False
+                    else:
+                        # Añadir chunks subsiguientes
+                        df_chunk.to_sql(
+                            name=self.sqlite_table_name,
+                            con=sqlite_conn,
+                            if_exists="append",
+                            index=False,
+                            method="multi",  # Forzar 'multi' para eficiencia
+                            chunksize=1000,  # Sub-chunking para to_sql
+                        )
 
-        Args:
-            table_name (str): Nombre de la tabla en SQLite donde se almacenan los datos.
-            file_path (str): Ruta del archivo Excel generado.
-            hoja (str): Nombre de la hoja en el archivo.
-        """
-        chunksize = 50000
-
-        with pd.ExcelWriter(file_path, engine="xlsxwriter") as writer:
-            with self.engine_sqlite.connect() as connection:
-                startrow = 0
-                for chunk in pd.read_sql_query(
-                    f"SELECT * FROM {table_name}",
-                    self.engine_sqlite,
-                    chunksize=chunksize,
-                ):
-                    print(f"Processing chunk of size: {len(chunk)}")
-                    logging.debug(f"Processing chunk of size: {len(chunk)}")
-                    chunk.to_excel(
-                        writer,
-                        sheet_name=hoja,
-                        startrow=startrow,
-                        index=False,
-                        header=not bool(startrow),
+                    process_time = time.time() - process_start
+                    total_processed += len(rows)
+                    self.total_records_processed = (
+                        total_processed  # Actualizar contador global
                     )
-                    startrow += len(chunk)
-                    print(f"Next startrow: {startrow}")
-                    logging.debug(f"Next startrow: {startrow}")
+                    elapsed_total = time.time() - start_extract_time
+                    rows_per_sec = (
+                        total_processed / elapsed_total if elapsed_total > 0 else 0
+                    )
 
-    def guardar_datos_excel_xlsxwriter2(self, table_name, hoja, wb):
+                    # Calcular progreso (asumiendo 80% del tiempo total para esta fase)
+                    progress_percent = (
+                        10 + (elapsed_total / (elapsed_total + 1)) * 70
+                    )  # Basado en tiempo relativo
+
+                    logger.debug(
+                        f"Chunk {total_processed // chunksize}: {len(rows)} filas procesadas. "
+                        f"Fetch: {fetch_time:.2f}s, Process/Write: {process_time:.2f}s. "
+                        f"Total: {total_processed:,}. Rate: {rows_per_sec:.1f} r/s."
+                    )
+                    self._update_progress(stage_name, progress_percent, total_processed)
+
+                    # Log extra para diagnóstico
+                    if total_processed % (chunksize * 2) == 0:
+                        logger.info(
+                            f"Progreso parcial: {total_processed:,} registros procesados en {elapsed_total:.2f}s. Memoria usada: {psutil.Process(os.getpid()).memory_info().rss / (1024*1024):.1f} MB"
+                        )
+
+                    # Liberar memoria
+                    del df_chunk
+                    if total_processed % (chunksize * 5) == 0:  # Cada 5 chunks
+                        gc.collect()
+
+            # Verificar recuento final en SQLite
+            with self.engine_sqlite.connect() as sqlite_conn:
+                final_count = sqlite_conn.execute(
+                    text(f"SELECT COUNT(*) FROM {self.sqlite_table_name}")
+                ).scalar()
+                if final_count != total_processed:
+                    logger.warning(
+                        f"Discrepancia en conteo: MySQL procesó {total_processed}, SQLite tiene {final_count}"
+                    )
+                    self.total_records_processed = (
+                        final_count  # Usar conteo SQLite como definitivo
+                    )
+
+            logger.info(
+                f"Extracción a SQLite completada. Total: {self.total_records_processed:,} registros."
+            )
+            self._update_progress(
+                "Datos extraídos a BD temporal", 80, self.total_records_processed
+            )
+
+        except SQLAlchemyError as e:
+            logger.error(
+                f"Error de base de datos durante la extracción: {e}", exc_info=True
+            )
+            self._update_progress(f"Error BD: {e}", 100)
+            raise
+        except Exception as e:
+            logger.error(f"Error inesperado durante la extracción: {e}", exc_info=True)
+            self._update_progress(f"Error extracción: {e}", 100)
+            raise
+
+    def _generate_output_file(self, hoja_nombre, chunksize=10000):
+        """Genera el archivo de salida (Excel o CSV) desde la tabla SQLite."""
+        stage_name = "Generando archivo de salida"
+        self._update_progress(stage_name, 85, self.total_records_processed)
+        logger.info(
+            f"Iniciando generación de archivo para {self.total_records_processed:,} registros."
+        )
+
+        # Decidir formato y generar nombre/ruta
+        use_csv = self.total_records_processed > 1000000  # Umbral para CSV
+        ext = ".csv" if use_csv else ".xlsx"
+        self.file_name = f"{hoja_nombre}_{self.database_name.upper()}_de_{self.IdtReporteIni}_a_{self.IdtReporteFin}_user_{self.user_id}{ext}"
+        self.file_path = os.path.join("media", self.file_name)
+        os.makedirs(os.path.dirname(self.file_path), exist_ok=True)
+        logger.info(f"Archivo de salida: {self.file_path}")
+
+        start_export_time = time.time()
+        records_written = 0
+
+        try:
+            with self.engine_sqlite.connect() as sqlite_conn:
+                # Obtener encabezados
+                headers_result = sqlite_conn.execute(
+                    text(f"PRAGMA table_info({self.sqlite_table_name})")
+                ).fetchall()
+                header_names = [col[1] for col in headers_result]
+
+                if use_csv:
+                    logger.info("Exportando a CSV...")
+                    # Escribir encabezado
+                    pd.DataFrame(columns=header_names).to_csv(
+                        self.file_path, index=False, encoding="utf-8-sig"
+                    )  # utf-8-sig para Excel
+                    # Escribir datos en chunks
+                    for chunk_df in pd.read_sql_query(
+                        f"SELECT * FROM {self.sqlite_table_name}",
+                        sqlite_conn,
+                        chunksize=chunksize,
+                    ):
+                        chunk_df.to_csv(
+                            self.file_path,
+                            mode="a",
+                            header=False,
+                            index=False,
+                            encoding="utf-8-sig",
+                        )
+                        records_written += len(chunk_df)
+                        progress_percent = (
+                            85 + (records_written / self.total_records_processed * 14)
+                            if self.total_records_processed > 0
+                            else 99
+                        )
+                        self._update_progress(
+                            f"{stage_name} (CSV)", progress_percent, records_written
+                        )
+                        # Log extra para diagnóstico
+                        if records_written % (chunksize * 2) == 0:
+                            logger.info(
+                                f"Exportación parcial: {records_written:,} registros escritos en {time.time() - start_export_time:.2f}s. Memoria usada: {psutil.Process(os.getpid()).memory_info().rss / (1024*1024):.1f} MB"
+                            )
+                        del chunk_df
+                        gc.collect()
+                else:
+                    logger.info("Exportando a Excel (optimizad)...")
+                    # Usar openpyxl write_only para memoria baja
+                    wb = Workbook(write_only=True)
+                    ws = wb.create_sheet(title=hoja_nombre)
+                    ws.append(header_names)  # Escribir encabezados
+
+                    # Leer y escribir en chunks
+                    cursor = sqlite_conn.execute(
+                        text(f"SELECT * FROM {self.sqlite_table_name}")
+                    )
+                    while True:
+                        rows = cursor.fetchmany(chunksize)
+                        if not rows:
+                            break
+                        for row in rows:
+                            # Convertir RowProxy a lista/tupla simple
+                            ws.append(tuple(row))
+                        records_written += len(rows)
+                        progress_percent = (
+                            85 + (records_written / self.total_records_processed * 14)
+                            if self.total_records_processed > 0
+                            else 99
+                        )
+                        self._update_progress(
+                            f"{stage_name} (Excel)", progress_percent, records_written
+                        )
+                        if records_written % (chunksize * 2) == 0:
+                            logger.info(
+                                f"Exportación parcial: {records_written:,} registros escritos en {time.time() - start_export_time:.2f}s. Memoria usada: {psutil.Process(os.getpid()).memory_info().rss / (1024*1024):.1f} MB"
+                            )
+                        # No es necesario borrar rows aquí, fetchmany devuelve copias
+
+                    logger.info(f"Guardando archivo Excel en {self.file_path}...")
+                    save_start = time.time()
+                    wb.save(self.file_path)
+                    logger.info(
+                        f"Archivo Excel guardado en {time.time() - save_start:.2f}s"
+                    )
+
+            export_time = time.time() - start_export_time
+            logger.info(
+                f"Generación de archivo completada en {export_time:.2f}s. Registros escritos: {records_written:,}"
+            )
+            if records_written != self.total_records_processed:
+                logger.warning(
+                    f"Discrepancia en escritura: SQLite tenía {self.total_records_processed}, archivo tiene {records_written}"
+                )
+
+            self._update_progress("Archivo generado", 99, records_written)
+
+        except Exception as e:
+            logger.error(f"Error generando archivo de salida: {e}", exc_info=True)
+            self._update_progress(f"Error archivo: {e}", 100)
+            # Intentar limpiar archivo parcial si existe
+            if self.file_path and os.path.exists(self.file_path):
+                try:
+                    os.remove(self.file_path)
+                    logger.info(f"Archivo parcial eliminado: {self.file_path}")
+                except OSError as oe:
+                    logger.warning(
+                        f"No se pudo eliminar archivo parcial {self.file_path}: {oe}"
+                    )
+            self.file_path = None  # Indicar que no hay archivo válido
+            raise
+
+    def _cleanup(self):
+        """Limpia recursos como la tabla SQLite temporal."""
+        logger.info(f"Limpiando tabla temporal SQLite: {self.sqlite_table_name}")
+        try:
+            if self.engine_sqlite:
+                with self.engine_sqlite.connect() as conn:
+                    conn.execute(text(f"DROP TABLE IF EXISTS {self.sqlite_table_name}"))
+                logger.info("Tabla temporal eliminada.")
+                # Si SQLite era un archivo, eliminarlo:
+                # if "///" in str(self.engine_sqlite.url): # Es archivo
+                #     db_path = str(self.engine_sqlite.url).split("///")[1]
+                #     if os.path.exists(db_path):
+                #         os.remove(db_path)
+                #         logger.info(f"Archivo DB temporal eliminado: {db_path}")
+        except Exception as e:
+            logger.warning(f"Error durante la limpieza de SQLite: {e}", exc_info=True)
+
+    def _generate_performance_report(self, execution_time):
+        """Genera un reporte de rendimiento."""
+        try:
+            report = ["=== REPORTE DE RENDIMIENTO ==="]
+            report.append(f"Tiempo total de ejecución: {execution_time:.2f} segundos")
+            report.append(f"Registros procesados: {self.total_records_processed:,}")
+            if execution_time > 0 and self.total_records_processed > 0:
+                report.append(
+                    f"Velocidad promedio: {self.total_records_processed / execution_time:.1f} reg/seg"
+                )
+
+            if self.file_path and os.path.exists(self.file_path):
+                file_size_mb = os.path.getsize(self.file_path) / (1024 * 1024)
+                report.append(
+                    f"Archivo generado: {self.file_name} ({file_size_mb:.2f} MB)"
+                )
+            else:
+                report.append("Archivo generado: No disponible")
+
+            report.append(
+                f"\nParámetros: DB={self.database_name}, Periodo={self.IdtReporteIni}-{self.IdtReporteFin}"
+            )
+            if self.proveedores:
+                report.append(f"Filtro Proveedores: {len(self.proveedores)} aplicados")
+            if self.macrozonas:
+                report.append(f"Filtro Macrozonas: {len(self.macrozonas)} aplicados")
+
+            # Memoria
+            process = psutil.Process(os.getpid())
+            memory_info = process.memory_info()
+            report.append(
+                f"\nUso máximo de memoria (RSS): {memory_info.rss / (1024 * 1024):.1f} MB"
+            )
+
+            return "\n".join(report)
+        except Exception as e:
+            logger.warning(f"Error generando reporte de rendimiento: {e}")
+            return "No se pudo generar el reporte de rendimiento."
+
+    # --- Método Principal ---
+    def run(self):
         """
-        Guarda los datos en un archivo Excel usando openpyxl.
-
-        Args:
-            table_name (str): Nombre de la tabla en SQLite donde se almacenan los datos.
-            hoja (str): Nombre de la hoja en el archivo.
-            wb (openpyxl.Workbook): Libro de trabajo de Excel.
-        """
-        chunksize = 50000
-
-        ws = wb.create_sheet(title=hoja)
-
-        headers = pd.read_sql_query(
-            f"SELECT * FROM {table_name} LIMIT 0", self.engine_sqlite
-        ).columns.tolist()
-        ws.append(headers)
-
-        for chunk in pd.read_sql_query(
-            f"SELECT * FROM {table_name}", self.engine_sqlite, chunksize=chunksize
-        ):
-            for index, row in chunk.iterrows():
-                cells = [WriteOnlyCell(ws, value=value) for value in row]
-                ws.append(cells)
-
-    def guardar_datos_excel_openpyxl(self, table_name, file_path, hoja):
-        """
-        Guarda los datos en un archivo Excel completo usando openpyxl.
-
-        Args:
-            table_name (str): Nombre de la tabla en SQLite donde se almacenan los datos.
-            file_path (str): Ruta del archivo Excel generado.
-            hoja (str): Nombre de la hoja en el archivo.
-        """
-        chunksize = 50000
-
-        wb = Workbook(write_only=True)
-        ws = wb.create_sheet(title=hoja)
-
-        with self.engine_sqlite.connect() as connection:
-            first_chunk = True
-            for chunk in pd.read_sql_table(
-                table_name, con=connection, chunksize=chunksize
-            ):
-                if first_chunk:
-                    ws.append(chunk.columns.tolist())
-                    first_chunk = False
-
-                for row in chunk.itertuples(index=False, name=None):
-                    ws.append(row)
-
-        wb.save(file_path)
-        print(f"Excel file {file_path} generated successfully")
-        logging.debug(f"Excel file {file_path} generated successfully")
-
-    def guardar_datos_excel_completo(self, table_name, file_path, hoja):
-        """
-        Guarda todos los datos en un archivo Excel completo.
-
-        Args:
-            table_name (str): Nombre de la tabla en SQLite donde se almacenan los datos.
-            file_path (str): Ruta del archivo Excel generado.
-            hoja (str): Nombre de la hoja en el archivo.
-        """
-        with pd.ExcelWriter(file_path, engine="openpyxl") as writer:
-            with self.engine_sqlite.connect() as connection:
-                df = pd.read_sql_table(table_name, con=connection)
-                df.to_excel(writer, index=False, sheet_name=hoja)
-
-    def procesar_hoja(self, hoja, wb):
-        """
-        Procesa los datos para una hoja específica.
-
-        Args:
-            hoja (str): Nombre de la hoja a procesar.
-            wb (openpyxl.Workbook): Libro de trabajo de Excel.
+        Orquesta el proceso completo de generación del cubo de ventas.
 
         Returns:
-            dict or bool: Diccionario con información de éxito o False si ocurre un error.
+            dict: Diccionario con el resultado del proceso:
+                  {
+                      'success': bool,
+                      'message': str,
+                      'file_path': str or None,
+                      'file_name': str or None,
+                      'execution_time': float,
+                      'metadata': dict
+                  }
         """
         try:
-            sqlout = self.generate_sqlout()
-            print(f"SQL Output: {sqlout}")
-            logging.debug(f"SQL Output: {sqlout}")
-            table_name = f"my_table_{self.database_name}_{self.user_id}_{hoja}"
-            params = {"fi": self.IdtReporteIni, "ff": self.IdtReporteFin, "empresa": self.database_name.upper()}
-            total_records = self.db_connection.execute_query_mysql_chunked(
-                query=sqlout, table_name=table_name, params=params
+            # 1. Generar Consulta SQL
+            query, params = self._generate_sql_query()
+            print(f"Consulta SQL generada:\n{query}\nParámetros: {params}")
+
+            # 2. (Opcional) Estimar Registros
+            self._estimate_total_records(query, params)
+
+            # 3. Ejecutar Consulta y volcar a SQLite
+            self._execute_query_to_sqlite(query, params)
+
+            # 4. Generar Archivo de Salida (Excel/CSV) desde SQLite
+            reporte = Reporte.objects.get(pk=self.reporte_id)  # Obtener nombre de hoja
+            hoja_nombre = reporte.nombre or "CuboVentas"
+            self._generate_output_file(hoja_nombre)
+
+            # 5. Limpieza
+            self._cleanup()
+
+            # 6. Finalizar y Reportar
+            execution_time = time.time() - self.start_time
+            performance_report = self._generate_performance_report(execution_time)
+            logger.info(
+                f"Proceso CuboVentas completado exitosamente en {execution_time:.2f}s."
             )
+            logger.info("INFORME DE RENDIMIENTO:\n" + performance_report)
+            self._update_progress("Completado", 100, self.total_records_processed)
 
-            print(f"Total records in {table_name}: {total_records}")
-            logging.debug(f"Total records in {table_name}: {total_records}")
+            return {
+                "success": True,
+                "message": f"Cubo de ventas generado exitosamente en {execution_time:.2f} segundos.",
+                "file_path": self.file_path,
+                "file_name": self.file_name,
+                "execution_time": execution_time,
+                "metadata": {
+                    "total_records": self.total_records_processed,
+                    "performance_report": performance_report,
+                },
+            }
 
-            archivo_cubo_ventas, file_path = self.generar_nombre_archivo(
-                hoja, ext=".csv" if total_records > 1000000 else ".xlsx"
-            )
-            print(f"Generated file path: {file_path}")
-            logging.debug(f"Generated file path: {file_path}")
-            self.guardar_datos(table_name, file_path, hoja, total_records, wb)
-            print(f"File {archivo_cubo_ventas} generated successfully")
-            logging.debug(f"File {archivo_cubo_ventas} generated successfully")
-
-            print(f"Processing of sheet {hoja} completed")
-            logging.debug(f"Processing of sheet {hoja} completed")
-            return True
         except Exception as e:
-            print(f"Error processing sheet {hoja}: {e}")
-            logging.error(f"Error processing sheet {hoja}: {e}")
+            execution_time = time.time() - self.start_time
+            error_msg = f"Error fatal en CuboVentas.run: {type(e).__name__} - {e}"
+            logger.error(error_msg, exc_info=True)
+            self._update_progress(
+                f"Error fatal: {e}", 100
+            )  # Asegurar que el progreso llegue a 100 en error
+            self._cleanup()  # Intentar limpiar incluso si hay error
+
             return {
                 "success": False,
-                "error_message": f"Error processing sheet {hoja}: {e}",
+                "message": f"Error al generar el cubo: {error_msg}",
+                "error": error_msg,  # Añadir clave 'error'
+                "file_path": None,
+                "file_name": None,
+                "execution_time": execution_time,
+                "metadata": {},
             }
 
-    def procesar_datos(self):
-        """
-        Procesa los datos para el cubo de ventas y guarda los resultados en un archivo.
+    # --- Métodos Adicionales (Mantenidos de la versión original si son necesarios) ---
 
-        Returns:
-            dict: Diccionario con información de éxito o error.
+    def get_data(self, start_row=0, chunk_size=10000, search=None):
         """
-        wb = Workbook(write_only=True)
-        reporte = Reporte.objects.get(pk=self.reporte_id)
-        hoja = reporte.nombre
-        print(f"Processing sheet {hoja}")
-        logging.debug(f"Processing sheet {hoja}")
-        if not self.procesar_hoja(hoja, wb):
+        Obtiene datos paginados desde la tabla SQLite temporal (para previsualización).
+        ADVERTENCIA: Llama a este método ANTES de que run() complete la limpieza.
+        Permite búsqueda simple si se pasa un string en 'search'.
+        """
+        logger.info(
+            f"Obteniendo datos paginados: start={start_row}, size={chunk_size} from {self.sqlite_table_name}"
+        )
+        if not self.engine_sqlite:
+            logger.error("Intento de obtener datos sin motor SQLite inicializado.")
             return {
-                "success": False,
-                "error_message": f"Error processing sheet {hoja}",
+                "headers": [],
+                "rows": [],
+                "metadata": {"error": "Engine not ready"},
             }
-        wb.save(self.file_path)
-        print(f"Process completed")
-        logging.debug(f"Process completed")
-        return {
-            "success": True,
-            "file_path": self.file_path,
-            "file_name": self.archivo_cubo_ventas,
-        }
 
-    def get_data(self):
-        """
-        Obtiene los datos procesados del cubo de ventas.
+        try:
+            with self.engine_sqlite.connect() as connection:
+                # Verificar si la tabla existe
+                from sqlalchemy import inspect
+                inspector = inspect(self.engine_sqlite)
+                if not inspector.has_table(self.sqlite_table_name):
+                    logger.warning(
+                        f"Tabla {self.sqlite_table_name} no encontrada para get_data."
+                    )
+                    return {
+                        "headers": [],
+                        "rows": [],
+                        "metadata": {
+                            "error": "Temporary data not found or already cleaned."
+                        },
+                    }
 
-        Returns:
-            dict: Diccionario con encabezados y filas de los datos.
-        """
-        reporte = Reporte.objects.get(pk=self.reporte_id)
-        table_name = f"my_table_{self.database_name}_{self.user_id}_{reporte.nombre}"
-        with self.engine_sqlite.connect() as connection:
-            df = pd.read_sql_query(f"SELECT * FROM {table_name}", connection)
-            headers = df.columns.tolist()
-            rows = df.values.tolist()
-        print(f"Data fetched from {table_name}")
-        logging.debug(f"Data fetched from {table_name}")
-        # Eliminar la tabla después de obtener los datos
-        self.db_connection.eliminar_tabla_sqlite(table_name)
-        logging.info(f"Tabla {table_name} eliminada después de obtener los datos")
-        return {
-            "headers": headers,
-            "rows": rows
-        }
+                total_count = connection.execute(
+                    text(f"SELECT COUNT(*) FROM {self.sqlite_table_name}")
+                ).scalar()
+
+                headers_result = connection.execute(
+                    text(f"PRAGMA table_info({self.sqlite_table_name})")
+                ).fetchall()
+                headers = [col[1] for col in headers_result]
+
+                # Búsqueda simple (solo para texto)
+                where_clause = ""
+                params = {"limit": chunk_size, "offset": start_row}
+                if search and search.strip():
+                    search_terms = search.strip().split()
+                    like_clauses = [
+                        f"({ ' OR '.join([f'{h} LIKE :search_{i}_{j}' for h in headers]) })"
+                        for j, term in enumerate(search_terms)
+                        for i, h in enumerate(headers)
+                    ]
+                    if like_clauses:
+                        where_clause = "WHERE " + " AND ".join(like_clauses)
+                        for j, term in enumerate(search_terms):
+                            for i, h in enumerate(headers):
+                                params[f"search_{i}_{j}"] = f"%{term}%"
+
+                query = text(
+                    f"SELECT * FROM {self.sqlite_table_name} {where_clause} LIMIT :limit OFFSET :offset"
+                )
+                result = connection.execute(query, params)
+                rows = [tuple(row) for row in result]  # Convertir a tuplas simples
+
+            logger.debug(f"get_data: {len(rows)} filas recuperadas.")
+            return {
+                "headers": headers,
+                "rows": rows,
+                "total_records": total_count,
+                "filtered_records": total_count if not search else len(rows),
+                "metadata": {
+                    "total_records": total_count,
+                    "current_page": start_row // chunk_size + 1,
+                    "total_pages": (total_count + chunk_size - 1) // chunk_size,
+                    "start_row": start_row,
+                    "chunk_size": chunk_size,
+                    "has_more": start_row + len(rows) < total_count,
+                },
+            }
+        except Exception as e:
+            logger.error(f"Error en get_data: {e}", exc_info=True)
+            return {"headers": [], "rows": [], "metadata": {"error": str(e)}}
