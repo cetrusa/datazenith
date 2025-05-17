@@ -85,6 +85,16 @@ SESSION_SAVE_EVERY_REQUEST = (
     True  # Guardar la sesión en cada solicitud para mantener su frescura
 )
 
+# Configuración de caché recomendada para producción (multiusuario seguro)
+CACHES = {
+    "default": {
+        "BACKEND": "django_redis.cache.RedisCache",
+        "LOCATION": "redis://redis:6379/1",  # Asegúrate que el host y puerto coincidan con tu docker-compose
+        "OPTIONS": {
+            "CLIENT_CLASS": "django_redis.client.DefaultClient",
+        },
+    }
+}
 
 RECAPTCHA_PUBLIC_KEY = "6LeffTwlAAAAAKYsF2RHBuWmMxSMYLo7DvWb_szY"
 RECAPTCHA_PRIVATE_KEY = "6LeffTwlAAAAAMwYZgijw9H4HQLMssatf7xayp8k"
