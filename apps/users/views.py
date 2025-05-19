@@ -732,67 +732,6 @@ class UserProfileView(LoginRequiredMixin, TemplateView):
         return context
 
 
-class SessionSecurityView(LoginRequiredMixin, TemplateView):
-    """
-    Vista para gestionar la seguridad de las sesiones del usuario.
-    """
-
-    template_name = "users/session_security.html"
-
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        user = self.request.user
-
-        # Recuperar información de las sesiones activas
-        sessions = user.session_security.get("active_sessions", [])
-
-        context.update(
-            {
-                "sessions": sessions,
-                "current_ip": self.request.META.get("REMOTE_ADDR", "Desconocida"),
-            }
-        )
-
-        return context
-
-    def post(self, request, *args, **kwargs):
-        action = request.POST.get("action")
-        session_id = request.POST.get("session_id")
-
-        if action == "terminate_session" and session_id:
-            user = request.user
-            sessions = user.session_security.get("active_sessions", [])
-
-            # Filtrar la sesión a terminar
-            updated_sessions = [s for s in sessions if s.get("id") != session_id]
-
-            # Actualizar las sesiones en el perfil
-            user.session_security["active_sessions"] = updated_sessions
-            user.save()
-
-            messages.success(request, "La sesión ha sido terminada correctamente.")
-
-        if action == "terminate_all":
-            user = request.user
-
-            # Mantener solo la sesión actual
-            current_session_id = request.session.session_key
-            sessions = user.session_security.get("active_sessions", [])
-            updated_sessions = [
-                s for s in sessions if s.get("id") == current_session_id
-            ]
-
-            # Actualizar las sesiones en el perfil
-            user.session_security["active_sessions"] = updated_sessions
-            user.save()
-
-            messages.success(
-                request, "Todas las demás sesiones han sido terminadas correctamente."
-            )
-
-        return redirect("users_app:session-security")
-
-
 class ChangePasswordView(LoginRequiredMixin, FormView):
     """
     Vista para cambiar la contraseña del usuario.

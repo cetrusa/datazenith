@@ -101,8 +101,9 @@ class HomePanelCuboPage(BaseView):
             request.session.save()  # Forzar guardado de la sesión
             StaticPage.name = database_name
 
-            # Invalidar caché específica para este usuario
-            cache_key = f"panel_cubo_{request.user.id}"
+            # Invalidar caché específica para este usuario y sesión
+            session_key = request.session.session_key or "anonymous"
+            cache_key = f"panel_cubo_{request.user.id}_{session_key}"
             cache.delete(cache_key)
 
             # Limpiar caché de configuración para este usuario y base de datos
@@ -209,12 +210,13 @@ class HomePanelCuboPage(BaseView):
         Obtiene el contexto del usuario desde caché si está disponible,
         o lo crea si no existe.
         """
-        cache_key = f"user_cubo_context_{user_id}_{database_name}"
+        session_key = self.request.session.session_key or "anonymous"
+        cache_key = f"user_cubo_context_{user_id}_{database_name}_{session_key}"
         user_context = cache.get(cache_key)
 
         if user_context:
             logger.debug(
-                f"Contexto de usuario obtenido desde caché para {user_id} en {database_name}"
+                f"Contexto de usuario obtenido desde caché para {user_id} en {database_name} (session {session_key})"
             )
             return user_context
 
@@ -308,7 +310,7 @@ class HomePanelBiPage(BaseView):
             request.session.save()
             StaticPage.name = database_name
 
-            # Invalidar caché específica para este usuario
+            # Invalidar caché específica para este usuario y sesión
             # Incluir ID de sesión para manejar modo incógnito
             session_key = request.session.session_key or "anonymous"
             cache_key = f"panel_bi_{request.user.id}_{session_key}"
@@ -422,42 +424,21 @@ class HomePanelBiPage(BaseView):
         o lo crea si no existe.
         """
         session_key = self.request.session.session_key or "anonymous"
-        cache_key = f"user_bi_context_{user_id}_{database_name}_{session_key}"
+        cache_key = f"user_context_{user_id}_{database_name}_{session_key}"
         user_context = cache.get(cache_key)
 
         if user_context:
-            logger.debug(
-                f"Contexto de usuario obtenido desde caché para {user_id} en {database_name}"
-            )
             return user_context
 
-        # Si no está en caché, crear el contexto
-        try:
-            config = ConfigBasic(database_name, user_id)
-            user_context = {
-                "proveedores": config.config.get("proveedores", []),
-                "macrozonas": config.config.get("macrozonas", []),
-                "ultimo_reporte": config.config.get("ultima_actualizacion", ""),
-            }
+        config = ConfigBasic(database_name, user_id)
+        user_context = {
+            "proveedores": config.config.get("proveedores", []),
+            "macrozonas": config.config.get("macrozonas", []),
+        }
 
-            # Duración del caché basada en si es probable que sea navegación incógnito
-            cache_timeout = 60 * 15  # 15 minutos normalmente
-            if self._is_likely_incognito(self.request):
-                cache_timeout = 60 * 5  # 5 minutos en modo incógnito
+        cache.set(cache_key, user_context, 60 * 15)  # 15 minutos
 
-            # Guardar en caché
-            cache.set(cache_key, user_context, cache_timeout)
-
-            return user_context
-
-        except Exception as e:
-            logger.error(f"Error al obtener contexto de usuario: {str(e)}")
-            # Devolver diccionario vacío o con valores por defecto
-            return {
-                "proveedores": [],
-                "macrozonas": [],
-                "ultimo_reporte": None,
-            }
+        return user_context
 
     def _validate_database_name(self, database_name):
         """
@@ -529,8 +510,9 @@ class HomePanelActualizacionPage(BaseView):
         request.session["database_name"] = database_name
         StaticPage.name = database_name
 
-        # Invalidar caché específica para este usuario
-        cache_key = f"panel_actualizacion_{request.user.id}"
+        # Invalidar caché específica para este usuario y sesión
+        session_key = request.session.session_key or "anonymous"
+        cache_key = f"panel_actualizacion_{request.user.id}_{session_key}"
         cache.delete(cache_key)
 
         logger.debug(
@@ -546,7 +528,8 @@ class HomePanelActualizacionPage(BaseView):
         start_time = time.time()  # Medición de tiempo para análisis de rendimiento
 
         # Verificamos si hay datos en caché para este usuario
-        cache_key = f"panel_actualizacion_{request.user.id}"
+        session_key = request.session.session_key or "anonymous"
+        cache_key = f"panel_actualizacion_{request.user.id}_{session_key}"
         cached_response = cache.get(cache_key)
 
         if cached_response:
@@ -608,23 +591,36 @@ class HomePanelActualizacionPage(BaseView):
         Obtiene el contexto del usuario desde caché si está disponible,
         o lo crea si no existe.
         """
-        cache_key = f"user_context_{user_id}_{database_name}"
+        session_key = self.request.session.session_key or "anonymous"
+        cache_key = f"user_context_{user_id}_{database_name}_{session_key}"
         user_context = cache.get(cache_key)
 
         if user_context:
             return user_context
 
-        # Si no está en caché, crear el contexto
         config = ConfigBasic(database_name, user_id)
         user_context = {
             "proveedores": config.config.get("proveedores", []),
             "macrozonas": config.config.get("macrozonas", []),
         }
 
-        # Guardar en caché
         cache.set(cache_key, user_context, 60 * 15)  # 15 minutos
 
         return user_context
+
+    def _validate_database_name(self, database_name):
+        """
+        Valida que el nombre de la base de datos sea seguro.
+        Previene inyecciones y caracteres no permitidos.
+        """
+        if not database_name:
+            return False
+
+        # Patrón para nombres de bases de datos válidos (alfanuméricos, guiones y guiones bajos)
+        import re
+
+        pattern = re.compile(r"^[a-zA-Z0-9_\-]+$")
+        return bool(pattern.match(database_name))
 
 
 class HomePanelInterfacePage(BaseView):
@@ -664,8 +660,9 @@ class HomePanelInterfacePage(BaseView):
         request.session["database_name"] = database_name
         StaticPage.name = database_name
 
-        # Invalidar caché específica para este usuario
-        cache_key = f"panel_interface_{request.user.id}"
+        # Invalidar caché específica para este usuario y sesión
+        session_key = request.session.session_key or "anonymous"
+        cache_key = f"panel_interface_{request.user.id}_{session_key}"
         cache.delete(cache_key)
 
         # Limpiar caché de configuración para este usuario y base de datos
@@ -684,7 +681,8 @@ class HomePanelInterfacePage(BaseView):
         start_time = time.time()  # Medición de tiempo para análisis de rendimiento
 
         # Verificamos si hay datos en caché para este usuario
-        cache_key = f"panel_interface_{request.user.id}"
+        session_key = request.session.session_key or "anonymous"
+        cache_key = f"panel_interface_{request.user.id}_{session_key}"
         cached_response = cache.get(cache_key)
 
         if cached_response:
@@ -746,16 +744,16 @@ class HomePanelInterfacePage(BaseView):
         Obtiene el contexto del usuario desde caché si está disponible,
         o lo crea si no existe.
         """
-        cache_key = f"user_interface_context_{user_id}_{database_name}"
+        session_key = self.request.session.session_key or "anonymous"
+        cache_key = f"user_interface_context_{user_id}_{database_name}_{session_key}"
         user_context = cache.get(cache_key)
 
         if user_context:
             logger.debug(
-                f"Contexto de usuario obtenido desde caché para {user_id} en {database_name}"
+                f"Contexto de usuario obtenido desde caché para {user_id} en {database_name} (session {session_key})"
             )
             return user_context
 
-        # Si no está en caché, crear el contexto
         config = ConfigBasic(database_name, user_id)
         user_context = {
             "proveedores": config.config.get("proveedores", []),
@@ -763,7 +761,6 @@ class HomePanelInterfacePage(BaseView):
             "interfaces_disponibles": self._obtener_interfaces_disponibles(config),
         }
 
-        # Guardar en caché
         cache.set(cache_key, user_context, 60 * 15)  # 15 minutos
 
         return user_context
