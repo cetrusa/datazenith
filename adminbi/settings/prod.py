@@ -105,6 +105,7 @@ EMAIL_HOST = "smtp.gmail.com"
 EMAIL_HOST_USER = get_secret("EMAIL")
 EMAIL_HOST_PASSWORD = get_secret("PASS_EMAIL")
 EMAIL_PORT = 587
+DEFAULT_FROM_EMAIL = EMAIL_HOST_USER
 
 sys.path.append(BASE_DIR.child("scripts"))
 sys.path.append(BASE_DIR.child("scripts", "extrae_bi"))
@@ -143,4 +144,4 @@ RQ_QUEUES = {
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 FILE_UPLOAD_MAX_MEMORY_SIZE = 104857600  # 100 MB
 DATA_UPLOAD_MAX_MEMORY_SIZE = 104857600  # 100 MB
-SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
