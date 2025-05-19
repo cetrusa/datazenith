@@ -130,11 +130,11 @@ class HomePanelCuboPage(BaseView):
         start_time = time.time()  # Medición de tiempo para análisis de rendimiento
 
         try:
-            # Verificamos si hay datos en caché para este usuario
-            # Usamos un identificador único que combina ID de usuario y sesión
-            # para manejar mejor el modo incógnito
+            # Asegurar que la sesión tenga session_key única antes de cachear
+            if not request.session.session_key:
+                request.session.save()
             user_id = request.user.id
-            session_key = request.session.session_key or "anonymous"
+            session_key = request.session.session_key
             cache_key = f"panel_cubo_{user_id}_{session_key}"
             cached_response = cache.get(cache_key)
 
@@ -149,9 +149,7 @@ class HomePanelCuboPage(BaseView):
 
             # Almacenamos en caché solo si la respuesta es exitosa
             if response.status_code == 200:
-                # Forzar renderizado de la respuesta antes de guardarla en caché
                 response.render()
-                # Usar un tiempo de caché más corto para sesiones anónimas/incógnito
                 cache_timeout = 60 * 5  # 5 minutos por defecto
                 if not request.user.is_authenticated:
                     cache_timeout = 60 * 2  # 2 minutos para usuarios no autenticados
@@ -340,10 +338,11 @@ class HomePanelBiPage(BaseView):
         start_time = time.time()  # Medición de tiempo para análisis de rendimiento
 
         try:
-            # Verificamos si hay datos en caché para este usuario
-            # Incluimos ID de sesión para manejar modo incógnito
+            # Asegurar que la sesión tenga session_key única antes de cachear
+            if not request.session.session_key:
+                request.session.save()
             user_id = request.user.id
-            session_key = request.session.session_key or "anonymous"
+            session_key = request.session.session_key
             cache_key = f"panel_bi_{user_id}_{session_key}"
             cached_response = cache.get(cache_key)
 
@@ -527,8 +526,10 @@ class HomePanelActualizacionPage(BaseView):
         """
         start_time = time.time()  # Medición de tiempo para análisis de rendimiento
 
-        # Verificamos si hay datos en caché para este usuario
-        session_key = request.session.session_key or "anonymous"
+        # Asegurar que la sesión tenga session_key única antes de cachear
+        if not request.session.session_key:
+            request.session.save()
+        session_key = request.session.session_key
         cache_key = f"panel_actualizacion_{request.user.id}_{session_key}"
         cached_response = cache.get(cache_key)
 
@@ -680,8 +681,10 @@ class HomePanelInterfacePage(BaseView):
         """
         start_time = time.time()  # Medición de tiempo para análisis de rendimiento
 
-        # Verificamos si hay datos en caché para este usuario
-        session_key = request.session.session_key or "anonymous"
+        # Asegurar que la sesión tenga session_key única antes de cachear
+        if not request.session.session_key:
+            request.session.save()
+        session_key = request.session.session_key
         cache_key = f"panel_interface_{request.user.id}_{session_key}"
         cached_response = cache.get(cache_key)
 
