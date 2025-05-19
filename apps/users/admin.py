@@ -6,6 +6,8 @@ from django.utils.translation import gettext_lazy as _
 from django.core.exceptions import ValidationError
 import ast
 import json
+from import_export.admin import ImportExportModelAdmin
+from import_export import resources
 
 from .models import User, RegistroAuditoria, UserProfile, UserPermission
 from apps.permisos.models import ConfEmpresas
@@ -100,10 +102,62 @@ class UserAdminForm(forms.ModelForm):
         return instance
 
 
-class UserAdmin(BaseUserAdmin):
+class UserResource(resources.ModelResource):
+    get_empresas_nombres = resources.Field()
+
+    class Meta:
+        model = User
+        fields = (
+            "id",
+            "username",
+            "email",
+            "nombres",
+            "apellidos",
+            "genero",
+            "is_active",
+            "is_staff",
+            "date_joined",
+            "get_empresas_nombres",
+        )
+        export_order = (
+            "id",
+            "username",
+            "email",
+            "nombres",
+            "apellidos",
+            "genero",
+            "is_active",
+            "is_staff",
+            "date_joined",
+            "get_empresas_nombres",
+        )
+
+    def dehydrate_get_empresas_nombres(self, user):
+        return user.get_empresas_nombres()
+
+
+def print_users(modeladmin, request, queryset):
+    """Acción para imprimir usuarios seleccionados (abre vista de impresión simple)."""
+    from django.http import HttpResponse
+
+    rows = [
+        f"{user.username}, {user.email}, {user.nombres}, {user.apellidos}, {user.date_joined.strftime('%Y-%m-%d %H:%M:%S')}"
+        for user in queryset
+    ]
+    html = "<html><head><title>Imprimir usuarios</title></head><body>"
+    html += "<h2>Listado de usuarios</h2><pre>" + "\n".join(rows) + "</pre>"
+    html += "<script>window.print();</script></body></html>"
+    return HttpResponse(html)
+
+
+print_users.short_description = _("Imprimir usuarios seleccionados")
+
+
+class UserAdmin(ImportExportModelAdmin, BaseUserAdmin):
     """Admin personalizado para el modelo User que extiende el UserAdmin de Django."""
 
     form = UserAdminForm
+    resource_class = UserResource
     inlines = [UserProfileInline]
 
     # Campos a mostrar en el listado
@@ -116,6 +170,8 @@ class UserAdmin(BaseUserAdmin):
         "is_active",
         "is_staff",
         "get_empresas_count",
+        "get_empresas_nombres",
+        "date_joined",
     )
 
     # Filtros en la barra lateral
@@ -125,7 +181,7 @@ class UserAdmin(BaseUserAdmin):
     search_fields = ("username", "email", "nombres", "apellidos")
 
     # Ordenación por defecto
-    ordering = ("username",)
+    ordering = ("-date_joined",)  # Ordenar por fecha de creación descendente
 
     # Organización en fieldsets para mejor visualización
     fieldsets = (
@@ -193,6 +249,14 @@ class UserAdmin(BaseUserAdmin):
         return f"{count}/{total}" if count < total else _("Todas")
 
     get_empresas_count.short_description = _("Empresas")
+
+    def get_empresas_nombres(self, obj):
+        """Método para mostrar los nombres de las empresas asociadas."""
+        return ", ".join([empresa.nmEmpresa for empresa in obj.conf_empresas.all()])
+
+    get_empresas_nombres.short_description = _("Nombres de Empresas")
+
+    actions = [print_users]
 
     class Media:
         js = ("admin/js/select_all.js",)

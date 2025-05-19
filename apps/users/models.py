@@ -48,6 +48,9 @@ class User(AbstractBaseUser, PermissionsMixin):
     is_staff = models.BooleanField(default=False, verbose_name="Administrador")
     is_active = models.BooleanField(default=False, verbose_name="Activo")
     is_superuser = models.BooleanField(default=False, verbose_name="Superusuario")
+    date_joined = models.DateTimeField(
+        auto_now_add=True, verbose_name="Fecha de creación"
+    )
 
     # Nuevos campos para 2FA
     totp_secret = models.CharField(
@@ -101,6 +104,12 @@ class User(AbstractBaseUser, PermissionsMixin):
             return True
         except cls.DoesNotExist:
             return False
+
+    def get_empresas_nombres(self):
+        """Devuelve una lista de nombres de empresas asociadas al usuario."""
+        return ", ".join([e.nmEmpresa for e in self.conf_empresas.all()])
+
+    get_empresas_nombres.short_description = "Empresas asociadas"
 
 
 class UserProfile(models.Model):

@@ -53,6 +53,7 @@ LOCAL_APPS = (
 THIRD_PARTY_APPS = (
     "captcha",
     "django_rq",
+    "import_export",  # Para exportar desde el admin
 )
 
 MIDDLEWARE = [
