@@ -60,7 +60,7 @@ class HomePanelCuboPage(BaseView):
     login_url = reverse_lazy("users_app:user-login")
 
     # Añadimos caché para esta vista
-    @method_decorator(cache_page(60 * 5))  # Caché de 5 minutos
+    # @method_decorator(cache_page(60 * 5))  # Caché de 5 minutos
     def dispatch(self, request, *args, **kwargs):
         """
         Método para despachar la solicitud con caché para mejorar rendimiento.
@@ -208,19 +208,20 @@ class HomePanelCuboPage(BaseView):
         Obtiene el contexto del usuario desde caché si está disponible,
         o lo crea si no existe.
         """
-        session_key = self.request.session.session_key or "anonymous"
-        cache_key = f"user_cubo_context_{user_id}_{database_name}_{session_key}"
+        # session_key = self.request.session.session_key or "anonymous"  # Comentado
+        cache_key = f"user_cubo_context_{database_name}"
         user_context = cache.get(cache_key)
 
         if user_context:
             logger.debug(
-                f"Contexto de usuario obtenido desde caché para {user_id} en {database_name} (session {session_key})"
+                f"Contexto obtenido desde caché para {database_name} (sin user/session)"
             )
             return user_context
 
         # Si no está en caché, crear el contexto
         try:
-            config = ConfigBasic(database_name, user_id)
+            # user_id = self.request.user.id  # Comentado: ya no se usa user_id
+            config = ConfigBasic(database_name)  # Solo database_name
             user_context = {
                 "proveedores": config.config.get("proveedores", []),
                 "macrozonas": config.config.get("macrozonas", []),
@@ -233,7 +234,7 @@ class HomePanelCuboPage(BaseView):
             return user_context
 
         except Exception as e:
-            logger.error(f"Error al obtener contexto de usuario: {str(e)}")
+            logger.error(f"Error al obtener contexto: {str(e)}")
             # Devolver diccionario vacío o con valores por defecto
             return {
                 "proveedores": [],
@@ -267,7 +268,7 @@ class HomePanelBiPage(BaseView):
     login_url = reverse_lazy("users_app:user-login")
 
     # Añadimos caché para esta vista
-    @method_decorator(cache_page(60 * 5))  # Caché de 5 minutos
+    # @method_decorator(cache_page(60 * 5))  # Caché de 5 minutos
     def dispatch(self, request, *args, **kwargs):
         """
         Método para despachar la solicitud con caché para mejorar rendimiento.
@@ -485,7 +486,7 @@ class HomePanelActualizacionPage(BaseView):
     login_url = reverse_lazy("users_app:user-login")
 
     # Añadimos caché para esta vista
-    @method_decorator(cache_page(60 * 5))  # Caché de 5 minutos
+    # @method_decorator(cache_page(60 * 5))  # Caché de 5 minutos
     def dispatch(self, request, *args, **kwargs):
         """
         Método para despachar la solicitud con caché para mejorar rendimiento.
@@ -634,7 +635,7 @@ class HomePanelInterfacePage(BaseView):
     login_url = reverse_lazy("users_app:user-login")
 
     # Añadimos caché para esta vista
-    @method_decorator(cache_page(60 * 5))  # Caché de 5 minutos
+    # @method_decorator(cache_page(60 * 5))  # Caché de 5 minutos
     def dispatch(self, request, *args, **kwargs):
         """
         Método para despachar la solicitud con caché para mejorar rendimiento.
