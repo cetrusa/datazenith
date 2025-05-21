@@ -108,7 +108,15 @@ class InterfaceContable:
     def _create_sqlite_engine(self):
         self._update_progress("Configurando BD temporal", 3)
         try:
-            self.engine_sqlite = create_engine("sqlite:///:memory:")
+            # Usar archivo temporal único en 'media' para depuración de permisos
+            import uuid
+
+            sqlite_table_name = getattr(
+                self, "sqlite_table_name", f"interface_{uuid.uuid4().hex[:8]}"
+            )
+            sqlite_path = os.path.join("media", f"temp_{sqlite_table_name}.db")
+            os.makedirs(os.path.dirname(sqlite_path), exist_ok=True)
+            self.engine_sqlite = create_engine(f"sqlite:///{sqlite_path}")
             with self.engine_sqlite.connect() as conn:
                 conn.execute(text("PRAGMA journal_mode = MEMORY;"))
                 conn.execute(text("PRAGMA synchronous = OFF;"))
@@ -128,7 +136,8 @@ class InterfaceContable:
             )
         return text(
             f"CALL {sql}('{self.IdtReporteIni}','{self.IdtReporteFin}','','{str(hoja)}');"
-        )    
+        )
+
     def _execute_query_to_sqlite(self, query, table_name, chunksize=50000):
         stage_name = "Extrayendo datos de MySQL"
         self._update_progress(stage_name, 10)
@@ -138,23 +147,29 @@ class InterfaceContable:
         try:
             with self.engine_mysql.connect() as mysql_conn:
                 # Primero verificar si la consulta devuelve resultados
-                print(f"[InterfaceContable] Ejecutando consulta MySQL para tabla: {table_name}")
+                print(
+                    f"[InterfaceContable] Ejecutando consulta MySQL para tabla: {table_name}"
+                )
                 result_proxy = mysql_conn.execute(query)
                 columns = result_proxy.keys()
-                
+
                 # Obtener el primer chunk para verificar si hay datos
                 rows = result_proxy.fetchmany(chunksize)
                 if not rows:
-                    print(f"[InterfaceContable] No hay datos para la tabla: {table_name}")
+                    print(
+                        f"[InterfaceContable] No hay datos para la tabla: {table_name}"
+                    )
                     logger.warning(f"No hay datos para la tabla: {table_name}")
                     self.total_records_processed = 0
                     return
-                
+
                 # Si hay datos, proceder con la creación de la tabla SQLite
                 with self.engine_sqlite.connect() as sqlite_conn, sqlite_conn.begin():
                     df_chunk = pd.DataFrame(rows, columns=columns)
-                    print(f"[InterfaceContable] Creando tabla SQLite '{table_name}' con {len(columns)} columnas y {len(rows)} filas iniciales")
-                    
+                    print(
+                        f"[InterfaceContable] Creando tabla SQLite '{table_name}' con {len(columns)} columnas y {len(rows)} filas iniciales"
+                    )
+
                     # Crear tabla con el primer chunk
                     df_chunk.to_sql(
                         name=table_name,
@@ -163,11 +178,11 @@ class InterfaceContable:
                         index=False,
                         method=None,
                     )
-                    
+
                     # Actualizar contadores
                     total_processed = len(rows)
                     self.total_records_processed = total_processed
-                    
+
                     # Procesar resto de chunks si hay más datos
                     while True:
                         rows = result_proxy.fetchmany(chunksize)
@@ -185,40 +200,52 @@ class InterfaceContable:
                         total_processed += len(rows)
                         self.total_records_processed = total_processed
                         elapsed_total = time.time() - start_extract_time
-                        progress_percent = 10 + (elapsed_total / (elapsed_total + 1)) * 70
-                        self._update_progress(stage_name, progress_percent, total_processed)
+                        progress_percent = (
+                            10 + (elapsed_total / (elapsed_total + 1)) * 70
+                        )
+                        self._update_progress(
+                            stage_name, progress_percent, total_processed
+                        )
                         del df_chunk
                         if total_processed % (chunksize * 5) == 0:
                             gc.collect()
-                            
+
                 # Verificar que la tabla se ha creado y confirmar el recuento final
                 with self.engine_sqlite.connect() as sqlite_conn:
                     # Verificar que la tabla existe
                     table_exists = sqlite_conn.execute(
-                        text(f"SELECT name FROM sqlite_master WHERE type='table' AND name='{table_name}'")
+                        text(
+                            f"SELECT name FROM sqlite_master WHERE type='table' AND name='{table_name}'"
+                        )
                     ).fetchone()
-                    
+
                     if not table_exists:
-                        raise ValueError(f"La tabla {table_name} no se creó correctamente en SQLite")
-                    
+                        raise ValueError(
+                            f"La tabla {table_name} no se creó correctamente en SQLite"
+                        )
+
                     # Confirmar recuento de registros
                     final_count = sqlite_conn.execute(
                         text(f"SELECT COUNT(*) FROM {table_name}")
                     ).scalar()
-                    
-                    print(f"[InterfaceContable] Tabla {table_name} creada con {final_count} registros")
-                    
+
+                    print(
+                        f"[InterfaceContable] Tabla {table_name} creada con {final_count} registros"
+                    )
+
                     if final_count != total_processed:
-                        logger.warning(f"Discrepancia en conteo para {table_name}: procesados {total_processed}, SQLite tiene {final_count}")
+                        logger.warning(
+                            f"Discrepancia en conteo para {table_name}: procesados {total_processed}, SQLite tiene {final_count}"
+                        )
                         self.total_records_processed = final_count
-                
+
                 self._update_progress(
                     "Datos extraídos a BD temporal", 80, self.total_records_processed
                 )
         except SQLAlchemyError as e:
             logger.error(
                 f"Error de base de datos durante la extracción para {table_name}: {e}",
-                exc_info=True
+                exc_info=True,
             )
             print(f"[InterfaceContable] Error de BD para {table_name}: {e}")
             self._update_progress(f"Error BD en {table_name}: {e}", 100)
@@ -232,7 +259,7 @@ class InterfaceContable:
         except Exception as e:
             logger.error(
                 f"Error inesperado durante la extracción para {table_name}: {e}",
-                exc_info=True
+                exc_info=True,
             )
             print(f"[InterfaceContable] Error extraer {table_name}: {e}")
             self._update_progress(f"Error en {table_name}: {e}", 100)
@@ -259,7 +286,14 @@ class InterfaceContable:
         self._update_progress(stage_name, 85, self.total_records_processed)
         use_csv = self.total_records_processed > 1000000
         ext = ".csv" if use_csv else ".xlsx"
-        self.file_name = f"Interface_Contable_{self.database_name}_de_{self.IdtReporteIni}_a_{self.IdtReporteFin}{ext}"
+        # Incluir user_id y reporte_id para unicidad y trazabilidad
+        reporte_id_str = (
+            f"_reporte_{self.reporte_id}"
+            if hasattr(self, "reporte_id") and self.reporte_id
+            else ""
+        )
+        user_id_str = f"_user_{self.user_id}" if self.user_id else ""
+        self.file_name = f"Interface_Contable_{self.database_name}_de_{self.IdtReporteIni}_a_{self.IdtReporteFin}{user_id_str}{reporte_id_str}{ext}"
         self.file_path = os.path.join("media", self.file_name)
         # Mejora: Validar que la ruta no sea vacía y crear carpeta destino
         output_dir = os.path.dirname(self.file_path)
@@ -297,6 +331,7 @@ class InterfaceContable:
                             if self.total_records_processed > 0
                             else 99
                         )
+                        logger.info(f"[INTERFACE] CSV: {records_written} registros escritos, progreso: {progress_percent:.2f}%, memoria: {psutil.Process(os.getpid()).memory_info().rss / (1024*1024):.1f} MB, tiempo: {time.time() - start_export_time:.2f}s")
                         self._update_progress(
                             f"{stage_name} (CSV)", progress_percent, records_written
                         )
@@ -321,6 +356,7 @@ class InterfaceContable:
                             if self.total_records_processed > 0
                             else 99
                         )
+                        logger.info(f"[INTERFACE] Excel: {records_written} registros escritos, progreso: {progress_percent:.2f}%, memoria: {psutil.Process(os.getpid()).memory_info().rss / (1024*1024):.1f} MB, tiempo: {time.time() - start_export_time:.2f}s")
                         self._update_progress(
                             f"{stage_name} (Excel)", progress_percent, records_written
                         )
@@ -393,15 +429,24 @@ class InterfaceContable:
 
             # Generar nombre de archivo de salida
             ext = ".xlsx"
-            self.file_name = f"Interface_Contable_{self.database_name}_de_{self.IdtReporteIni}_a_{self.IdtReporteFin}{ext}"
+            # Incluir user_id y reporte_id para unicidad y trazabilidad
+            reporte_id_str = (
+                f"_reporte_{self.reporte_id}"
+                if hasattr(self, "reporte_id") and self.reporte_id
+                else ""
+            )
+            user_id_str = f"_user_{self.user_id}" if self.user_id else ""
+            self.file_name = f"Interface_Contable_{self.database_name}_de_{self.IdtReporteIni}_a_{self.IdtReporteFin}{user_id_str}{reporte_id_str}{ext}"
             self.file_path = os.path.join("media", self.file_name)
             output_dir = os.path.dirname(self.file_path)
             os.makedirs(output_dir, exist_ok=True)
 
             # Crear un ExcelWriter para todas las hojas
             with pd.ExcelWriter(self.file_path, engine="xlsxwriter") as writer:
-                total_global_records = 0                
-                for hoja in self.config["txProcedureInterface"]:
+                total_global_records = 0
+                for idx, hoja in enumerate(
+                    self.config["txProcedureInterface"], start=1
+                ):
                     hoja = str(hoja).strip()
                     if not hoja:
                         continue
@@ -416,45 +461,62 @@ class InterfaceContable:
                         print(f"[InterfaceContable] Query generado: {query}")
                         logger.info(f"[InterfaceContable] Query generado: {query}")
                         table_name = f"{self.sqlite_table_name}_{hoja}"
-                        
+
                         # Ejecutar consulta y verificar si se creó la tabla
                         self._execute_query_to_sqlite(query, table_name)
-                        
+
                         # Verificar que la tabla exista antes de continuar
                         with self.engine_sqlite.connect() as conn:
                             table_exists = conn.execute(
-                                text(f"SELECT name FROM sqlite_master WHERE type='table' AND name='{table_name}'")
+                                text(
+                                    f"SELECT name FROM sqlite_master WHERE type='table' AND name='{table_name}'"
+                                )
                             ).fetchone()
-                            
+
                             if not table_exists:
-                                logger.warning(f"[InterfaceContable] La tabla {table_name} no se creó correctamente. Omitiendo...")
-                                print(f"[InterfaceContable] La tabla {table_name} no se creó correctamente. Omitiendo...")
+                                logger.warning(
+                                    f"[InterfaceContable] La tabla {table_name} no se creó correctamente. Omitiendo..."
+                                )
+                                print(
+                                    f"[InterfaceContable] La tabla {table_name} no se creó correctamente. Omitiendo..."
+                                )
                                 continue
-                                
+
                             # Verificar que haya datos en la tabla
-                            row_count = conn.execute(text(f"SELECT COUNT(*) FROM {table_name}")).scalar()
+                            row_count = conn.execute(
+                                text(f"SELECT COUNT(*) FROM {table_name}")
+                            ).scalar()
                             if row_count == 0:
-                                logger.warning(f"[InterfaceContable] La tabla {table_name} está vacía. Omitiendo...")
-                                print(f"[InterfaceContable] La tabla {table_name} está vacía. Omitiendo...")
+                                logger.warning(
+                                    f"[InterfaceContable] La tabla {table_name} está vacía. Omitiendo..."
+                                )
+                                print(
+                                    f"[InterfaceContable] La tabla {table_name} está vacía. Omitiendo..."
+                                )
                                 self._cleanup_table(table_name)
                                 continue
-                        
+
                         print(
                             f"[InterfaceContable] Extracción de datos completada para hoja {hoja}. Total registros procesados: {self.total_records_processed}"
                         )
                         logger.info(
                             f"[InterfaceContable] Extracción de datos completada para hoja {hoja}. Total registros procesados: {self.total_records_processed}"
                         )
-                        
+
                         # Guardar datos en la hoja correspondiente
                         self._guardar_datos_excel_xlsxwriter(table_name, hoja, writer)
                         total_global_records += self.total_records_processed
-                        
+
                         # Limpiar tabla temporal
                         self._cleanup_table(table_name)
                     except Exception as e:
-                        logger.error(f"[InterfaceContable] Error al procesar hoja {hoja}: {str(e)}", exc_info=True)
-                        print(f"[InterfaceContable] Error al procesar hoja {hoja}: {str(e)}")
+                        logger.error(
+                            f"[InterfaceContable] Error al procesar hoja {hoja}: {str(e)}",
+                            exc_info=True,
+                        )
+                        print(
+                            f"[InterfaceContable] Error al procesar hoja {hoja}: {str(e)}"
+                        )
                         # Intentar limpiar tabla en caso de error
                         try:
                             self._cleanup_table(f"{self.sqlite_table_name}_{hoja}")
@@ -462,8 +524,32 @@ class InterfaceContable:
                             pass
                         # Continuar con la siguiente hoja
                         continue
+                    # Progreso global por hoja
+                    if self.progress_callback:
+                        percent = int(
+                            (idx / len(self.config["txProcedureInterface"])) * 100
+                        )
+                        self.progress_callback(
+                            f"Progreso global: {idx}/{len(self.config['txProcedureInterface'])} hojas",
+                            percent,
+                            hoja_idx=idx,
+                            total_hojas=len(self.config["txProcedureInterface"]),
+                        )
 
             execution_time = time.time() - self.start_time
+            if total_global_records == 0:
+                print("[InterfaceContable] No hay datos para mostrar en ninguna hoja.")
+                logger.warning(
+                    "[InterfaceContable] No hay datos para mostrar en ninguna hoja."
+                )
+                return {
+                    "success": False,
+                    "error_message": "No hay datos para mostrar en ninguna hoja.",
+                    "file_path": None,
+                    "file_name": None,
+                    "execution_time": execution_time,
+                    "metadata": {"total_records": 0},
+                }
             print(f"[InterfaceContable] Archivo generado en: {self.file_path}")
             logger.info(f"[InterfaceContable] Archivo generado en: {self.file_path}")
             print(

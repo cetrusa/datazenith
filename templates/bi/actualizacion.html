@@ -85,6 +85,7 @@ Actualización Bi
   var startTime = 0;
   var progressInterval = null;
   var progressBar = document.getElementById("progressBar");
+  let lastProgressValue = 0;
 
   document.getElementById("submitBtnActualizacion").addEventListener("click", function (event) {
     event.preventDefault();
@@ -215,13 +216,18 @@ Actualización Bi
     }
   }
 
-  function updateProgressBar(progressValue, stageText) {
+  function updateProgressBar(value, stageText) {
+    if (value < lastProgressValue) {
+      value = lastProgressValue;
+    } else {
+      lastProgressValue = value;
+    }
     var progressStage = document.getElementById("progress-stage");
-    progressValue = Math.max(0, Math.min(100, Number(progressValue) || 0));
-    progressBar.style.width = progressValue + "%";
-    progressBar.setAttribute("aria-valuenow", progressValue);
-    progressBar.textContent = progressValue.toFixed(0) + "%";
-    if (progressValue < 100) {
+    value = Math.max(0, Math.min(100, Number(value) || 0));
+    progressBar.style.width = value + "%";
+    progressBar.setAttribute("aria-valuenow", value);
+    progressBar.textContent = value.toFixed(0) + "%";
+    if (value < 100) {
       progressBar.className = "progress-bar progress-bar-striped progress-bar-animated bg-success";
     } else {
       progressBar.className = "progress-bar bg-success";

@@ -1204,7 +1204,7 @@ class CheckTaskStatusView(BaseView):
 
                 # Si la tarea es interface_task y success es False, devolver error y NO mostrar link de descarga
                 if (
-                    task_name == "interface_task"
+                    task_name in ["interface_task", "plano_task"]
                     and isinstance(result, dict)
                     and not result.get("success", True)
                 ):
@@ -1228,11 +1228,16 @@ class CheckTaskStatusView(BaseView):
                 if task_name == "actualiza_bi_task":
                     powerbi_status = None
                     if isinstance(result, dict):
-                        powerbi_status = result.get("powerbi_status") or result.get(
-                            "metadata", {}
-                        ).get("powerbi_status")
-                        if powerbi_status:
-                            result["powerbi_status"] = powerbi_status
+                        powerbi_status = result.get("powerbi_status")
+                        # Si el estado es Unknown tras agotar intentos, mostrar mensaje claro
+                        if powerbi_status == "Unknown":
+                            # Mensaje claro para el usuario
+                            return JsonResponse({
+                                "status": "unknown",
+                                "result": result,
+                                "error_message": "El estado de actualización de Power BI es desconocido tras varios intentos. El proceso puede seguir en curso. Por favor, reintente en unos minutos o verifique manualmente en el portal de Power BI.",
+                                "summary": self._generate_summary(job, result),
+                            }, status=200)
 
                 if (
                     isinstance(result, dict)
@@ -1494,7 +1499,7 @@ class CheckTaskStatusView(BaseView):
                 "tiempo_ejecucion": f"{result.get('execution_time', 0):.2f} segundos",
             }
 
-        elif task_name in ["interface_task"]:
+        elif task_name in ["interface_task", "plano_task"]:
             # Resumen especial para Interface Contable
             db_name = job.args[0] if len(job.args) > 0 else "desconocida"
             fecha_ini = job.args[1] if len(job.args) > 1 else "desconocida"

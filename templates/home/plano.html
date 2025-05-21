@@ -105,6 +105,7 @@ Archivos Planos
   var startTime = 0;
   var progressInterval = null;
   var progressBar = document.getElementById("progressBar");
+  var lastProgressValue = 0;
 
   document.getElementById("submitBtnPlano").addEventListener("click", function (event) {
     event.preventDefault();
@@ -260,8 +261,14 @@ Archivos Planos
   function updateProgressBar(progressValue, stageText) {
     var progressStage = document.getElementById("progress-stage");
     progressValue = Math.max(0, Math.min(100, Number(progressValue) || 0));
+    // Evitar retrocesos en la barra
+    if (progressValue < lastProgressValue) {
+      progressValue = lastProgressValue;
+    } else {
+      lastProgressValue = progressValue;
+    }
     progressBar.style.width = progressValue + "%";
-    progressBar.setAttribute("aria-valuenow", progressValue);
+    progressBar.setAttribute("aria-valuenow", progressValue); // <-- corregido
     progressBar.textContent = progressValue.toFixed(0) + "%";
     if (progressValue < 100) {
       progressBar.className = "progress-bar progress-bar-striped progress-bar-animated bg-primary";

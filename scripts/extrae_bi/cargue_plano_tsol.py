@@ -66,7 +66,14 @@ class DataBaseConnection:
         print(self.engine_mysql_bi)
         print(self.engine_mysql_conf)
         # Establecer o crear el motor para SQLite
-        self.engine_sqlite = create_engine("sqlite:///mydata.db")
+        import uuid
+
+        sqlite_table_name = getattr(
+            self, "sqlite_table_name", f"cargueplanotsol_{uuid.uuid4().hex[:8]}"
+        )
+        sqlite_path = os.path.join("media", f"temp_{sqlite_table_name}.db")
+        os.makedirs(os.path.dirname(sqlite_path), exist_ok=True)
+        self.engine_sqlite = create_engine(f"sqlite:///{sqlite_path}")
         print(self.engine_sqlite)
 
     def create_engine_mysql_bi(self):
@@ -642,11 +649,13 @@ class CarguePlano:
                     )
 
             resultado = self.eliminar_duplicados_df(resultado_out, txTabla)
-            
+
             # Imprimir una muestra de las filas del DataFrame
             print("Muestra del DataFrame antes de insertar en la base de datos:")
-            print(resultado.head(10))  # Puedes cambiar el número dentro de head() para mostrar más filas
-            
+            print(
+                resultado.head(10)
+            )  # Puedes cambiar el número dentro de head() para mostrar más filas
+
             with self.engine_mysql_bi.connect() as connection:
                 cursor = connection.execution_options(isolation_level="READ COMMITTED")
                 resultado.to_sql(
@@ -671,7 +680,6 @@ class CarguePlano:
             )
         except Exception as e:
             logging.error(f"Error inesperado al insertar datos en {txTabla}: {e}")
-
 
     def mapeo_de_caracteres(self):
         try:
@@ -887,8 +895,17 @@ class CarguePlano:
             print("listo iniciando aqui en la funcion procesar plano")
             expected_files = self.obtener_nombres_archivos_esperados()
 
-            self.cargue()
-
+            result = self.cargue()
+            # Si el resultado indica que no hay datos, devolver formato uniforme
+            if isinstance(result, dict) and not result.get("success", True):
+                return {
+                    "success": False,
+                    "error_message": result.get(
+                        "error_message", "No hay datos para procesar"
+                    ),
+                    "file_path": None,
+                    "file_name": None,
+                }
             return {"success": True, "message": "Archivo procesado con éxito"}
 
         except Exception as e:
@@ -896,15 +913,6 @@ class CarguePlano:
             return {
                 "success": False,
                 "error_message": f"Error al procesar el archivo: {e}",
+                "file_path": None,
+                "file_name": None,
             }
-
-
-# Ejemplo de uso
-# cargador = CargueZip(
-#     "distrijass",
-#     "D:\\Descargas\\Distrijass\\DISTRIJASS_210653_901164665_202361103 (1).zip",
-# )
-# if cargador.procesar_zip():
-#     # Continuar con el procesamiento después de la extracción
-# else:
-#     # Manejar el error

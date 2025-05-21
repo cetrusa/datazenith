@@ -58,10 +58,12 @@ Interface Contable
             <option value="100000">100,000 (Para conjuntos de datos grandes)</option>
             <option value="200000">200,000 (Para equipos con muchos recursos)</option>
           </select>
-          <small class="form-text text-muted">Ajuste este valor según el rendimiento de su sistema y el tamaño de los datos</small>
+          <small class="form-text text-muted">Ajuste este valor según el rendimiento de su sistema y el tamaño de los
+            datos</small>
         </div>
     </div>
-    <span class="card text-center"><button id="submitBtnInterface" type="submit" class="btn btn-primary" data-submitted="false">Generar Interface Contable</button></span>
+    <span class="card text-center"><button id="submitBtnInterface" type="submit" class="btn btn-primary"
+        data-submitted="false">Generar Interface Contable</button></span>
     </form>
 
     <br>
@@ -69,7 +71,8 @@ Interface Contable
     {% include 'includes/download_file.html' %}
   </div>
   <!-- Este es el Modal -->
-  <div class="modal" id="processingModal" tabindex="-1" role="dialog" aria-labelledby="processingModalLabel" aria-hidden="true" style="display: none; background-color: rgba(0, 0, 0, 0.5);">
+  <div class="modal" id="processingModal" tabindex="-1" role="dialog" aria-labelledby="processingModalLabel"
+    aria-hidden="true" style="display: none; background-color: rgba(0, 0, 0, 0.5);">
     <div class="modal-dialog modal-dialog-centered" role="document">
       <div class="modal-content bg-dark text-white">
         <div class="modal-header">
@@ -79,7 +82,8 @@ Interface Contable
           <div id="progress-stage" class="mb-3 font-weight-bold">Por favor, espere mientras se genera el archivo...
           </div>
           <div class="progress" style="height: 20px;">
-            <div id="progressBar" class="progress-bar progress-bar-striped progress-bar-animated bg-primary" role="progressbar" style="width: 0%;" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">0%</div>
+            <div id="progressBar" class="progress-bar progress-bar-striped progress-bar-animated bg-primary"
+              role="progressbar" style="width: 0%;" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">0%</div>
           </div>
           <div id="detailedStatus" class="small text-muted mt-3 p-2 border-top"></div>
           <p id="time-info" class="mt-2 small text-muted">Tiempo transcurrido: 0 seg</p>
@@ -99,6 +103,7 @@ Interface Contable
   var startTime = 0;
   var progressInterval = null;
   var progressBar = document.getElementById("progressBar");
+  let lastProgressValue = 0;
 
   // Listener para el botón específico submitBtnInterface
   document.getElementById("submitBtnInterface").addEventListener("click", function (event) {
@@ -263,13 +268,18 @@ Interface Contable
     }
   }
 
-  function updateProgressBar(progressValue, stageText) {
+  function updateProgressBar(value, stageText) {
+    if (value < lastProgressValue) {
+      value = lastProgressValue;
+    } else {
+      lastProgressValue = value;
+    }
     var progressStage = document.getElementById("progress-stage");
-    progressValue = Math.max(0, Math.min(100, Number(progressValue) || 0));
-    progressBar.style.width = progressValue + "%";
-    progressBar.setAttribute("aria-valuenow", progressValue);
-    progressBar.textContent = progressValue.toFixed(0) + "%";
-    if (progressValue < 100) {
+    value = Math.max(0, Math.min(100, Number(value) || 0));
+    progressBar.style.width = value + "%";
+    progressBar.setAttribute("aria-valuenow", value);
+    progressBar.textContent = value.toFixed(0) + "%";
+    if (value < 100) {
       progressBar.className = "progress-bar progress-bar-striped progress-bar-animated bg-primary";
     } else {
       progressBar.className = "progress-bar bg-primary";

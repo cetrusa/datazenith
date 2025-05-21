@@ -11,6 +11,8 @@ from scripts.config import ConfigBasic
 from scripts.conexion import Conexion as con
 import json
 from django.core.exceptions import ImproperlyConfigured
+import os
+import uuid
 
 # Configuración del logging
 logging.basicConfig(
@@ -42,8 +44,13 @@ class DataBaseConnection:
         self.config = config
         self.engine_mysql_bi = self.create_engine_mysql_bi()
         # Configuramos el engine SQLite con opciones optimizadas
+        sqlite_table_name = getattr(
+            self, "sqlite_table_name", f"cargueinfoventas_{uuid.uuid4().hex[:8]}"
+        )
+        sqlite_path = os.path.join("media", f"temp_{sqlite_table_name}.db")
+        os.makedirs(os.path.dirname(sqlite_path), exist_ok=True)
         self.engine_sqlite = create_engine(
-            "sqlite:///mydata.db",
+            f"sqlite:///{sqlite_path}",
             connect_args={
                 "timeout": 60,  # Aumentamos timeout para operaciones largas
                 "check_same_thread": False,
@@ -875,7 +882,7 @@ class CargueInfoVentas:
                 f"Tiempo transcurrido en marcar registros procesados: {tiempo_transcurrido} segundos."
             )
             print(
-                f"Tiempo transcurrido en marcar registros procesados: {tiempo_transcurrido} segundos."
+                f"Tiempo transcurrido en marcar registros como procesados: {tiempo_transcurrido} segundos."
             )
 
     def eliminar_registros_procesados(self):
@@ -900,6 +907,7 @@ class CargueInfoVentas:
             print(f"Error al eliminar registros procesados: {e}")
         finally:
             final = time.time()
+            tiempo_transcurrido = final - inicio
             logging.info(
                 f"Tiempo transcurrido en eliminar registros procesados: {tiempo_transcurrido} segundos."
             )
@@ -999,6 +1007,17 @@ class CargueInfoVentas:
         logging.info(
             f"Procesados {self.stats['registros_procesados']} registros, insertados {self.stats['registros_insertados']}, descartados {self.stats['registros_descartados']}."
         )
+
+        if self.stats["registros_procesados"] == 0:
+            return {
+                "success": False,
+                "error_message": "No hay datos para mostrar en el cargue de ventas.",
+                "file_path": None,
+                "file_name": None,
+                "registros_procesados": 0,
+                "registros_insertados": 0,
+                "tiempo_transcurrido": tiempo_transcurrido,
+            }
 
         return {
             "success": True,

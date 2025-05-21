@@ -111,6 +111,7 @@ Informe Cubo de Ventas
   var startTime = 0; // Para calcular tiempo transcurrido
   var progressInterval = null; // Intervalo para actualizar tiempo
   var progressBar = document.getElementById("progressBar"); // Referencia a la barra de progreso
+  var lastProgressValue = 0; // Para evitar retrocesos en la barra
 
   // Listener para el botón específico submitBtnCubo
   document.getElementById("submitBtnCubo").addEventListener("click", function (event) {
@@ -339,6 +340,12 @@ Informe Cubo de Ventas
   function updateProgressBar(progressValue, stageText) {
     var progressStage = document.getElementById("progress-stage"); // Usar el ID correcto
     progressValue = Math.max(0, Math.min(100, Number(progressValue) || 0));
+    // Evitar retrocesos en la barra
+    if (progressValue < lastProgressValue) {
+      progressValue = lastProgressValue;
+    } else {
+      lastProgressValue = progressValue;
+    }
     progressBar.style.width = progressValue + "%";
     progressBar.setAttribute("aria-valuenow", progressValue);
     progressBar.textContent = progressValue.toFixed(0) + "%"; // Sin decimales en la barra

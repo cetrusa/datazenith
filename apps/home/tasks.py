@@ -62,9 +62,13 @@ def update_job_progress(
         current_job if current_job and current_job.id == target_job_id else None
     )
 
+    print(
+        f"[update_job_progress] job_id={job_id}, progress={progress}, status={status}, meta={meta}"
+    )
     if job_to_update:
         if not meta:
             meta = {}
+        print(f"[update_job_progress] Updating job meta for job_id={target_job_id}")
         # Asegurar que 'status' y 'progress' estén en meta para RQ
         # Usar meta.get para evitar sobreescribir valores existentes si no se proporcionan nuevos
         current_meta = job_to_update.meta or {}
@@ -78,12 +82,21 @@ def update_job_progress(
         job_to_update.meta.update(updated_meta)
         try:
             job_to_update.save_meta()
+            print(
+                f"[update_job_progress] Meta saved for job_id={target_job_id}: progress={updated_meta.get('progress')}% status={status}"
+            )
             logger.debug(
                 f"RQ Job {target_job_id} progress updated: {status} - {updated_meta.get('progress')}%"
             )
         except Exception as e:
+            print(
+                f"[update_job_progress] Error saving meta for job_id={target_job_id}: {e}"
+            )
             logger.error(f"Error al guardar meta para RQ Job {target_job_id}: {e}")
     else:
+        print(
+            f"[update_job_progress] No job found to update for job_id={target_job_id}"
+        )
         # Si no estamos en el job actual (poco común para progreso), necesitaríamos fetch el job
         # Esto es menos eficiente y generalmente no necesario para updates de progreso
         logger.warning(
@@ -341,15 +354,29 @@ def interface_task(
         f"[interface_task] INICIO: database_name={database_name}, IdtReporteIni={IdtReporteIni}, IdtReporteFin={IdtReporteFin}, user_id={user_id}, report_id={report_id}, batch_size={batch_size}"
     )
 
-    def rq_update_progress(stage, progress_percent, current_rec=None, total_rec=None):
+    def rq_update_progress(
+        stage,
+        progress_percent,
+        current_rec=None,
+        total_rec=None,
+        hoja_idx=None,
+        total_hojas=None,
+    ):
         meta = {"stage": stage}
         if current_rec is not None:
             meta["records_processed"] = current_rec
         if total_rec is not None:
             meta["total_records_estimate"] = total_rec
-        update_job_progress(
-            job_id, int(progress_percent), status="processing", meta=meta
+        if hoja_idx is not None and total_hojas is not None:
+            meta["hoja_actual"] = hoja_idx
+            meta["total_hojas"] = total_hojas
+            global_percent = int((hoja_idx / total_hojas) * 100)
+        else:
+            global_percent = progress_percent
+        print(
+            f"[interface_task][progreso] stage={stage}, hoja_idx={hoja_idx}, total_hojas={total_hojas}, global_percent={global_percent}"
         )
+        update_job_progress(job_id, int(global_percent), status="processing", meta=meta)
 
     print("[interface_task] Instanciando InterfaceContable...")
     # Instanciar y ejecutar la lógica principal, pasando el callback adaptado para RQ
@@ -406,15 +433,45 @@ def plano_task(
     print(
         f"[plano_task] INICIO: database_name={database_name}, IdtReporteIni={IdtReporteIni}, IdtReporteFin={IdtReporteFin}, user_id={user_id}, report_id={report_id}, batch_size={batch_size}"
     )
+    print(f"[plano_task] Working directory: {os.getcwd()}")
+    print(
+        f"[plano_task] media/mydata.db exists? {os.path.exists(os.path.join('media', 'mydata.db'))}"
+    )
+    print(f"[plano_task] media/ dir exists? {os.path.exists('media')}")
+    print(f"[plano_task] User: {os.environ.get('USERNAME') or os.environ.get('USER')}")
 
-    def rq_update_progress(stage, progress_percent, current_rec=None, total_rec=None):
-        meta = {"stage": stage}
+    # Callback robusto y uniforme para progreso
+    def rq_update_progress(
+        stage,
+        progress_percent,
+        current_rec=None,
+        total_rec=None,
+        hoja_idx=None,
+        total_hojas=None,
+        status=None,
+        meta=None,
+        **kwargs,
+    ):
+        meta_dict = {"stage": stage}
         if current_rec is not None:
-            meta["records_processed"] = current_rec
+            meta_dict["records_processed"] = current_rec
         if total_rec is not None:
-            meta["total_records_estimate"] = total_rec
+            meta_dict["total_records_estimate"] = total_rec
+        if hoja_idx is not None and total_hojas is not None:
+            meta_dict["hoja_actual"] = hoja_idx
+            meta_dict["total_hojas"] = total_hojas
+            global_percent = int((hoja_idx / total_hojas) * 100)
+        else:
+            global_percent = progress_percent
+        if status is not None:
+            meta_dict["status"] = status
+        if meta is not None:
+            meta_dict.update(meta)
+        print(
+            f"[plano_task][progreso] stage={stage}, hoja_idx={hoja_idx}, total_hojas={total_hojas}, global_percent={global_percent}, status={status}, meta={meta}"
+        )
         update_job_progress(
-            job_id, int(progress_percent), status="processing", meta=meta
+            job_id, int(global_percent), status=(status or "processing"), meta=meta_dict
         )
 
     print("[plano_task] Instanciando InterfacePlano...")
@@ -433,7 +490,45 @@ def plano_task(
     )
     resultado = interface.run()
     print(f"[plano_task] RESULTADO: {resultado}")
-    update_job_progress(job_id, 90, meta={"stage": "Finalizando generación de plano"})
+
+    # --- Asegurar que el resultado siempre tenga 'metadata' relevante ---
+    if "metadata" not in resultado or not isinstance(resultado.get("metadata"), dict):
+        # Intentar obtener info relevante de InterfacePlano si existe
+        total_hojas = None
+        hojas_con_datos = None
+        if hasattr(interface, "config"):
+            hojas1 = getattr(interface, "_obtener_lista_hojas", lambda x: [])(
+                "txProcedureCsv"
+            )
+            hojas2 = getattr(interface, "_obtener_lista_hojas", lambda x: [])(
+                "txProcedureCsv2"
+            )
+            total_hojas = len(hojas1) if hojas1 else len(hojas2)
+        # Si el resultado tiene éxito, estimar hojas_con_datos como 1 (mínimo) si no hay info
+        if resultado.get("success"):
+            hojas_con_datos = 1
+        else:
+            hojas_con_datos = 0
+        resultado["metadata"] = {
+            "total_hojas": total_hojas,
+            "hojas_con_datos": hojas_con_datos,
+        }
+
+    # Reportar progreso final y estado global según éxito o error
+    if not resultado.get("success", True):
+        update_job_progress(
+            job_id,
+            100,
+            status="failed",
+            meta={"stage": "Finalizado con error", "result": resultado},
+        )
+    else:
+        update_job_progress(
+            job_id,
+            100,
+            status="completed",
+            meta={"stage": "Finalizado", "result": resultado},
+        )
     print("[plano_task] FIN")
     return resultado
 

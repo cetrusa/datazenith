@@ -67,7 +67,14 @@ class DataBaseConnection:
         print(self.engine_mysql_bi)
         print(self.engine_mysql_conf)
         # Establecer o crear el motor para SQLite
-        self.engine_sqlite = create_engine("sqlite:///mydata.db")
+        import uuid
+
+        sqlite_table_name = getattr(
+            self, "sqlite_table_name", f"carguezip_{uuid.uuid4().hex[:8]}"
+        )
+        sqlite_path = os.path.join("media", f"temp_{sqlite_table_name}.db")
+        os.makedirs(os.path.dirname(sqlite_path), exist_ok=True)
+        self.engine_sqlite = create_engine(f"sqlite:///{sqlite_path}")
         print(self.engine_sqlite)
 
     def create_engine_mysql_bi(self):

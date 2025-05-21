@@ -116,6 +116,7 @@ Informe Cubo de Ventas
     var startTime = 0; // Para calcular tiempo transcurrido
     var progressInterval = null; // Intervalo para actualizar tiempo
     var progressBar = document.getElementById("progressBar"); // Referencia a la barra de progreso
+    let lastProgressValue = 0;
 
     // Listener para el botón específico submitBtnCubo
     document.getElementById("submitBtnCubo").addEventListener("click", function (event) {
@@ -362,14 +363,19 @@ Informe Cubo de Ventas
     }
 
     // --- Funciones Estándar Añadidas ---
-    function updateProgressBar(progressValue, stageText) {
+    function updateProgressBar(value, stageText) {
+        if (value < lastProgressValue) {
+            value = lastProgressValue;
+        } else {
+            lastProgressValue = value;
+        }
         var progressStage = document.getElementById("progress-stage"); // Usar el ID correcto
-        progressValue = Math.max(0, Math.min(100, Number(progressValue) || 0));
-        progressBar.style.width = progressValue + "%";
-        progressBar.setAttribute("aria-valuenow", progressValue);
-        progressBar.textContent = progressValue.toFixed(0) + "%"; // Sin decimales en la barra
+        value = Math.max(0, Math.min(100, Number(value) || 0));
+        progressBar.style.width = value + "%";
+        progressBar.setAttribute("aria-valuenow", value);
+        progressBar.textContent = value.toFixed(0) + "%"; // Sin decimales en la barra
         // Usar color primario (azul) para cubo
-        if (progressValue < 100) {
+        if (value < 100) {
             progressBar.className = "progress-bar progress-bar-striped progress-bar-animated bg-primary";
         } else {
             // Cambiar a verde si es éxito, rojo si es fallo (detectado en handleTaskStatus)

@@ -159,26 +159,18 @@ class CuboVentas:
         self._update_progress("Configurando BD temporal", 3)
         logger.info("Creando y optimizando motor SQLite...")
         try:
-            # Usar archivo temporal único en 'media' si es posible, o en memoria
-            # sqlite_path = os.path.join("media", f"temp_{self.sqlite_table_name}.db")
-            # os.makedirs(os.path.dirname(sqlite_path), exist_ok=True)
-            # self.engine_sqlite = create_engine(f"sqlite:///{sqlite_path}", ...)
-            # O usar en memoria si el dataset cabe y es más rápido:
-            self.engine_sqlite = create_engine("sqlite:///:memory:")
+            # Usar archivo temporal único en 'media' para depuración de permisos
+            sqlite_path = os.path.join("media", f"temp_{self.sqlite_table_name}.db")
+            os.makedirs(os.path.dirname(sqlite_path), exist_ok=True)
+            self.engine_sqlite = create_engine(f"sqlite:///{sqlite_path}")
 
             # Aplicar optimizaciones PRAGMA (con precaución)
             with self.engine_sqlite.connect() as conn:
-                conn.execute(
-                    text("PRAGMA journal_mode = MEMORY;")
-                )  # Más rápido para temp, riesgo bajo
-                conn.execute(
-                    text("PRAGMA synchronous = OFF;")
-                )  # Más rápido, riesgo bajo para temp
-                conn.execute(text("PRAGMA cache_size = -100000;"))  # ~100MB cache
+                conn.execute(text("PRAGMA journal_mode = MEMORY;"))
+                conn.execute(text("PRAGMA synchronous = OFF;"))
+                conn.execute(text("PRAGMA cache_size = -100000;"))
                 conn.execute(text("PRAGMA temp_store = MEMORY;"))
-                # conn.execute(text("PRAGMA page_size = 8192;")) # Puede ayudar, pero probar
-                # conn.execute(text("PRAGMA mmap_size = 1073741824;")) # 1GB mmap, si aplica
-            logger.info("Motor SQLite creado y optimizado.")
+            logger.info(f"Motor SQLite creado y optimizado en {sqlite_path}.")
         except Exception as e:
             logger.error(f"Error creando motor SQLite: {e}", exc_info=True)
             raise
@@ -307,28 +299,20 @@ class CuboVentas:
         )
 
         total_processed = 0
-        start_extract_time = time.time()
         first_chunk = True
-
+        columns = None
+        start_extract_time = time.time()
         try:
-            with self.engine_mysql.connect() as mysql_conn, self.engine_sqlite.connect() as sqlite_conn, sqlite_conn.begin():  # Transacción SQLite
-
-                # Ejecutar consulta principal en MySQL
-                result_proxy = mysql_conn.execute(query, params)
-                columns = result_proxy.keys()  # Obtener nombres de columnas
-
-                while True:
-                    fetch_start = time.time()
-                    rows = result_proxy.fetchmany(chunksize)
-                    fetch_time = time.time() - fetch_start
-                    if not rows:
-                        logger.info("No hay más filas para procesar desde MySQL.")
-                        break
-
-                    process_start = time.time()
+            with self.engine_mysql.connect() as mysql_conn, self.engine_sqlite.connect() as sqlite_conn:
+                result = mysql_conn.execution_options(stream_results=True).execute(query, params)
+                columns = result.keys()
+                rows = result.fetchmany(chunksize)
+                if not rows:
+                    logger.info("La consulta no retornó datos. No se generará archivo.")
+                    self.total_records_processed = 0
+                    return False  # Indica que no hay datos
+                while rows:
                     df_chunk = pd.DataFrame(rows, columns=columns)
-
-                    # Crear tabla en el primer chunk
                     if first_chunk:
                         logger.info(
                             f"Creando tabla SQLite '{self.sqlite_table_name}' con {len(columns)} columnas."
@@ -336,55 +320,23 @@ class CuboVentas:
                         df_chunk.to_sql(
                             name=self.sqlite_table_name,
                             con=sqlite_conn,
-                            if_exists="replace",  # Reemplazar si existe (limpieza)
+                            if_exists="replace",
                             index=False,
-                            method=None,  # Dejar que SQLAlchemy decida (usará multi por defecto)
+                            method=None,
                         )
                         first_chunk = False
                     else:
-                        # Añadir chunks subsiguientes
                         df_chunk.to_sql(
                             name=self.sqlite_table_name,
                             con=sqlite_conn,
                             if_exists="append",
                             index=False,
-                            method="multi",  # Forzar 'multi' para eficiencia
-                            chunksize=1000,  # Sub-chunking para to_sql
+                            method="multi",
+                            chunksize=1000,
                         )
-
-                    process_time = time.time() - process_start
                     total_processed += len(rows)
-                    self.total_records_processed = (
-                        total_processed  # Actualizar contador global
-                    )
-                    elapsed_total = time.time() - start_extract_time
-                    rows_per_sec = (
-                        total_processed / elapsed_total if elapsed_total > 0 else 0
-                    )
-
-                    # Calcular progreso (asumiendo 80% del tiempo total para esta fase)
-                    progress_percent = (
-                        10 + (elapsed_total / (elapsed_total + 1)) * 70
-                    )  # Basado en tiempo relativo
-
-                    logger.debug(
-                        f"Chunk {total_processed // chunksize}: {len(rows)} filas procesadas. "
-                        f"Fetch: {fetch_time:.2f}s, Process/Write: {process_time:.2f}s. "
-                        f"Total: {total_processed:,}. Rate: {rows_per_sec:.1f} r/s."
-                    )
-                    self._update_progress(stage_name, progress_percent, total_processed)
-
-                    # Log extra para diagnóstico
-                    if total_processed % (chunksize * 2) == 0:
-                        logger.info(
-                            f"Progreso parcial: {total_processed:,} registros procesados en {elapsed_total:.2f}s. Memoria usada: {psutil.Process(os.getpid()).memory_info().rss / (1024*1024):.1f} MB"
-                        )
-
-                    # Liberar memoria
-                    del df_chunk
-                    if total_processed % (chunksize * 5) == 0:  # Cada 5 chunks
-                        gc.collect()
-
+                    self.total_records_processed = total_processed
+                    rows = result.fetchmany(chunksize)
             # Verificar recuento final en SQLite
             with self.engine_sqlite.connect() as sqlite_conn:
                 final_count = sqlite_conn.execute(
@@ -394,17 +346,14 @@ class CuboVentas:
                     logger.warning(
                         f"Discrepancia en conteo: MySQL procesó {total_processed}, SQLite tiene {final_count}"
                     )
-                    self.total_records_processed = (
-                        final_count  # Usar conteo SQLite como definitivo
-                    )
-
+                    self.total_records_processed = final_count
             logger.info(
                 f"Extracción a SQLite completada. Total: {self.total_records_processed:,} registros."
             )
             self._update_progress(
                 "Datos extraídos a BD temporal", 80, self.total_records_processed
             )
-
+            return True
         except SQLAlchemyError as e:
             logger.error(
                 f"Error de base de datos durante la extracción: {e}", exc_info=True
@@ -625,7 +574,17 @@ class CuboVentas:
             self._estimate_total_records(query, params)
 
             # 3. Ejecutar Consulta y volcar a SQLite
-            self._execute_query_to_sqlite(query, params)
+            datos_ok = self._execute_query_to_sqlite(query, params)
+            if datos_ok is False or self.total_records_processed == 0:
+                self._update_progress("Sin datos para mostrar", 100, 0, 0)
+                return {
+                    "success": False,
+                    "message": "No hay datos para mostrar en el cubo de ventas.",
+                    "file_path": None,
+                    "file_name": None,
+                    "execution_time": time.time() - self.start_time,
+                    "metadata": {"total_records": 0},
+                }
 
             # 4. Generar Archivo de Salida (Excel/CSV) desde SQLite
             reporte = Reporte.objects.get(pk=self.reporte_id)  # Obtener nombre de hoja
@@ -661,18 +620,15 @@ class CuboVentas:
             error_msg = f"Error fatal en CuboVentas.run: {type(e).__name__} - {e}"
             logger.error(error_msg, exc_info=True)
             self._update_progress(
-                f"Error fatal: {e}", 100
-            )  # Asegurar que el progreso llegue a 100 en error
-            self._cleanup()  # Intentar limpiar incluso si hay error
-
+                f"Error fatal: {e}", 100, self.total_records_processed
+            )
             return {
                 "success": False,
-                "message": f"Error al generar el cubo: {error_msg}",
-                "error": error_msg,  # Añadir clave 'error'
+                "message": error_msg,
                 "file_path": None,
                 "file_name": None,
                 "execution_time": execution_time,
-                "metadata": {},
+                "metadata": {"total_records": self.total_records_processed},
             }
 
     # --- Métodos Adicionales (Mantenidos de la versión original si son necesarios) ---

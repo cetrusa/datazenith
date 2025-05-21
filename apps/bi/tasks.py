@@ -1,5 +1,5 @@
 from scripts.extrae_bi.apipowerbi import Api_PowerBi, Api_PowerBi_Config
-import apps.home.tasks as home_tasks          
+import apps.home.tasks as home_tasks
 import os
 import time
 import logging
@@ -46,6 +46,9 @@ def actualiza_bi_task(
     )
 
     def rq_update_progress(meta_dict, progress_percent):
+        print(
+            f"[actualiza_bi_task] Progress callback: meta={meta_dict}, progress={progress_percent}"
+        )
         # meta_dict contiene: stage, tabla, nmReporte, progress
         home_tasks.update_job_progress(job_id, int(progress_percent), meta=meta_dict)
 
@@ -54,7 +57,7 @@ def actualiza_bi_task(
     logger.info(
         f"Iniciando actualiza_bi_task (RQ Job: {job_id}) para {database_name}, Periodo: {IdtReporteIni}-{IdtReporteFin}, user_id={user_id}, id_reporte={id_reporte}, batch_size={batch_size}"
     )
-    
+
     config = Api_PowerBi_Config(database_name)
     extractor = Api_PowerBi(
         config,

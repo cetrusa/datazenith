@@ -25,7 +25,10 @@ class ExtraeBiConfig:
         self.config = self.config_basic.config
         self.engine_mysql_bi = self._create_engine_mysql_bi()
         self.engine_mysql_out = self._create_engine_mysql_out()
-        self.engine_sqlite = con.ConexionSqlite()
+        import os
+
+        db_path = os.path.join("media", "mydata.db")
+        self.engine_sqlite = con.ConexionSqlite(db_path)
 
     def _create_engine_mysql_bi(self):
         c = self.config
@@ -156,12 +159,16 @@ class ExtraeBiExtractor:
                 "success": True,
                 "message": "Extracción completada con éxito",
                 "errores_tablas": errores_tablas,
-                "tablas_procesadas": [
-                    {
-                        "tabla": getattr(self, "txTabla", None),
-                        "nmReporte": getattr(self, "nmReporte", None),
-                    }
-                ] if hasattr(self, "txTabla") and hasattr(self, "nmReporte") else [],
+                "tablas_procesadas": (
+                    [
+                        {
+                            "tabla": getattr(self, "txTabla", None),
+                            "nmReporte": getattr(self, "nmReporte", None),
+                        }
+                    ]
+                    if hasattr(self, "txTabla") and hasattr(self, "nmReporte")
+                    else []
+                ),
             }
         except Exception as e:
             logging.error(f"Error general en el extractor: {e}")
