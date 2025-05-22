@@ -35,6 +35,19 @@ services:
       - web
       - redis
 
+  rqscheduler:
+    build: .
+    command: python manage.py rqscheduler
+    volumes:
+      - .:/code
+    environment:
+      - DJANGO_SETTINGS_MODULE=adminbi.settings.prod
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    depends_on:
+      - web
+      - redis
+
   redis:
     image: redis:alpine3.16
     ports:

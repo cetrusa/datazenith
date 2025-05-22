@@ -2,6 +2,7 @@
 from django.urls import path
 
 from . import views
+from .views import CleanMediaView
 
 app_name = "home_app"
 
@@ -74,5 +75,10 @@ urlpatterns = [
         "reporteador/",
         views.ReporteadorPage.as_view(),
         name="reporteador",
+    ),
+    path(
+        "clean_media/",
+        CleanMediaView.as_view(),
+        name="clean_media",
     ),
 ]

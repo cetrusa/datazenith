@@ -40,6 +40,7 @@ from rq.job import Job
 from rq.job import NoSuchJobError
 from django_rq import get_connection
 from django.utils.translation import gettext_lazy as _
+from .utils import clean_old_media_files
 
 logger = logging.getLogger(__name__)
 
@@ -1017,7 +1018,9 @@ class DownloadFileView(LoginRequiredMixin, View):
                 f"Archivo eliminado: {file_path} ({file_size/1024:.2f}KB, modificado: {time.ctime(file_mod_time)}) por usuario {user_id} en {time.time() - start_time:.2f}s"
             )
 
-            return JsonResponse({"success": True})
+            # Limpieza automática de archivos viejos tras cada borrado manual
+            removed_auto = clean_old_media_files(hours=4)
+            return JsonResponse({"success": True, "auto_cleaned_files": removed_auto})
 
         except FileNotFoundError:
             logger.warning(
@@ -1142,7 +1145,9 @@ class DeleteFileView(BaseView):
             logger.info(
                 f"Archivo eliminado: {file_path} ({file_size/1024:.2f}KB, modificado: {time.ctime(file_mod_time)}) por usuario {user_id} en {time.time() - start_time:.2f}s"
             )
-            return JsonResponse({"success": True})
+            # Limpieza automática de archivos viejos tras cada borrado manual
+            removed_auto = clean_old_media_files(hours=4)
+            return JsonResponse({"success": True, "auto_cleaned_files": removed_auto})
         except Exception as e:
             logger.error(
                 f"Error al eliminar archivo {file_path}: {str(e)} por usuario {user_id}"
@@ -1232,12 +1237,15 @@ class CheckTaskStatusView(BaseView):
                         # Si el estado es Unknown tras agotar intentos, mostrar mensaje claro
                         if powerbi_status == "Unknown":
                             # Mensaje claro para el usuario
-                            return JsonResponse({
-                                "status": "unknown",
-                                "result": result,
-                                "error_message": "El estado de actualización de Power BI es desconocido tras varios intentos. El proceso puede seguir en curso. Por favor, reintente en unos minutos o verifique manualmente en el portal de Power BI.",
-                                "summary": self._generate_summary(job, result),
-                            }, status=200)
+                            return JsonResponse(
+                                {
+                                    "status": "unknown",
+                                    "result": result,
+                                    "error_message": "El estado de actualización de Power BI es desconocido tras varios intentos. El proceso puede seguir en curso. Por favor, reintente en unos minutos o verifique manualmente en el portal de Power BI.",
+                                    "summary": self._generate_summary(job, result),
+                                },
+                                status=200,
+                            )
 
                 if (
                     isinstance(result, dict)
@@ -1896,3 +1904,65 @@ class ReporteadorDataAjaxView(ReporteGenericoPage):
                 },
                 status=500,
             )
+
+
+def clean_old_media_files(hours=4):
+    """
+    Elimina archivos en la carpeta media/ con extensiones permitidas
+    (.xlsx, .db, .zip, .csv, .txt) que tengan más de 'hours' horas de modificados.
+    """
+    import os
+    import time
+    from pathlib import Path
+
+    MEDIA_DIR = Path("media")
+    EXTENSIONS = {".xlsx", ".db", ".zip", ".csv", ".txt"}
+    now = time.time()
+    removed = []
+    for file in MEDIA_DIR.iterdir():
+        if file.is_file() and file.suffix.lower() in EXTENSIONS:
+            mtime = file.stat().st_mtime
+            age_hours = (now - mtime) / 3600
+            if age_hours > hours:
+                try:
+                    file.unlink()
+                    removed.append(str(file))
+                    logger.info(
+                        f"[clean_old_media_files] Archivo eliminado: {file} (antigüedad: {age_hours:.2f}h)"
+                    )
+                except Exception as e:
+                    logger.error(
+                        f"[clean_old_media_files] Error al eliminar {file}: {e}"
+                    )
+    return removed
+
+
+from django.views.decorators.http import require_POST
+from django.utils.decorators import method_decorator
+from django.contrib.admin.views.decorators import staff_member_required
+
+
+@method_decorator(
+    [login_required, staff_member_required, require_POST], name="dispatch"
+)
+class CleanMediaView(View):
+    """
+    Vista protegida para lanzar la limpieza manual de archivos viejos en media/.
+    Solo accesible para usuarios staff autenticados.
+    Devuelve JSON con archivos eliminados o error.
+    """
+
+    def post(self, request, *args, **kwargs):
+        try:
+            hours = int(request.POST.get("hours", 4))
+            removed = clean_old_media_files(hours=hours)
+            return JsonResponse(
+                {
+                    "success": True,
+                    "removed_files": removed,
+                    "message": f"{len(removed)} archivos eliminados de media/",
+                }
+            )
+        except Exception as e:
+            logger.error(f"[CleanMediaView] Error: {e}")
+            return JsonResponse({"success": False, "error_message": str(e)}, status=500)

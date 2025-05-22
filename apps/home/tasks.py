@@ -19,6 +19,7 @@ from scripts.extrae_bi.plano import InterfacePlano
 # from scripts.StaticPage import StaticPage # No parece usarse
 from scripts.extrae_bi.cargue_plano_tsol import CarguePlano
 from scripts.extrae_bi.extrae_bi_insert import ExtraeBiConfig, ExtraeBiExtractor
+from apps.home.utils import clean_old_media_files
 
 # Configuración de logging
 logger = logging.getLogger(__name__)
@@ -643,3 +644,12 @@ def extrae_bi_task(
     update_job_progress(job_id, 95, meta={"stage": "Finalizando extracción BI"})
     print("[extrae_bi_task] FIN")
     return result
+
+
+def clean_media_periodic(hours=4):
+    """
+    Tarea periódica para limpiar archivos viejos en media/.
+    """
+    removed = clean_old_media_files(hours=hours)
+    logger.info(f"[clean_media_periodic] Archivos eliminados: {removed}")
+    return removed
