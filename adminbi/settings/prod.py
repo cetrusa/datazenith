@@ -136,7 +136,11 @@ RQ_QUEUES = {
         "HOST": "redis",
         "PORT": 6379,
         "DB": 0,
-        "DEFAULT_TIMEOUT": 360,
+        "DEFAULT_TIMEOUT": 3600,  # Aumentado a 1 hora
+        "RESULT_TTL": 86400,  # Mantener trabajos completados por 24 horas
+        "FAILURE_TTL": 86400,  # Mantener trabajos fallidos por 24 horas
+        "JOB_TIMEOUT": 3600,  # Tiempo máximo de ejecución de job: 1 hora
+        "CONNECTION_TIMEOUT": 30,  # Timeout de conexión a Redis en segundos
     },
 }
 

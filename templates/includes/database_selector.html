@@ -2,7 +2,11 @@
 <!-- <input type="checkbox" name="" id="check" /> -->
 <div class="database-selector-wrapper bg-dark">
     <div class="d-flex justify-content-center align-items-center">
+        {% if form_url %}
         <form class="d-flex ml-auto" action="{% url form_url %}" method="post" id="FormSelectorBase">
+        {% else %}
+        <form class="d-flex ml-auto" action="#" method="post" id="FormSelectorBase">
+        {% endif %}
             {% csrf_token %}
             <div class="form-group w-100">
                 <select class="form-control" id="database_select" name="database_select">

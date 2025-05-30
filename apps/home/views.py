@@ -1564,6 +1564,34 @@ class CheckTaskStatusView(BaseView):
                 ),
             }
 
+        elif task_name == "cargue_infoventas_task":
+            # Para cargue masivo de ventas
+            db_name = job.args[1] if len(job.args) > 1 else "desconocida"
+            fecha_ini = job.args[2] if len(job.args) > 2 else "desconocida"
+            fecha_fin = job.args[3] if len(job.args) > 3 else "desconocida"
+
+            return {
+                "tipo_proceso": "Cargue Masivo de Ventas",
+                "base_datos": db_name,
+                "periodo": f"{fecha_ini} - {fecha_fin}",
+                "registros_procesados": result.get(
+                    "registros_procesados", "Desconocido"
+                ),
+                "registros_insertados": result.get(
+                    "registros_insertados", "Desconocido"
+                ),
+                "registros_descartados": result.get(
+                    "registros_descartados", "Desconocido"
+                ),
+                "advertencias": len(result.get("warnings", [])),
+                "resultado": (
+                    "Carga completada exitosamente"
+                    if result.get("success", False)
+                    else "Carga completada con errores"
+                ),
+                "detalles": result.get("message", "Sin detalles adicionales"),
+            }
+
         # Para otros tipos de tareas
         return {
             "tipo_proceso": task_name,
@@ -1623,6 +1651,18 @@ class ReporteGenericoPage(BaseView):
         id_reporte = self.id_reporte
         if id_reporte is None:
             id_reporte = request.POST.get("reporte_id")
+        # Permitir actualización solo de base de datos (AJAX o selector)
+        if database_name and not (IdtReporteIni and IdtReporteFin):
+            request.session["database_name"] = database_name
+            print(
+                "[ReporteGenericoPage] post: Solo cambio de base de datos, actualizado en sesión."
+            )
+            return JsonResponse(
+                {
+                    "success": True,
+                    "message": f"Base de datos actualizada a: {database_name}",
+                }
+            )
         if not all([database_name, IdtReporteIni, IdtReporteFin]):
             print("[ReporteGenericoPage] post: Faltan datos requeridos")
             return JsonResponse(
@@ -1923,6 +1963,7 @@ def clean_old_media_files(hours=4):
         if file.is_file() and file.suffix.lower() in EXTENSIONS:
             mtime = file.stat().st_mtime
             age_hours = (now - mtime) / 3600
+
             if age_hours > hours:
                 try:
                     file.unlink()

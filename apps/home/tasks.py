@@ -15,6 +15,8 @@ from scripts.config import ConfigBasic
 from scripts.extrae_bi.cargue_zip import CargueZip
 from scripts.extrae_bi.interface import InterfaceContable
 from scripts.extrae_bi.plano import InterfacePlano
+from scripts.cargue.cargue_infoproveedor import CargueInfoVentas
+from scripts.cargue.cargue_infoventas_insert import CargueInfoVentasInsert
 
 # from scripts.StaticPage import StaticPage # No parece usarse
 from scripts.extrae_bi.cargue_plano_tsol import CarguePlano
@@ -216,7 +218,9 @@ def task_handler(f: Callable[..., T]) -> Callable[..., ResultDict]:
 from django.db import connection
 
 
-@job("default", timeout=DEFAULT_TIMEOUT)  # Usar cola 'default' o una específica
+@job(
+    "default", timeout=DEFAULT_TIMEOUT, result_ttl=3600
+)  # Usar cola 'default' o una específica, resultado se mantiene 1h
 @task_handler  # Aplicar decorador estándar
 def cubo_ventas_task(
     database_name,
@@ -328,7 +332,7 @@ def cubo_ventas_task(
     return result_data
 
 
-@job("default", timeout=DEFAULT_TIMEOUT)
+@job("default", timeout=DEFAULT_TIMEOUT, result_ttl=3600)
 @task_handler
 def interface_task(
     database_name,
@@ -415,7 +419,7 @@ def interface_task(
     return result_data
 
 
-@job("default", timeout=DEFAULT_TIMEOUT)
+@job("default", timeout=DEFAULT_TIMEOUT, result_ttl=3600)
 @task_handler
 def plano_task(
     database_name,
@@ -534,7 +538,7 @@ def plano_task(
     return resultado
 
 
-@job("default", timeout=DEFAULT_TIMEOUT)
+@job("default", timeout=DEFAULT_TIMEOUT, result_ttl=3600)
 @task_handler
 def cargue_zip_task(database_name: str, zip_file_path: str) -> ResultDict:
     """
@@ -572,7 +576,7 @@ def cargue_zip_task(database_name: str, zip_file_path: str) -> ResultDict:
     return resultado
 
 
-@job("default", timeout=DEFAULT_TIMEOUT)
+@job("default", timeout=DEFAULT_TIMEOUT, result_ttl=3600)
 @task_handler
 def cargue_plano_task(database_name: str) -> ResultDict:
     """
@@ -585,7 +589,6 @@ def cargue_plano_task(database_name: str) -> ResultDict:
 
     print("[cargue_plano_task] Instanciando CarguePlano...")
     update_job_progress(job_id, 10, meta={"stage": "Iniciando CarguePlano"})
-
     cargue_plano = CarguePlano(database_name)  # Asume CarguePlano es para TSOL
     print("[cargue_plano_task] Ejecutando procesar_plano()...")
     update_job_progress(job_id, 30, meta={"stage": "Procesando archivos planos"})
@@ -598,7 +601,7 @@ def cargue_plano_task(database_name: str) -> ResultDict:
     return resultado
 
 
-@job("default", timeout=DEFAULT_TIMEOUT)
+@job("default", timeout=DEFAULT_TIMEOUT, result_ttl=3600)
 @task_handler
 def extrae_bi_task(
     database_name: str,
@@ -653,3 +656,85 @@ def clean_media_periodic(hours=4):
     removed = clean_old_media_files(hours=hours)
     logger.info(f"[clean_media_periodic] Archivos eliminados: {removed}")
     return removed
+
+
+@job("default", timeout=DEFAULT_TIMEOUT, result_ttl=3600)
+@task_handler
+def cargue_infoventas_task(
+    temp_path, database_name, IdtReporteIni, IdtReporteFin, user_id=None
+):
+    """
+    Tarea RQ para el cargue masivo de ventas, usando la clase CargueInfoVentasInsert.
+    El archivo temporal se elimina al finalizar.
+    """
+    job = get_current_job()
+    job_id = job.id if job else None
+
+    print(
+        f"[cargue_infoventas_task] INICIO: temp_path={temp_path}, database_name={database_name}, IdtReporteIni={IdtReporteIni}, IdtReporteFin={IdtReporteFin}, user_id={user_id}, job_id={job_id}"
+    )
+
+    def rq_update_progress(percent):
+        if job:
+            update_job_progress(
+                job_id,
+                percent,
+                status="processing",
+                meta={"stage": f"Cargue {percent}%"},
+            )
+        print(f"[cargue_infoventas_task] Progreso: {percent}% (job_id={job_id})")
+
+    errores = []
+    try:
+        print(
+            f"[cargue_infoventas_task] Instanciando CargueInfoVentasInsert con: temp_path={temp_path}, database_name={database_name}, IdtReporteIni={IdtReporteIni}, IdtReporteFin={IdtReporteFin}, user_id={user_id}"
+        )
+        cargador = CargueInfoVentasInsert(
+            temp_path, database_name, IdtReporteIni, IdtReporteFin, user_id=user_id
+        )
+        try:
+            print("[cargue_infoventas_task] Llamando a procesar_cargue...")
+            cargador.procesar_cargue(progress_callback=rq_update_progress)
+        except Exception as e:
+            # Si ocurre un error parcial, lo guardamos pero seguimos
+            error_msg = f"Error parcial durante el proceso de carga: {str(e)}"
+            print(f"[cargue_infoventas_task][ERROR] {error_msg}")
+            errores.append(error_msg)
+        resultado = {
+            "success": len(errores) == 0,
+            "message": (
+                "Carga completada con advertencias."
+                if errores
+                else "Carga completada exitosamente. Revisa los logs para más detalles."
+            ),
+        }
+        if errores:
+            resultado["warnings"] = errores
+        logger.info(
+            f"cargue_infoventas_task (Job ID: {job_id}) completado. Errores: {errores if errores else 'Ninguno'}"
+        )
+    except Exception as e:
+        print(f"[cargue_infoventas_task][ERROR CRÍTICO] {str(e)}")
+        resultado = {"success": False, "error_message": str(e)}
+        logger.error(
+            f"Error crítico en cargue_infoventas_task (Job ID: {job_id}): {str(e)}",
+            exc_info=True,
+        )
+    finally:
+        if os.path.exists(temp_path):
+            try:
+                os.remove(temp_path)
+                logger.info(f"Archivo temporal eliminado: {temp_path}")
+                print(
+                    f"[cargue_infoventas_task] Archivo temporal eliminado: {temp_path}"
+                )
+            except Exception as e:
+                logger.warning(
+                    f"No se pudo eliminar el archivo temporal {temp_path}: {str(e)}"
+                )
+                print(
+                    f"[cargue_infoventas_task][WARNING] No se pudo eliminar el archivo temporal {temp_path}: {str(e)}"
+                )
+
+    print(f"[cargue_infoventas_task] FIN: {resultado}")
+    return resultado
