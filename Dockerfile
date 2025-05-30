@@ -16,7 +16,7 @@ ENV PYTHONUNBUFFERED=1
 COPY ./requirements-docker.txt .
 
 # Instalamos las dependencias de Python desde requirements-docker.txt
-RUN pip install --no-cache-dir -r requirements-docker.txt
+RUN pip install --default-timeout=120 --no-cache-dir -r requirements-docker.txt
 
 # Copiamos todos los archivos y directorios al directorio de trabajo en el contenedor
 COPY . .
