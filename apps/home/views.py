@@ -1755,7 +1755,7 @@ class ReporteGenericoPage(BaseView):
         """
         Utilidad para obtener headers, rows y resultado (lista de dicts) de un reporte tipo Cubo/Proveedor.
         """
-        from scripts.extrae_bi.cubo import CuboVentas
+        from scripts.extrae_bi.cubo_sin_sqlite import CuboVentas
 
         cubo = CuboVentas(
             database_name, IdtReporteIni, IdtReporteFin, user_id, id_reporte
