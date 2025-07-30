@@ -76,7 +76,8 @@ ROOT_URLCONF = "adminbi.urls"
 
 # Tiempo de inactividad antes de cerrar la sesión automáticamente (en segundos)
 # Configuración optimizada para rendimiento
-SESSION_ENGINE = "django_redis.sessions"  # Solo Redis, más rápido que cached_db
+SESSION_ENGINE = "django.contrib.sessions.backends.cache"  # Usar caché para sesiones
+SESSION_CACHE_ALIAS = "default"  # Usar el caché por defecto (Redis)
 SESSION_COOKIE_AGE = 1209600  # 2 semanas
 SESSION_EXPIRE_SECONDS = 7200  # Expire despues de 2 horas
 SESSION_EXPIRE_AFTER_LAST_ACTIVITY = (
