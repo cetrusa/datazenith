@@ -174,28 +174,33 @@ class HomePanelCuboPage(BaseView):
         start_time = time.time()  # Medición de tiempo
 
         try:
+            # Llamar al método padre de BaseView de forma más eficiente
             context = super().get_context_data(**kwargs)
             context["form_url"] = "home_app:panel_cubo"
 
-            # Añadimos bandera para carga diferida
+            # Optimización crítica: carga mínima en primera carga
             context["use_lazy_loading"] = True
+            context["initial_load"] = True  # Bandera para carga inicial rápida
 
-            # Añadimos información de optimización para JavaScript
+            # Configuración de optimización mínima
             context["optimization"] = {
                 "cache_timeout": 300,  # 5 minutos en segundos
                 "use_compression": True,
+                "defer_heavy_operations": True,  # Diferir operaciones pesadas
             }
 
-            # Obtenemos datos de usuario si hay una base de datos seleccionada
-            user_id = self.request.user.id
+            # Solo cargar datos críticos en primera carga
             database_name = self.request.session.get("database_name")
-
             if database_name:
-                context_data = self._get_cached_user_context(user_id, database_name)
-                context.update(context_data)
+                # Carga mínima de contexto solo con datos esenciales
+                context["database_selected"] = True
+                context["database_name"] = database_name
+                # Diferir el resto de datos para carga AJAX posterior
+            else:
+                context["database_selected"] = False
 
             logger.debug(
-                f"HomePanelCuboPage.get_context_data completado en {time.time() - start_time:.2f}s"
+                f"HomePanelCuboPage.get_context_data (optimizado) completado en {time.time() - start_time:.2f}s"
             )
             return context
 
@@ -2007,3 +2012,74 @@ class CleanMediaView(View):
         except Exception as e:
             logger.error(f"[CleanMediaView] Error: {e}")
             return JsonResponse({"success": False, "error_message": str(e)}, status=500)
+
+
+@login_required
+def load_panel_data_ajax(request):
+    """
+    Endpoint AJAX para cargar datos pesados del panel de manera diferida.
+    Mejora la velocidad inicial de carga de la página.
+    """
+    if request.method != 'GET':
+        return JsonResponse({"error": "Método no permitido"}, status=405)
+    
+    try:
+        start_time = time.time()
+        user_id = request.user.id
+        database_name = request.session.get("database_name")
+        
+        if not database_name:
+            return JsonResponse({
+                "success": False,
+                "error": "No hay base de datos seleccionada"
+            })
+        
+        # Cargar datos de configuración
+        cache_key = f"panel_data_{user_id}_{database_name}"
+        panel_data = cache.get(cache_key)
+        
+        if not panel_data:
+            from scripts.config import ConfigBasic
+            
+            config = ConfigBasic(database_name, user_id)
+            panel_data = {
+                "proveedores": config.config.get("proveedores", [])[:10],  # Limitar para rendimiento
+                "macrozonas": config.config.get("macrozonas", [])[:10],
+                "ultimo_reporte": config.config.get("ultima_actualizacion", ""),
+                "estadisticas": {
+                    "total_proveedores": len(config.config.get("proveedores", [])),
+                    "total_macrozonas": len(config.config.get("macrozonas", [])),
+                }
+            }
+            
+            # Guardar en caché por 10 minutos
+            cache.set(cache_key, panel_data, 600)
+        
+        # Información adicional del sistema
+        panel_data.update({
+            "user_info": {
+                "username": request.user.username,
+                "nombre_completo": f"{request.user.nombres} {request.user.apellidos}",
+            },
+            "system_info": {
+                "database_selected": database_name,
+                "load_time": round(time.time() - start_time, 2),
+                "cache_used": cache_key in [key for key in cache._cache.keys()] if hasattr(cache, '_cache') else False
+            }
+        })
+        
+        logger.info(f"Panel data cargado para {user_id} en {time.time() - start_time:.2f}s")
+        
+        return JsonResponse({
+            "success": True,
+            "data": panel_data,
+            "load_time": time.time() - start_time
+        })
+        
+    except Exception as e:
+        logger.error(f"Error en load_panel_data_ajax: {e}")
+        return JsonResponse({
+            "success": False,
+            "error": "Error al cargar datos del panel",
+            "details": str(e)
+        }, status=500)

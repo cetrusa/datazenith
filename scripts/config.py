@@ -359,7 +359,7 @@ class ConfigBasic:
         """
         Configura la información del correo.
         """
-        sql = text("SELECT * FROM powerbi_adm.conf_tipo WHERE nbTipo = '6';")
+        sql = text("SELECT * FROM powerbi_adm.conf_tipo WHERE nbTipo = '11';")
         df = self.execute_sql_query(sql)
         if not df.empty:
             self.config["nmUsrCorreo"] = df["nmUsr"].iloc[0]

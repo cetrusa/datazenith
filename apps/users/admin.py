@@ -252,7 +252,8 @@ class UserAdmin(ImportExportModelAdmin, BaseUserAdmin):
 
     def get_empresas_nombres(self, obj):
         """Método para mostrar los nombres de las empresas asociadas."""
-        return ", ".join([empresa.nmEmpresa for empresa in obj.conf_empresas.all()])
+        # Optimización: usar only() para cargar solo el campo necesario
+        return ", ".join([empresa.nmEmpresa for empresa in obj.conf_empresas.only('nmEmpresa')])
 
     get_empresas_nombres.short_description = _("Nombres de Empresas")
 

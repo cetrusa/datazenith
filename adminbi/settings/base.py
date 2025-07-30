@@ -59,6 +59,8 @@ THIRD_PARTY_APPS = (
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
+    "apps.users.middleware.PerformanceMiddleware",  # Monitor de rendimiento
+    "django.middleware.gzip.GZipMiddleware",  # Compresión para mejor rendimiento
     "django.contrib.sessions.middleware.SessionMiddleware",  # Primero SessionMiddleware
     "django_session_timeout.middleware.SessionTimeoutMiddleware",
     "django.middleware.common.CommonMiddleware",
@@ -66,13 +68,15 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    "apps.users.middleware.DatabaseQueryDebugMiddleware",  # Debug de queries (solo en DEBUG)
 ]
 
 INSTALLED_APPS = DJANGO_APPS + LOCAL_APPS + THIRD_PARTY_APPS
 ROOT_URLCONF = "adminbi.urls"
 
 # Tiempo de inactividad antes de cerrar la sesión automáticamente (en segundos)
-SESSION_ENGINE = "django.contrib.sessions.backends.cached_db"
+# Configuración optimizada para rendimiento
+SESSION_ENGINE = "django_redis.sessions"  # Solo Redis, más rápido que cached_db
 SESSION_COOKIE_AGE = 1209600  # 2 semanas
 SESSION_EXPIRE_SECONDS = 7200  # Expire despues de 2 horas
 SESSION_EXPIRE_AFTER_LAST_ACTIVITY = (
@@ -82,19 +86,54 @@ SESSION_TIMEOUT_REDIRECT = "users_app:user-login"  # Redirect to the named URL
 SESSION_EXPIRE_AT_BROWSER_CLOSE = (
     False  # Mantener sesión activa incluso al cerrar el navegador
 )
-SESSION_SAVE_EVERY_REQUEST = (
-    True  # Guardar la sesión en cada solicitud para mantener su frescura
-)
+# Optimización crítica: Solo guardar sesión cuando cambie
+SESSION_SAVE_EVERY_REQUEST = False  # Cambio importante para rendimiento
 
-# Configuración de caché recomendada para producción (multiusuario seguro)
+# Configuración de caché optimizada para rendimiento
 CACHES = {
     "default": {
         "BACKEND": "django_redis.cache.RedisCache",
-        "LOCATION": "redis://redis:6379/1",  # Asegúrate que el host y puerto coincidan con tu docker-compose
+        "LOCATION": "redis://redis:6379/1",
         "OPTIONS": {
             "CLIENT_CLASS": "django_redis.client.DefaultClient",
+            "CONNECTION_POOL_KWARGS": {
+                "max_connections": 50,
+                "retry_on_timeout": True,
+            },
+            "COMPRESSOR": "django_redis.compressors.zlib.ZlibCompressor",
+            "IGNORE_EXCEPTIONS": True,
         },
+        "KEY_PREFIX": "datazenith",
+        "TIMEOUT": 300,  # 5 minutos por defecto
     }
+}
+
+# Optimizaciones de base de datos
+DATABASES = {
+    'default': {
+        'ENGINE': 'django.db.backends.mysql',
+        'OPTIONS': {
+            'init_command': "SET sql_mode='STRICT_TRANS_TABLES'",
+            'charset': 'utf8mb4',
+        },
+        'CONN_MAX_AGE': 60,  # Reutilizar conexiones por 60 segundos
+    }
+}
+
+# Optimizaciones adicionales de rendimiento
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'handlers': {
+        'file': {
+            'level': 'WARNING',  # Solo logs importantes
+            'class': 'logging.FileHandler',
+            'filename': 'django.log',
+        },
+    },
+    'root': {
+        'handlers': ['file'],
+    },
 }
 
 RECAPTCHA_PUBLIC_KEY = "6LeffTwlAAAAAKYsF2RHBuWmMxSMYLo7DvWb_szY"

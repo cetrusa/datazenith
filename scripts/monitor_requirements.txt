@@ -1,0 +1,3 @@
+# Instalar las dependencias necesarias para el monitor de conexiones
+pymysql
+psutil

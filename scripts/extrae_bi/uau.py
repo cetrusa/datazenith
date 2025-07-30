@@ -64,6 +64,36 @@ class DataBaseConnection:
 
 
 class CompiUpdate:
+    def wait_until_excel_ready(self, excel, timeout=120):
+        """
+        Espera a que Excel esté listo (no ocupado ni calculando) antes de continuar.
+        """
+        start = time.time()
+        while True:
+            try:
+                # CalculationState: 0=xlDone, 1=xlCalculating, 2=xlPending
+                calc_state = getattr(excel, "CalculationState", 0)
+                ready = getattr(excel, "Ready", True)
+                if calc_state == 0 and ready:
+                    logging.info(
+                        f"[EXCEL][WAIT] Excel listo para continuar (CalculationState={calc_state}, Ready={ready})"
+                    )
+                    break
+                else:
+                    logging.info(
+                        f"[EXCEL][WAIT] Esperando a que Excel termine... (CalculationState={calc_state}, Ready={ready})"
+                    )
+            except Exception as e:
+                logging.info(
+                    f"[EXCEL][WAIT] Excepción al chequear estado de Excel: {e}"
+                )
+            if time.time() - start > timeout:
+                logging.error(
+                    f"[EXCEL][WAIT] Timeout esperando a que Excel esté listo tras {timeout} segundos."
+                )
+                break
+            time.sleep(2)
+
     def __init__(self, database_name):
         self.timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
         self.file_path = None
@@ -134,154 +164,202 @@ class CompiUpdate:
             self._open_and_process_excel()
         else:
             logging.error("Proceso terminado debido a la falta del archivo requerido.")
-            
+
     def handle_microsoft_login_window(self):
-        # La ventana de inicio de sesión podría necesitar tiempo para aparecer.
-        # Usar un bucle con tiempo de espera permite reintentos si la ventana no está inmediatamente disponible.
-        while not self.login_window_handled:
+        logging.info(
+            "[LOGIN] Iniciando monitoreo de ventana de inicio de sesión de Microsoft..."
+        )
+        max_wait = 180  # segundos
+        waited = 0
+        while not self.login_window_handled and waited < max_wait:
             try:
-                app = Application(backend="uia").connect(title_re=".*Microsoft.*", timeout=5)
+                logging.info(
+                    f"[LOGIN] Buscando ventana de Microsoft... (esperado: 'Cesar Trujillo') Esperado: {waited}s de {max_wait}s"
+                )
+                app = Application(backend="uia").connect(
+                    title_re=".*Microsoft.*", timeout=5
+                )
                 dialog = app.window(title_re=".*Microsoft.*")
-                dialog.wait('visible', timeout=5)
-                
-                # Suponiendo que "Cesar Trujillo" es el texto visible asociado con la cuenta, lo usamos para la selección.
-                # Aquí debes usar el control_type adecuado y el título o ID del control que identifica la cuenta.
-                account_control = dialog.child_window(title="Cesar Trujillo", control_type="Text")
-                account_control.wait('ready', timeout=5)
+                dialog.wait("visible", timeout=5)
+                logging.info(
+                    "[LOGIN] Ventana de Microsoft detectada, buscando control de cuenta..."
+                )
+                account_control = dialog.child_window(
+                    title="Cesar Trujillo", control_type="Text"
+                )
+                account_control.wait("ready", timeout=5)
                 account_control.click_input()
                 self.login_window_handled = True
-                logging.info("La cuenta de Microsoft ha sido seleccionada exitosamente.")
+                logging.info(
+                    "[LOGIN] La cuenta de Microsoft ha sido seleccionada exitosamente."
+                )
             except pywinauto.timings.TimeoutError:
-                # Si la ventana no aparece en el tiempo de espera, espera un poco y vuelve a intentarlo.
+                logging.info(
+                    "[LOGIN] Timeout esperando ventana de Microsoft. Reintentando..."
+                )
                 time.sleep(5)
+                waited += 5
             except Exception as e:
-                logging.error(f"Ocurrió un error al manejar la ventana de inicio de sesión de Microsoft: {e}")
+                logging.error(
+                    f"[LOGIN] Ocurrió un error al manejar la ventana de inicio de sesión de Microsoft: {e}"
+                )
                 break  # Rompe el ciclo si ocurre un error inesperado.
+        if not self.login_window_handled:
+            logging.error(
+                f"[LOGIN] No se pudo seleccionar la cuenta de Microsoft tras {max_wait} segundos. Continuando sin login automático."
+            )
 
     def monitor_login_window(self):
         self.login_window_handled = False
         self.handle_microsoft_login_window()
 
-
     def _open_and_process_excel(self):
         excel = win32com.client.Dispatch("Excel.Application")
         try:
+            logging.info("[EXCEL] Abriendo Excel y archivo: %s", self.file_path)
             excel.Visible = True
             workbook = excel.Workbooks.Open(self.file_path)
 
-            # Obtiene la fecha actual
             current_date = datetime.datetime.now()
             current_month_name = current_date.strftime("%Y%m")
-            # Obtiene la fecha un mes atrás
-            last_month_date = current_date - datetime.timedelta(
-                days=10
-            )  # puedes ajustar los días si es necesario
+            last_month_date = current_date - datetime.timedelta(days=10)
             last_month_name = last_month_date.strftime("%Y%m")
 
-            # Verifica si el valor actual del slicer es el mismo que el mes actual
+            logging.info(
+                "[EXCEL] Obteniendo slicer principal 'SegmentaciónDeDatos_Período'"
+            )
             slicer_cache = workbook.SlicerCaches("SegmentaciónDeDatos_Período")
-            # Maneja la ventana de inicio de sesión antes de empezar a actualizar conexiones
-            print(slicer_cache.VisibleSlicerItemsList)
+            logging.info(
+                f"[EXCEL] VisibleSlicerItemsList actual: {slicer_cache.VisibleSlicerItemsList}"
+            )
 
-            # Iniciar el monitoreo en un hilo separado
-            threading.Thread(target=self.monitor_login_window, daemon=True).start()
+            # Si quieres login automático, descomenta las siguientes dos líneas:
+            # logging.info("[EXCEL] Iniciando hilo de monitoreo de login window...")
+            # threading.Thread(target=self.monitor_login_window, daemon=True).start()
+            # Por defecto, no se espera login_window_handled y se continúa siempre.
 
-            current_month_value = "[Calendario].[Período].&[" + current_month_name + "]"
+            current_month_value = f"[Calendario].[Período].&[{current_month_name}]"
 
             if slicer_cache.VisibleSlicerItemsList == [current_month_value]:
-                print("El slicer ya está seleccionado en el mismo valor.")
-                while not self.login_window_handled:
-                    time.sleep(1)  # Espera 1 segundo antes de volver a verificar
-                # Actualiza las conexiones sin ejecutar la macro completa
+                logging.info(
+                    "[EXCEL] El slicer principal ya está seleccionado en el valor actual."
+                )
                 for connection in workbook.Connections:
+                    logging.info(f"[EXCEL] Refrescando conexión: {connection.Name}")
+                    before_refresh = getattr(connection, 'RefreshDate', None)
                     connection.Refresh()
+                    self.wait_until_excel_ready(excel, timeout=90)
+                    after_refresh = getattr(connection, 'RefreshDate', None)
+                    logging.info(f"[EXCEL] Estado conexión: {connection.Name} | Antes: {before_refresh} | Después: {after_refresh}")
+                    # Loguear errores OLEDB si existen
+                    try:
+                        oledb_errors = getattr(connection, 'OLEDBErrors', None)
+                        if oledb_errors and hasattr(oledb_errors, 'Count') and oledb_errors.Count > 0:
+                            for i in range(1, oledb_errors.Count+1):
+                                err = oledb_errors.Item(i)
+                                logging.error(f"[EXCEL][OLEDBError] Conexión: {connection.Name} | Error: {err.Description}")
+                    except Exception as e:
+                        logging.error(f"[EXCEL][OLEDBError] No se pudo obtener errores OLEDB para {connection.Name}: {e}")
             else:
-                print("Seleccionando nuevo valor en el slicer...")
-                # Limpia los filtros del slicer
+                logging.info(
+                    "[EXCEL] Seleccionando nuevo valor en el slicer principal..."
+                )
                 # slicer_cache.ClearAllFilters()
-                # Establece el valor deseado en la lista de elementos visibles
                 slicer_cache.VisibleSlicerItemsList = [current_month_value]
-                # Actualiza las conexiones sin ejecutar la macro completa
-                while not self.login_window_handled:
-                    time.sleep(1)  # Espera 1 segundo antes de volver a verificar
+                self.wait_until_excel_ready(excel, timeout=90)
                 for connection in workbook.Connections:
+                    logging.info(f"[EXCEL] Refrescando conexión: {connection.Name}")
+                    before_refresh = getattr(connection, 'RefreshDate', None)
                     connection.Refresh()
+                    self.wait_until_excel_ready(excel, timeout=90)
+                    after_refresh = getattr(connection, 'RefreshDate', None)
+                    logging.info(f"[EXCEL] Estado conexión: {connection.Name} | Antes: {before_refresh} | Después: {after_refresh}")
+                    try:
+                        oledb_errors = getattr(connection, 'OLEDBErrors', None)
+                        if oledb_errors and hasattr(oledb_errors, 'Count') and oledb_errors.Count > 0:
+                            for i in range(1, oledb_errors.Count+1):
+                                err = oledb_errors.Item(i)
+                                logging.error(f"[EXCEL][OLEDBError] Conexión: {connection.Name} | Error: {err.Description}")
+                    except Exception as e:
+                        logging.error(f"[EXCEL][OLEDBError] No se pudo obtener errores OLEDB para {connection.Name}: {e}")
 
-            # Lista para almacenar los valores de los periodos
             period_values = []
-
-            # Genera los valores para el mes actual y los dos meses anteriores
             for i in range(3):
                 month_date = current_date - relativedelta(months=i)
                 month_name = month_date.strftime("%Y%m")
-                period_values.append("[Calendario].[Período].&[" + month_name + "]")
+                period_values.append(f"[Calendario].[Período].&[{month_name}]")
 
+            logging.info(
+                "[EXCEL] Obteniendo slicer clientes 'SegmentaciónDeDatos_Período1'"
+            )
             slicer_cache_clientes = workbook.SlicerCaches(
                 "SegmentaciónDeDatos_Período1"
             )
+            logging.info(
+                f"[EXCEL] VisibleSlicerItemsList clientes actual: {slicer_cache_clientes.VisibleSlicerItemsList}"
+            )
 
-            # Comprueba si el slicer ya está configurado con los valores correctos
             if set(slicer_cache_clientes.VisibleSlicerItemsList) == set(period_values):
-                print("El slicer ya está seleccionado en los valores correctos.")
+                logging.info(
+                    "[EXCEL] El slicer clientes ya está seleccionado en los valores correctos."
+                )
             else:
-                print("Seleccionando nuevos valores en el slicer...")
-                # Limpia los filtros del slicer si es necesario
+                logging.info(
+                    "[EXCEL] Seleccionando nuevos valores en el slicer clientes..."
+                )
                 # slicer_cache_clientes.ClearAllFilters()
-
-                # Establece los valores deseados en la lista de elementos visibles
                 slicer_cache_clientes.VisibleSlicerItemsList = period_values
-                while not self.login_window_handled:
-                    time.sleep(1)  # Espera 1 segundo antes de volver a verificar
-
-                # Actualiza las conexiones
+                self.wait_until_excel_ready(excel, timeout=90)
                 for connection in workbook.Connections:
+                    logging.info(f"[EXCEL] Refrescando conexión: {connection.Name}")
                     connection.Refresh()
+                    self.wait_until_excel_ready(excel, timeout=90)
 
-            time.sleep(60)
+            logging.info("[EXCEL] Esperando 10s para sincronización de OneDrive...")
+            time.sleep(10)
 
-            # workbook.Save()
-
-            # Espera un poco para asegurarse de que OneDrive sincronice los cambios
-            time.sleep(10)  # Espera 2 segundos, puedes ajustar este valor
-
-            # Guarda una copia del archivo
+            logging.info(f"[EXCEL] Guardando copia local en: {self.local_copy_path}")
+            self.wait_until_excel_ready(excel, timeout=60)
             workbook.SaveCopyAs(self.local_copy_path)
             workbook.Close(SaveChanges=False)
-            # Abre la copia local
+            logging.info(f"[EXCEL] Abriendo copia local: {self.local_copy_path}")
             copy_workbook = excel.Workbooks.Open(self.local_copy_path)
 
-            # Elimina conexiones
             for connection in copy_workbook.Connections:
+                logging.info(f"[EXCEL] Eliminando conexión: {connection.Name}")
                 connection.Delete()
 
-            time.sleep(2)  # Espera 2 segundos, puedes ajustar este valor
+            logging.info(
+                "[EXCEL] Esperando 2s antes de guardar y cerrar la copia local..."
+            )
+            time.sleep(2)
 
-            # copy_workbook.SlicerCaches("SegmentaciónDeDatos_Período").Delete()
-
-            # Guarda y cierra la copia local
             copy_workbook.Save()
             copy_workbook.Close()
 
-            # Cierra Excel
             excel.Quit()
-            logging.info("Termina proceso Excel")
-            # Espera un poco para asegurarse de que OneDrive sincronice los cambios
-            time.sleep(2)  # Espera 2 segundos, puedes ajustar este valor
+            logging.info("[EXCEL] Termina proceso Excel")
+            time.sleep(2)
 
             self.send_email()
 
         except Exception as e:
-            logging.error(f"Error during Excel processing: {e}")
+            logging.error(f"[EXCEL] Error during Excel processing: {e}")
         finally:
-            workbook.Close(SaveChanges=False)
-            excel.Quit()
-            logging.info("Excel process completed.")
-            
+            try:
+                workbook.Close(SaveChanges=False)
+            except Exception:
+                pass
+            try:
+                excel.Quit()
+            except Exception:
+                pass
+            logging.info("[EXCEL] Excel process completed.")
 
     def send_email(self):
         logging.info("Inicia envío de correos")
         # Indica que vas a usar las variables globales
-        sql = text("SELECT * FROM powerbi_adm.conf_tipo WHERE nbTipo = '6';")
+        sql = text("SELECT * FROM powerbi_adm.conf_tipo WHERE nbTipo = '11';")
         # print(sql)
         df = self.config_basic.execute_sql_query(sql)
         # print(df)
@@ -292,14 +370,13 @@ class CompiUpdate:
         else:
             # Considera si necesitas manejar el caso de un DataFrame vacío de manera diferente
             print("No se encontraron configuraciones de Correo.")
-            
 
-        host = "smtp.gmail.com"
+        host = "mail.amovil.com.co"
         port = 587
         username = self.config["nmUsrCorreo"]
         password = self.config["txPassCorreo"]
 
-        from_addr = "torredecontrolamovil@gmail.com"
+        from_addr = "amovildesk@amovil.com.co"
         to_addr = [
             "lider.proyectos@amovil.co",
         ]
@@ -354,7 +431,9 @@ class CompiUpdate:
             part.set_payload(attachment.read())
 
         encoders.encode_base64(part)
-        part.add_header("Content-Disposition", f"attachment; filename= {self.local_copy_path}")
+        part.add_header(
+            "Content-Disposition", f"attachment; filename= {self.local_copy_path}"
+        )
 
         msg.attach(part)
 
@@ -395,7 +474,6 @@ class CompiUpdate:
     def send_email_notification(self, error_message):
         logging.info("Inicia envío de correos")
         # Indica que vas a usar las variables globales
-        
 
         host = "smtp.gmail.com"
         port = 587

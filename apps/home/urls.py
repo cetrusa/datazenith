@@ -12,6 +12,12 @@ urlpatterns = [
         views.HomePanelCuboPage.as_view(),
         name="panel_cubo",
     ),
+    # Nueva ruta para carga diferida de datos
+    path(
+        "api/load_panel_data/",
+        views.load_panel_data_ajax,
+        name="load_panel_data_ajax",
+    ),
     path(
         "panel_bi/",
         views.HomePanelBiPage.as_view(),

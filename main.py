@@ -10,7 +10,7 @@ import json
 import pandas as pd
 
 from scripts.extrae_bi.extrae_bi import Extrae_Bi
-from scripts.extrae_bi.apipowerbi import Api_PowerBi
+from scripts.extrae_bi.apipowerbi import Api_PowerBi,Api_PowerBi_Config
 from scripts.extrae_bi.uau import CompiUpdate
 
 from unipath import Path
@@ -94,8 +94,8 @@ class Inicio:
             )
         elif __file__:
             self.dir_actual = os.path.dirname(__file__)
-            self.name = str("levapan")
-            self.dir_actual = str("personalizado7")
+            self.name = str("compi")
+            self.dir_actual = str("puentedia")
             self.nmDt = self.dir_actual
 
         self.configurar(self.name)
@@ -117,7 +117,7 @@ class Inicio:
             raise
 
     def correo_config(self):
-        sql = text("SELECT * FROM powerbi_adm.conf_tipo WHERE nbTipo = '6';")
+        sql = text("SELECT * FROM powerbi_adm.conf_tipo WHERE nbTipo = '11';")
         # print(sql)
         df = self.config_basic.execute_sql_query(sql)
         # print(df)
@@ -164,12 +164,12 @@ class Inicio:
         logging.info("Inicia envío de correos")
         # Indica que vas a usar las variables globales
 
-        host = "smtp.gmail.com"
+        host = "mail.amovil.com.co"
         port = 587
         username = self.config["nmUsrCorreo"]
         password = self.config["txPassCorreo"]
 
-        from_addr = "torredecontrolamovil@gmail.com"
+        from_addr = "amovildesk@amovil.com.co"
         to_addr = [
             "cesar.trujillo@amovil.co",
         ]
@@ -244,19 +244,19 @@ class Inicio:
 
     def actualiza_bi(self):
         try:
+            # Quita database_name, solo pasa los argumentos que espera Api_PowerBi
+            config = Api_PowerBi_Config(database_name=self.name)
             actualizabi = Api_PowerBi(
-                database_name=self.name,
+                config=config,
                 IdtReporteIni=self.IdtReporteIni,
                 IdtReporteFin=self.IdtReporteFin,
             )
             time.sleep(5)
-            actualizabi.run_datasetrefresh_solo_inicio()
-            # actualizabi.run_datasetrefresh()
+            # actualizabi.run_datasetrefresh_solo_inicio()
+            actualizabi.run_datasetrefresh()
             logging.info("Proceso de actualización de Power BI completado")
         except Exception as e:
-            error_message = "Error en el proceso de actualización de Power BI: " + str(
-                e
-            )
+            error_message = "Error en el proceso de actualización de Power BI: " + str(e)
             logging.error(error_message)
             self.send_email_notification(error_message)
 
@@ -274,9 +274,9 @@ class Inicio:
         try:
             print(self.name)
             self.fetch_date_config(self.nmDt)
-            self.extrae_bi()  # Llama al primer proceso
+            # self.extrae_bi()  # Llama al primer proceso
             # self.actualiza_bi()  # Llama al segundo proceso
-            # self.refresh_excel()  # Llama al tercer proceso
+            self.refresh_excel()  # Llama al tercer proceso
             logging.info("Fin del proceso")
         except Exception as e:
             error_message = (
