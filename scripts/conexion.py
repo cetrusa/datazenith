@@ -21,6 +21,12 @@ class Conexion:
 
     @staticmethod
     def ConexionMariadb3(user, password, host, port, database):
+        import os
+        # Permitir configuración dinámica por variables de entorno
+        pool_size = int(os.getenv("DB_POOL_SIZE", 20))
+        max_overflow = int(os.getenv("DB_MAX_OVERFLOW", 25))
+        pool_timeout = int(os.getenv("DB_POOL_TIMEOUT", 120))
+        pool_recycle = int(os.getenv("DB_POOL_RECYCLE", 3600))
         """
         Crea una conexión optimizada a MariaDB/MySQL con pool de conexiones.
 
@@ -94,24 +100,20 @@ class Conexion:
                     connect_args=connect_args,
                     # Configuración optimizada del pool de conexiones
                     poolclass=QueuePool,  # Especificar explícitamente QueuePool para mejor control
-                    pool_size=20,  # Mantener hasta 20 conexiones permanentes
-                    max_overflow=25,  # Permitir hasta 25 conexiones adicionales (aumentado)
-                    pool_timeout=120,  # Timeout más razonable (2 minutos)
-                    pool_recycle=3600,  # Reciclar conexiones después de 1 hora
+                    pool_size=pool_size,  # Dinámico por entorno
+                    max_overflow=max_overflow,  # Dinámico por entorno
+                    pool_timeout=pool_timeout,  # Dinámico por entorno
+                    pool_recycle=pool_recycle,  # Dinámico por entorno
                     pool_pre_ping=True,  # Verificar si las conexiones están activas
                     echo=False,  # No mostrar SQL en logs (optimiza rendimiento)
                     echo_pool=False,  # No mostrar actividad del pool en logs
                     future=True,  # Usar funcionalidades más recientes y optimizadas
-                    # Backoff exponencial para reintentos de conexión
                     pool_reset_on_return="commit",  # Comportamiento más seguro para el estado de conexiones
                 )
-
                 # Guardar la conexión en caché
                 Conexion._connection_cache[connection_key] = engine
                 Conexion._last_connection_time[connection_key] = current_time
-
                 return engine
-
             except Exception as e:
                 logging.error(
                     f"Error al conectar con la base de datos {database} en {host}: {e}"
@@ -120,6 +122,29 @@ class Conexion:
                     f"Error al conectar con la base de datos {database} en {host}: {e}"
                 )
                 raise
+
+    @staticmethod
+    def export_pool_metrics():
+        """
+        Devuelve un resumen de los pools activos para monitoreo externo (por ejemplo, Prometheus).
+        """
+        with Conexion._cache_lock:
+            metrics = []
+            for key, engine in Conexion._connection_cache.items():
+                pool = getattr(engine, "pool", None)
+                pool_data = {}
+                if pool and hasattr(pool, "size") and hasattr(pool, "checkedin"):
+                    pool_data = {
+                        "size": pool.size(),
+                        "checked_in": pool.checkedin(),
+                        "checked_out": pool.checkedout(),
+                        "overflow": pool.overflow(),
+                    }
+                metrics.append({
+                    "connection_key": key,
+                    "pool": pool_data
+                })
+            return metrics
 
     @staticmethod
     def ConexionSqlite(db_path: str = "mydata.db"):
