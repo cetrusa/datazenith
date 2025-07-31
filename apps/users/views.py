@@ -183,34 +183,19 @@ class LoginUser(FormView):
                 )
                 return redirect("users_app:two_factor_verify")
 
-            # Optimización: Preparar datos de sesión antes de login
-            remember_me = form.cleaned_data.get("remember", False)
-            
             # Registro de la dirección IP
             user.last_login_ip = self.request.META.get("REMOTE_ADDR", "")
             user.save()
 
             login(self.request, user)
 
-            # Configuración optimizada del tiempo de expiración de la sesión
-            if remember_me:
+            # Configuración del tiempo de expiración de la sesión según checkbox "Recordarme"
+            if form.cleaned_data.get("remember", False):
                 # Configurar sesión para que expire en 30 días
                 self.request.session.set_expiry(60 * 60 * 24 * 30)
             else:
                 # Usar el tiempo por defecto (cierra al cerrar navegador)
                 self.request.session.set_expiry(0)
-
-            # Pre-calentar datos críticos en background para mejor UX
-            try:
-                # Obtener primera base de datos disponible para pre-cargarla
-                first_db = user.conf_empresas.first()
-                if first_db:
-                    self.request.session["database_name"] = first_db.name
-                    # Invalidar caché para preparar datos frescos
-                    cache_key = f"user_databases_{user.id}"
-                    cache.delete(cache_key)
-            except Exception as e:
-                logger.warning(f"Error pre-cargando datos para {user.username}: {e}")
 
             return super(LoginUser, self).form_valid(form)
         else:
@@ -286,9 +271,9 @@ class BaseView(LoginRequiredMixin, TemplateView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
 
-        # Obtener empresas asignadas al usuario con caché optimizado
+        # Obtener empresas asignadas al usuario
         try:
-            # Caché más largo para datos que cambian poco
+            # Obtenemos las bases de datos con caché para mejorar rendimiento
             cache_key = f"user_databases_{self.request.user.id}"
             databases = cache.get(cache_key)
 
@@ -298,99 +283,137 @@ class BaseView(LoginRequiredMixin, TemplateView):
                     .select_related()
                     .order_by("nmEmpresa")
                 )
-                # Caché por 15 minutos (datos que no cambian frecuentemente)
-                cache.set(cache_key, databases, 900)
+                # Guardamos en caché por 5 minutos (ajustar según necesidad)
+                cache.set(cache_key, databases, 300)
 
-            # Crear listas optimizadas
+            # Crear lista para la plantilla (como tuplas para el selector)
             databases_list = [
                 (database.name, database.nmEmpresa) for database in databases
             ]
 
-            # Crear lista ordenada de diccionarios una sola vez
+            # Crear lista para operaciones internas (como diccionarios)
+            database_dict_list = [
+                {
+                    "name": database.name,
+                    "nmEmpresa": database.nmEmpresa,
+                    "id": database.id,
+                }
+                for database in databases
+            ]
+
+            # Ordenar las bases de datos por nombre de empresa
             sorted_database_list = sorted(
-                [
-                    {
-                        "name": database.name,
-                        "nmEmpresa": database.nmEmpresa,
-                        "id": database.id,
-                    }
-                    for database in databases
-                ],
-                key=lambda x: x["nmEmpresa"]
+                database_dict_list, key=lambda x: x["nmEmpresa"]
             )
 
-            # Obtener la base de datos seleccionada de la sesión
-            database_name = self.request.session.get("database_name")
+            # Obtener la base de datos seleccionada de la sesión o el POST
+            database_name = self.request.session.get(
+                "database_name"
+            ) or self.request.POST.get("database_select")
 
-            # Solo procesar si hay bases de datos disponibles
-            if sorted_database_list:
-                # Verificar si la base de datos seleccionada está en la lista
-                if database_name:
-                    db_exists = any(
-                        db["name"] == database_name for db in sorted_database_list
-                    )
+            # Guardar la base de datos original para verificar si cambió
+            original_database_name = database_name
 
-                    if not db_exists:
-                        # Si la BD seleccionada no está en la lista, seleccionar la primera disponible
-                        database_name = sorted_database_list[0]["name"]
-                        self.request.session["database_name"] = database_name
-                        # Solo modificar sesión cuando sea necesario
-                        self.request.session.modified = True
+            # Verificar si la base de datos seleccionada está en la lista
+            if database_name and sorted_database_list:
+                db_exists = any(
+                    db["name"] == database_name for db in sorted_database_list
+                )
 
-                        logger.warning(
-                            f"Base de datos cambiada automáticamente para {self.request.user.username}: {database_name}"
-                        )
-
-                # Si no hay una base de datos seleccionada, seleccionar la primera
-                elif not database_name:
+                if not db_exists:
+                    # Si la BD seleccionada no está en la lista, seleccionar la primera disponible
                     database_name = sorted_database_list[0]["name"]
                     self.request.session["database_name"] = database_name
                     self.request.session.modified = True
 
-                    logger.info(
-                        f"Primera selección de base de datos para {self.request.user.username}: {database_name}"
+                    # Log del cambio para seguimiento
+                    logger.warning(
+                        f"Se cambió automáticamente la base de datos de {original_database_name} a {database_name} "
+                        f"porque la original no estaba disponible para el usuario {self.request.user.username}"
                     )
 
-                # Actualizar StaticPage.name solo si es necesario
-                if database_name:
-                    try:
-                        from scripts.StaticPage import StaticPage
-                        if StaticPage.name != database_name:
-                            StaticPage.name = database_name
-                    except ImportError:
-                        logger.warning("No se pudo importar StaticPage")
+            # Si aún no hay una base de datos seleccionada y hay opciones disponibles, seleccionar la primera
+            elif not database_name and sorted_database_list:
+                database_name = sorted_database_list[0]["name"]
+                self.request.session["database_name"] = database_name
+                self.request.session.modified = True
 
-                # Información adicional de la base de datos seleccionada (optimizada)
-                selected_database = next(
-                    (db for db in sorted_database_list if db["name"] == database_name),
-                    None
+                # Log para seguimiento
+                logger.info(
+                    f"Primera selección automática de base de datos {database_name} para el usuario {self.request.user.username}"
                 )
-                if selected_database:
-                    context["selected_database"] = selected_database
+
+            # Actualizar StaticPage.name para mantener consistencia global
+            if database_name:
+                try:
+                    from scripts.StaticPage import StaticPage
+
+                    StaticPage.name = database_name
+                except ImportError:
+                    logger.warning(
+                        "No se pudo importar StaticPage para actualizar el nombre de la base de datos"
+                    )
 
             # Pasar las variables de contexto a la plantilla
-            context.update({
-                "databases_list": databases_list,
-                "database_list": sorted_database_list,
-                "database_name": database_name,
-                "database_name_session": database_name,
-                "form_url": self.get_form_url(),
-            })
+            context["databases_list"] = (
+                databases_list  # Lista de tuplas para la plantilla
+            )
+            context["database_list"] = (
+                sorted_database_list  # Lista de diccionarios para compatibilidad
+            )
+            context["database_name"] = database_name
+            context["database_name_session"] = (
+                database_name  # Para el selector en la plantilla
+            )
+            context["form_url"] = (
+                self.get_form_url()
+            )  # URL para el formulario de selección
+
+            # Agregar información adicional de la base de datos seleccionada
+            if database_name:
+                try:
+                    # Intentar obtener de la lista filtrada primero (más eficiente)
+                    selected_db_info = next(
+                        (
+                            db
+                            for db in sorted_database_list
+                            if db["name"] == database_name
+                        ),
+                        None,
+                    )
+
+                    if selected_db_info:
+                        context["selected_database"] = selected_db_info
+                    else:
+                        # Si no está en la lista, intentar obtenerlo de la base de datos
+                        selected_db = ConfEmpresas.objects.get(name=database_name)
+                        context["selected_database"] = {
+                            "name": selected_db.name,
+                            "nmEmpresa": selected_db.nmEmpresa,
+                            "id": selected_db.id,
+                        }
+                except (ConfEmpresas.DoesNotExist, StopIteration) as e:
+                    logger.error(
+                        f"Error al obtener información de la base de datos seleccionada: {e}"
+                    )
+                    # No hacemos nada, simplemente no tendrá la información adicional
 
         except Exception as e:
             # Manejo de errores robusto
-            logger.exception(f"Error al obtener bases de datos para {self.request.user.username}: {e}")
-            context.update({
-                "databases_list": [],
-                "database_list": [],
-                "database_name": None,
-                "database_name_session": None,
-                "form_url": self.get_form_url(),
-            })
+            logger.exception(
+                f"Error al obtener bases de datos para el usuario {self.request.user.username}: {e}"
+            )
+            context["databases_list"] = []
+            context["database_list"] = []
+            context["database_name"] = None
+            context["database_name_session"] = None
+            context["form_url"] = self.get_form_url()
 
             messages.error(
                 self.request,
-                "Error al cargar las bases de datos disponibles. Por favor, intente nuevamente."
+                _(
+                    "Error al cargar las bases de datos disponibles. Por favor, intente nuevamente."
+                ),
             )
 
         return context
@@ -514,38 +537,23 @@ class DatabaseListView(ListView):
     template_name = "includes/database_list.html"
 
     def get_queryset(self):
-        # Optimización: usar only() para cargar solo campos necesarios
-        return self.request.user.conf_empresas.only(
-            'id', 'name', 'nmEmpresa'
-        ).order_by("nmEmpresa")
+        return self.request.user.conf_empresas.all().order_by("nmEmpresa")
 
 
 @login_required(login_url=reverse_lazy("users_app:user-login"))
 def database_list(request):
     """
     Vista para obtener la lista de bases de datos en formato JSON.
-    Optimizada con caché para mejor rendimiento.
     """
     try:
-        # Usar caché para esta consulta frecuente
-        cache_key = f"user_databases_json_{request.user.id}"
-        databases_list = cache.get(cache_key)
-        
-        if databases_list is None:
-            databases = request.user.conf_empresas.only(
-                'id', 'name', 'nmEmpresa'
-            ).order_by("nmEmpresa")
-            
-            databases_list = [
-                {
-                    "database_name": database.name,
-                    "database_nmEmpresa": database.nmEmpresa,
-                }
-                for database in databases
-            ]
-            # Cachear por 10 minutos
-            cache.set(cache_key, databases_list, 600)
-            
+        databases = request.user.conf_empresas.all().order_by("nmEmpresa")
+        databases_list = [
+            {
+                "database_name": database.name,
+                "database_nmEmpresa": database.nmEmpresa,
+            }
+            for database in databases
+        ]
         return JsonResponse({"status": "success", "databases_list": databases_list})
     except Exception as e:
         print(f"Error en database_list: {e}")
@@ -763,11 +771,7 @@ class UserListView(LoginRequiredMixin, ListView):
     login_url = reverse_lazy("users_app:user-login")
 
     def get_queryset(self):
-        # Optimización: usar only() para cargar solo campos necesarios
-        # y agregar select_related si hay relaciones
-        return User.objects.only(
-            'id', 'username', 'email', 'nombres', 'apellidos', 'is_active', 'date_joined'
-        ).order_by("username")
+        return User.objects.all().order_by("username")
 
 
 class UserDetailView(LoginRequiredMixin, DetailView):
@@ -948,24 +952,11 @@ def api_user_list(request):
     """
     API endpoint para listar usuarios.
     Devuelve un JSON con la lista de usuarios.
-    Optimizado para mejor rendimiento.
     """
-    # Usar caché para esta consulta frecuente
-    cache_key = 'api_user_list_data'
-    users_data = cache.get(cache_key)
-    
-    if users_data is None:
-        # Solo cargar los campos necesarios
-        users = User.objects.only(
-            "id", "username", "email", "nombres", "apellidos", "is_active"
-        ).values(
-            "id", "username", "email", "nombres", "apellidos", "is_active"
-        )
-        users_data = list(users)
-        # Cachear por 5 minutos
-        cache.set(cache_key, users_data, 300)
-    
-    return JsonResponse({"users": users_data})
+    users = User.objects.all().values(
+        "id", "username", "email", "nombres", "apellidos", "is_active"
+    )
+    return JsonResponse({"users": list(users)})
 
 
 @login_required(login_url=reverse_lazy("users_app:user-login"))

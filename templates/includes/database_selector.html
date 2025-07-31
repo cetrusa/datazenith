@@ -1,93 +1,65 @@
-{% load cache %}
-<!-- Selector de bases de datos optimizado -->
+<!-- Selector de bases de datos -->
+<!-- <input type="checkbox" name="" id="check" /> -->
 <div class="database-selector-wrapper bg-dark">
     <div class="d-flex justify-content-center align-items-center">
         <form class="d-flex ml-auto" action="{% url form_url %}" method="post" id="FormSelectorBase">
             {% csrf_token %}
             <div class="form-group w-100">
                 <select class="form-control" id="database_select" name="database_select">
-                    <option disabled>Seleccione una empresa</option>
+                    <option disabled selected>Seleccione una empresa</option>
                     {% for database_name,database_nmEmpresa in databases_list %}
-                    <option value="{{ database_name }}" {% if database_name == database_name_session %}selected{% endif %}>{{ database_nmEmpresa }}</option>
+                    <option value="{{ database_name }}">{{ database_nmEmpresa }} </option>
                     {% endfor %}
                 </select>
             </div>
         </form>
     </div>
 </div>
-
-{% cache 1800 "database_selector_js" %}
-<!-- JavaScript optimizado para el selector -->
+<!-- Código JavaScript relacionado con el selector de bases de datos -->
 <script>
-    $(document).ready(function () {
-        // Cache DOM elements para mejor rendimiento
-        var $databaseSelect = $('#database_select');
-        var $form = $('#FormSelectorBase');
-        var formUrl = "{% url form_url %}";
-        var csrfToken = $('input[name="csrfmiddlewaretoken"]').val();
-        
-        // Establecer la opción seleccionada del servidor
-        var currentDatabase = "{{ database_name_session|default:'' }}";
-        if (currentDatabase) {
-            $databaseSelect.val(currentDatabase);
-        }
 
-        // Manejar cambio de base de datos con debounce
-        var changeTimeout;
-        $databaseSelect.on('change', function () {
-            clearTimeout(changeTimeout);
-            var selectedDatabase = $(this).val();
-            
-            if (selectedDatabase) {
-                changeTimeout = setTimeout(function() {
-                    updateDatabaseName(selectedDatabase);
-                }, 300); // Debounce de 300ms
+    $(document).ready(function () {
+        var database = window.sessionStorage.getItem("database_name");
+        $.get('{% url "users_app:database_list" %}', function (data) {
+            var databaseSelect = $('#database_select');
+            $.each(data.database_list, function (index, database) {
+                databaseSelect.append('<option value="' + database.database_name + '">' + database.database_nmEmpresa + '</option>');
+            });
+
+            if (database) {
+                updateDatabaseName(database);
+                document.getElementById("database_select").value = database;
+
+
             }
+        });
+
+        document.getElementById("database_select").addEventListener("change", function () {
+            var select = this;
+            database = select.options[select.selectedIndex].value;
+            window.sessionStorage.setItem("database_name", database);
+            updateDatabaseName(database);
         });
     });
 
     function updateDatabaseName(newDatabase) {
-        console.log("Actualizando base de datos:", newDatabase);
-        
-        var $databaseSelect = $('#database_select');
-        
-        // Mostrar indicador de carga optimizado
-        $databaseSelect.prop('disabled', true).addClass('loading');
-        
-        var csrfToken = $('input[name="csrfmiddlewaretoken"]').val();
-        
-        $.ajax({
-            url: "{% url form_url %}",
-            type: "POST",
-            data: {
-                'database_select': newDatabase,
-                'csrfmiddlewaretoken': csrfToken
-            },
-            cache: false,
-            timeout: 10000, // 10 segundos timeout
-            success: function(response) {
-                console.log("Base de datos actualizada:", newDatabase);
-                // Recargar la página para reflejar los cambios
-                window.location.reload();
-            },
-            error: function(xhr, status, error) {
-                console.error("Error al actualizar base de datos:", error, status);
-                var message = "Error al cambiar la base de datos.";
-                
-                if (status === 'timeout') {
-                    message += " La operación tardó demasiado tiempo.";
-                } else if (xhr.status === 403) {
-                    message += " No tiene permisos para esta base de datos.";
-                } else if (xhr.status === 500) {
-                    message += " Error interno del servidor.";
+        console.log("Updating database name:", newDatabase);
+        var csrfToken = document.getElementsByName("csrfmiddlewaretoken")[0].value;
+        var xhr = new XMLHttpRequest();
+        xhr.open("POST", "{% url form_url %}", true);
+        xhr.setRequestHeader("X-CSRFToken", csrfToken);
+        xhr.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
+        xhr.onreadystatechange = function () {
+            if (this.readyState === XMLHttpRequest.DONE) {
+                if (this.status === 200) {
+                    console.log("Database name updated successfully:", newDatabase);
+                    database = newDatabase;
+                } else {
+                    console.log("Error al actualizar el valor de database_name en la sesión:", this.status, this.responseText);
                 }
-                
-                alert(message + " Intente nuevamente.");
-            },
-            complete: function() {
-                $databaseSelect.prop('disabled', false).removeClass('loading');
             }
-        });
+        };
+        xhr.send("database_select=" + encodeURIComponent(newDatabase));
     }
+
 </script>
-{% endcache %}

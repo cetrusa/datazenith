@@ -107,9 +107,7 @@ class User(AbstractBaseUser, PermissionsMixin):
 
     def get_empresas_nombres(self):
         """Devuelve una lista de nombres de empresas asociadas al usuario."""
-        # Optimización: usar only() para cargar solo el campo necesario
-        empresas = self.conf_empresas.only('nmEmpresa')
-        return ", ".join([e.nmEmpresa for e in empresas])
+        return ", ".join([e.nmEmpresa for e in self.conf_empresas.all()])
 
     get_empresas_nombres.short_description = "Empresas asociadas"
 
