@@ -1,75 +1,43 @@
-# Dockerfile optimizado para servidor de producción
-FROM python:3.12-slim
+# Usamos la imagen oficial de Python 3.12 como imagen base
+FROM python:3.12
 
-# Metadatos
-LABEL maintainer="DataZenith Team"
-LABEL description="DataZenith BI - Servidor de Producción"
-LABEL version="1.0"
+# Crea un usuario y un grupo para ejecutar la aplicación
+# RUN groupadd -r datazenithgroup && useradd -r -g datazenithgroup adminuser
 
-# Variables de entorno para optimización
-ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1 \
-    PIP_NO_CACHE_DIR=1 \
-    PIP_DISABLE_PIP_VERSION_CHECK=1 \
-    DEBIAN_FRONTEND=noninteractive
-
-# Crear usuario no-root para seguridad
-RUN groupadd -r datazenith && useradd -r -g datazenith -s /bin/bash datazenith
-
-# Instalar dependencias del sistema
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential \
-    libmariadb-dev \
-    libmariadb3 \
-    pkg-config \
-    curl \
-    git \
-    nginx \
-    supervisor \
-    tzdata \
-    && rm -rf /var/lib/apt/lists/* \
-    && apt-get clean
-
-# Configurar zona horaria
-RUN ln -sf /usr/share/zoneinfo/America/Bogota /etc/localtime && \
-    echo "America/Bogota" > /etc/timezone
-
-# Crear directorios necesarios
-RUN mkdir -p /code /code/logs /code/staticfiles /code/media && \
-    chown -R datazenith:datazenith /code
-
-# Establecer directorio de trabajo
+# Establecemos /code como el directorio de trabajo dentro del contenedor
 WORKDIR /code
 
-# Copiar requirements y instalar dependencias Python
-COPY --chown=datazenith:datazenith requirements-docker.txt .
-RUN pip install --upgrade pip setuptools wheel && \
-    pip install --no-cache-dir -r requirements-docker.txt && \
-    pip install gunicorn[gevent] && \
-    rm requirements-docker.txt
+# Configuramos variables de entorno
+ENV PIP_DISABLE_PIP_VERSION_CHECK=1
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
 
-# Copiar código de la aplicación
-COPY --chown=datazenith:datazenith . .
+# Copiamos requirements-docker.txt a /code en el contenedor
+COPY ./requirements-docker.txt .
 
-# Crear directorio de logs
-RUN mkdir -p logs && chown -R datazenith:datazenith logs
+# Instalamos las dependencias de Python desde requirements-docker.txt
+RUN pip install --default-timeout=120 --no-cache-dir -r requirements-docker.txt
 
-# Configurar permisos
-RUN chown -R datazenith:datazenith /code && \
-    chmod +x /code/manage.py
+# Copiamos todos los archivos y directorios al directorio de trabajo en el contenedor
+COPY . .
 
-# Cambiar a usuario no-root
-USER datazenith
+# Ajustamos la zona horaria del contenedor
+RUN ln -sf /usr/share/zoneinfo/America/Bogota /etc/localtime
 
-# Recopilar archivos estáticos
-RUN python manage.py collectstatic --noinput --settings=adminbi.settings.prod
+# Ejecutamos el comando collectstatic de Django
+RUN python manage.py collectstatic --no-input
 
-# Configurar healthcheck
-HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
-    CMD curl -f http://localhost:30000/ || exit 1
+# Cambiamos la propiedad y los permisos de los archivos estáticos
+# RUN chown -R adminuser:datazenithgroup /code/static
+RUN chmod -R 755 /code/static
 
-# Exponer puerto
-EXPOSE 30000
+# Crea la carpeta media y establece permisos adecuados
+RUN mkdir -p /code/media
+# RUN chown -R adminuser:datazenithgroup /code/media
+RUN chmod -R 755 /code/media
 
-# Comando por defecto
-CMD ["gunicorn", "--bind", "0.0.0.0:30000", "--workers", "4", "--timeout", "28800", "--max-requests", "1000", "--max-requests-jitter", "50", "--access-logfile", "/code/logs/access.log", "--error-logfile", "/code/logs/error.log", "--log-level", "info", "adminbi.wsgi:application"]
+# Cambiar al usuario no root
+# USER adminuser
+
+# Comando para iniciar la aplicación
+CMD ["gunicorn", "--bind", "0.0.0.0:30000", "--timeout", "28800", "adminbi.wsgi:application"]

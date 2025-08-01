@@ -1,0 +1,57 @@
+version: '3.8'
+
+services:
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile-server
+    container_name: datazenith-web
+    restart: always
+    ports:
+      - "30000:30000"
+    volumes:
+      - ./media:/code/media
+      - ./staticfiles:/code/staticfiles
+      - ./logs:/code/logs
+      - ./secret.json:/code/secret.json
+    depends_on:
+      - redis
+    command: ["gunicorn", "--bind", "0.0.0.0:30000", "--workers", "4", "--timeout", "28800", "--max-requests", "1000", "--max-requests-jitter", "50", "--access-logfile", "/code/logs/access.log", "--error-logfile", "/code/logs/error.log", "--log-level", "info", "adminbi.wsgi:application"]
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile-server
+    container_name: datazenith-worker
+    restart: always
+    volumes:
+      - ./logs:/code/logs
+      - ./secret.json:/code/secret.json
+    depends_on:
+      - redis
+    command: ["python", "manage.py", "rqworker", "default"]
+
+  scheduler:
+    build:
+      context: .
+      dockerfile: Dockerfile-server
+    container_name: datazenith-scheduler
+    restart: always
+    volumes:
+      - ./logs:/code/logs
+      - ./secret.json:/code/secret.json
+    depends_on:
+      - redis
+    command: ["python", "manage.py", "rqscheduler"]
+
+  redis:
+    image: redis:7.2-alpine
+    container_name: datazenith-redis
+    restart: always
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+
+volumes:
+  redis_data:

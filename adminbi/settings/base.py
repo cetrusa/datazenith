@@ -48,6 +48,7 @@ LOCAL_APPS = (
     "apps.bi",
     "apps.permisos",
     "apps.cargues",
+    "apps.monitor",
 )
 
 THIRD_PARTY_APPS = (

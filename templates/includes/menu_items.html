@@ -31,5 +31,10 @@
           Configuración</span></a>
     </li>
     {% endif %}
+    {% if perms.monitor.panel_monitor %}
+    <li class="nav-item">
+      <a class="nav-link text-white" href="{% url 'monitor:dashboard' %}"><i class="fas fa-chart-line"></i><span> Monitoreo</span></a>
+    </li>
+    {% endif %}
   </ul>
 </nav>
