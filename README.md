@@ -109,3 +109,41 @@ python manage.py createsuperuser
 - Mantén actualizados los requirements en todos los archivos usados por Docker.
 - Si agregas nuevas extensiones de archivo a limpiar, actualiza la función en `utils.py`.
 - Revisa los logs para monitorear la actividad de limpieza y posibles errores.
+
+### Calidad: bloqueo de archivos de 0 bytes
+
+Se incluye un verificador `scripts/check_zero_byte_files.py` y un hook de git en `.githooks/pre-commit`.
+
+Activación del hook:
+
+1. Configura la ruta de hooks local:
+   - Windows (PowerShell):
+     - `git config core.hooksPath .githooks`
+   - Linux/Mac:
+     - `git config core.hooksPath .githooks`
+2. Asegura permisos de ejecución (Linux/Mac): `chmod +x .githooks/pre-commit`
+
+Ejecución manual del verificador:
+- Todos los archivos: `python scripts/check_zero_byte_files.py --all`
+- Solo stageados (modo pre-commit): `python scripts/check_zero_byte_files.py`
+
+### Commit asistido con verificación (Windows .bat)
+
+Se incluye un script para facilitar commits con control previo de archivos de 0 bytes:
+
+- Ubicación: `commit_with_check.bat`
+- Requisitos: Git y Python en el PATH.
+- Qué hace:
+  1) Ejecuta `scripts/check_zero_byte_files.py` sobre archivos stageados.
+  2) Si todo está OK, hace `git add -A` y `git commit` con marca de tiempo `[fecha hora]` + tu comentario.
+
+Uso (PowerShell o CMD):
+
+```powershell
+./commit_with_check.bat "Descripción corta del cambio (qué se agrega principalmente)"
+```
+
+Notas:
+- Si no indicas comentario, usa "Actualizacion menor" por defecto.
+- Si el verificador encuentra archivos de 0 bytes no permitidos, el commit se bloquea y se listan.
+- Para auditar todo el repo (no solo stageados): `python scripts/check_zero_byte_files.py --all`
