@@ -16,6 +16,9 @@ services:
       - REDIS_PORT=6379
       - RQ_DEFAULT_TIMEOUT=28800
       - RQ_TASK_TIMEOUT=28800
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1
     depends_on:
       - redis
     ulimits:
@@ -35,6 +38,9 @@ services:
       - REDIS_PORT=6379
       - RQ_DEFAULT_TIMEOUT=28800
       - RQ_TASK_TIMEOUT=28800
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1
     depends_on:
       - web
       - redis
@@ -50,6 +56,9 @@ services:
       - REDIS_PORT=6379
       - RQ_DEFAULT_TIMEOUT=28800
       - RQ_TASK_TIMEOUT=28800
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1
     depends_on:
       - web
       - redis
@@ -65,6 +74,9 @@ services:
       - REDIS_PORT=6379
       - RQ_DEFAULT_TIMEOUT=28800
       - RQ_TASK_TIMEOUT=28800
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1
     depends_on:
       - web
       - redis
@@ -80,6 +92,9 @@ services:
       - REDIS_PORT=6379
       - RQ_DEFAULT_TIMEOUT=28800
       - RQ_TASK_TIMEOUT=28800
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1
     depends_on:
       - web
       - redis
@@ -95,6 +110,9 @@ services:
       - REDIS_PORT=6379
       - RQ_DEFAULT_TIMEOUT=28800
       - RQ_TASK_TIMEOUT=28800
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1
     depends_on:
       - web
       - redis

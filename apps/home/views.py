@@ -1385,15 +1385,20 @@ class CheckTaskStatusView(BaseView):
                             request.session["file_name"] = job.meta.get("file_name")
                             meta["file_ready"] = True
 
+                # Calcular tiempos usando el reloj del worker cuando sea posible
+                started_ts = job.started_at.timestamp() if job.started_at else None
+                now_ts = job.meta.get("updated_at") if hasattr(job, "meta") and job.meta else None
+                if not now_ts:
+                    now_ts = time.time()
                 elapsed_time = 0
-                if job.started_at:
-                    elapsed_time = time.time() - job.started_at.timestamp()
+                if started_ts:
+                    elapsed_time = max(0, now_ts - started_ts)
 
                 eta = None
-                if progress > 5 and elapsed_time > 0:
+                if progress and progress > 0 and elapsed_time > 0:
                     try:
                         eta = (elapsed_time / progress) * (100 - progress)
-                    except:
+                    except Exception:
                         eta = None
 
                 meta["last_update"] = time.time()

@@ -5,6 +5,7 @@ import sqlalchemy
 import pymysql
 from sqlalchemy.pool import QueuePool
 from threading import Lock
+from sqlalchemy.exc import OperationalError
 
 
 class Conexion:
@@ -39,9 +40,12 @@ class Conexion:
         pool_size = int(os.getenv("DB_POOL_SIZE", 20))
         max_overflow = int(os.getenv("DB_MAX_OVERFLOW", 25))
         pool_timeout = int(os.getenv("DB_POOL_TIMEOUT", 120))
-        pool_recycle = int(os.getenv("DB_POOL_RECYCLE", 3600))
-        read_timeout_env = int(os.getenv("DB_READ_TIMEOUT", 300))
-        write_timeout_env = int(os.getenv("DB_WRITE_TIMEOUT", 300))
+        # RDS suele cortar a las 8h; reciclamos antes (valor por defecto seguro)
+        pool_recycle = int(os.getenv("DB_POOL_RECYCLE", 28000))
+        # Timeouts por defecto elevados para cargas pesadas (hasta 30 min)
+        connect_timeout_env = int(os.getenv("DB_CONNECT_TIMEOUT", 60))
+        read_timeout_env = int(os.getenv("DB_READ_TIMEOUT", 1800))
+        write_timeout_env = int(os.getenv("DB_WRITE_TIMEOUT", 1800))
 
         # Crear una clave única para esta conexión
         connection_key = f"{user}@{host}:{port}/{database}"
@@ -85,10 +89,25 @@ class Conexion:
                     # Optimizaciones para reducir latencia
                     "client_flag": pymysql.constants.CLIENT.MULTI_STATEMENTS,
                     # Configuración de timeout para evitar conexiones bloqueadas
-                    "connect_timeout": 60,
-                    "read_timeout": read_timeout_env,  # por defecto 5 minutos (ajustable)
-                    "write_timeout": write_timeout_env,  # por defecto 5 minutos (ajustable)
+                    "connect_timeout": connect_timeout_env,
+                    "read_timeout": read_timeout_env,  # ajustable por entorno
+                    "write_timeout": write_timeout_env,  # ajustable por entorno
                 }
+
+                # Soporte opcional para SSL (por ejemplo, en RDS)
+                if os.getenv("DB_SSL_MODE", "false").lower() == "true":
+                    ssl_args = {}
+                    ssl_ca = os.getenv("DB_SSL_CA")
+                    ssl_cert = os.getenv("DB_SSL_CERT")
+                    ssl_key = os.getenv("DB_SSL_KEY")
+                    if ssl_ca:
+                        ssl_args["ca"] = ssl_ca
+                    if ssl_cert:
+                        ssl_args["cert"] = ssl_cert
+                    if ssl_key:
+                        ssl_args["key"] = ssl_key
+                    # Si no se proveen archivos, habilita TLS sin verificación estricta
+                    connect_args["ssl"] = ssl_args or {}
 
                 # Crear engine con configuración optimizada para conexiones frecuentes
                 engine = sqlalchemy.create_engine(
@@ -113,13 +132,21 @@ class Conexion:
                     future=True,  # Usar funcionalidades más recientes y optimizadas
                     pool_reset_on_return="commit",  # Comportamiento más seguro para el estado de conexiones
                 )
+                # Aplicar opciones de ejecución por defecto (streaming) para evitar cargas en memoria
+                try:
+                    engine = engine.execution_options(stream_results=True)
+                except Exception as ex:
+                    logging.debug(f"No se pudieron aplicar execution_options al engine: {ex}")
                 # Guardar la conexión en caché
                 Conexion._connection_cache[connection_key] = engine
                 Conexion._last_connection_time[connection_key] = current_time
                 return engine
             except Exception as e:
+                # Evitar deadlocks: no llamar a métodos que bloqueen nuevamente el lock aquí
+                pool_snapshot = {"total_cached": len(Conexion._connection_cache)}
                 logging.error(
-                    f"Error al conectar con la base de datos {database} en {host}: {e}"
+                    f"Error al conectar con la base de datos {database} en {host}: {e}. "
+                    f"Estado de caché/pool: {pool_snapshot}"
                 )
                 print(
                     f"Error al conectar con la base de datos {database} en {host}: {e}"
@@ -248,6 +275,46 @@ class Conexion:
         # Si llegamos aquí, todos los reintentos fallaron
         logging.error(f"Fallaron todos los reintentos de conexión: {last_error}")
         raise last_error  # Re-lanzar el último error
+
+    @staticmethod
+    def execute_with_retry(engine, statement, params=None, retries=3, base_backoff=1):
+        """
+        Ejecuta una consulta con reintentos ante fallos operacionales transitorios.
+
+        Args:
+            engine (Engine): Engine de SQLAlchemy donde ejecutar.
+            statement (str | sqlalchemy.sql.elements.TextClause): Consulta SQL o sqlalchemy.text(...).
+            params (dict | None): Parámetros para la consulta.
+            retries (int): Número de reintentos.
+            base_backoff (int | float): Tiempo base para backoff exponencial (segundos).
+
+        Returns:
+            Result: Resultado de la ejecución.
+        """
+        if isinstance(statement, str):
+            statement = sqlalchemy.text(statement)
+
+        attempt = 0
+        last_error = None
+        while attempt <= retries:
+            try:
+                with engine.connect() as conn:
+                    return conn.execute(statement, params or {})
+            except OperationalError as e:
+                last_error = e
+                if attempt < retries:
+                    wait = (2 ** attempt) * base_backoff
+                    logging.warning(f"Retry {attempt + 1}/{retries} tras OperationalError: {e}. Esperando {wait}s…")
+                    time.sleep(wait)
+                    attempt += 1
+                else:
+                    break
+            except Exception as e:
+                # No reintentar para otros errores no operacionales por defecto
+                raise e
+
+        # Si agota reintentos
+        raise last_error
 
     @staticmethod
     def clear_connection_cache(connection_key=None):
