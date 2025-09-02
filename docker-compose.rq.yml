@@ -78,52 +78,6 @@ services:
         max-size: "50m"
         max-file: "5"
 
-  rqworker3:
-    build: .
-    command: python manage.py rqworker default
-    volumes:
-      - .:/code
-    environment:
-      - DJANGO_SETTINGS_MODULE=adminbi.settings.prod
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
-      - RQ_DEFAULT_TIMEOUT=28800
-      - RQ_TASK_TIMEOUT=28800
-    dns:
-      - 8.8.8.8
-      - 1.1.1.1
-    depends_on:
-      - web
-      - redis
-    logging:
-      driver: json-file
-      options:
-        max-size: "50m"
-        max-file: "5"
-
-  rqworker4:
-    build: .
-    command: python manage.py rqworker default
-    volumes:
-      - .:/code
-    environment:
-      - DJANGO_SETTINGS_MODULE=adminbi.settings.prod
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
-      - RQ_DEFAULT_TIMEOUT=28800
-      - RQ_TASK_TIMEOUT=28800
-    dns:
-      - 8.8.8.8
-      - 1.1.1.1
-    depends_on:
-      - web
-      - redis
-    logging:
-      driver: json-file
-      options:
-        max-size: "50m"
-        max-file: "5"
-
   rqscheduler:
     build: .
     command: python manage.py rqscheduler
