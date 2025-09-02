@@ -43,6 +43,11 @@ urlpatterns = [
         name="proveedor",
     ),
     path(
+        "matrix/",
+        views.MatrixPage.as_view(),
+        name="matrix",
+    ),
+    path(
         "interface/",
         views.InterfacePage.as_view(),
         name="interface",

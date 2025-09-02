@@ -14,6 +14,7 @@ from scripts.extrae_bi.cubo import CuboVentas
 from scripts.config import ConfigBasic
 from scripts.extrae_bi.cargue_zip import CargueZip
 from scripts.extrae_bi.interface import InterfaceContable
+from scripts.extrae_bi.matrix import MatrixVentas
 from scripts.extrae_bi.plano import InterfacePlano
 from scripts.cargue.cargue_infoproveedor import CargueInfoVentas
 from scripts.cargue.cargue_infoventas_insert import CargueInfoVentasInsert
@@ -340,6 +341,93 @@ def cubo_ventas_task(
     # Devolver directamente el resultado de CuboVentas.run()
     # El decorador @task_handler añadirá execution_time y manejará el estado final.
     return result_data
+
+@job("default", timeout=DEFAULT_TIMEOUT, result_ttl=3600)
+@task_handler
+def matrix_task(
+    database_name,
+    IdtReporteIni,
+    IdtReporteFin,
+    user_id,
+    report_id,
+    batch_size=DEFAULT_BATCH_SIZE,
+):
+    """
+    Tarea RQ para generar Matrix de Ventas, reportando progreso detallado.
+    Optimizada para grandes volúmenes de datos.
+    """
+    try:
+        connection.close()
+    except Exception:
+        pass
+    job = get_current_job()
+    job_id = job.id if job else None
+    logger.info(
+        f"Iniciando matrix_task (RQ Job ID: {job_id}) para DB: {database_name}, Periodo: {IdtReporteIni}-{IdtReporteFin}"
+    )
+    print(
+        f"[matrix_task] INICIO: database_name={database_name}, IdtReporteIni={IdtReporteIni}, IdtReporteFin={IdtReporteFin}, user_id={user_id}, report_id={report_id}, batch_size={batch_size}"
+    )
+
+    def rq_update_progress(
+        stage,
+        progress_percent,
+        current_rec=None,
+        total_rec=None,
+        hoja_idx=None,
+        total_hojas=None,
+    ):
+        meta = {"stage": stage}
+        if current_rec is not None:
+            meta["records_processed"] = current_rec
+        if total_rec is not None:
+            meta["total_records_estimate"] = total_rec
+        if hoja_idx is not None and total_hojas is not None:
+            meta["hoja_actual"] = hoja_idx
+            meta["total_hojas"] = total_hojas
+            global_percent = int((hoja_idx / total_hojas) * 100)
+        else:
+            global_percent = progress_percent
+        print(
+            f"[matrix_task][progreso] stage={stage}, hoja_idx={hoja_idx}, total_hojas={total_hojas}, global_percent={global_percent}"
+        )
+        update_job_progress(job_id, int(global_percent), status="processing", meta=meta)
+
+    print("[matrix_task] Instanciando MatrixVentas...")
+    # Instanciar y ejecutar la lógica principal, pasando el callback adaptado para RQ
+    matrix_processor = MatrixVentas(
+        database_name,
+        IdtReporteIni,
+        IdtReporteFin,
+        user_id,
+        report_id,
+        progress_callback=rq_update_progress,  # <-- Pasar callback adaptado
+    )
+
+    # Si matrix soporta batch_size, pásalo aquí o configúralo internamente
+    if hasattr(matrix_processor, "batch_size"):
+        matrix_processor.batch_size = batch_size
+
+    print("[matrix_task] Ejecutando run() de MatrixVentas...")
+    # run() ahora usa el callback internamente y devuelve el resultado final
+    # El decorador @task_handler se encargará del manejo de errores y formato final
+    result_data = (
+        matrix_processor.run()
+    )  # batch_size se pasa en __init__ o se usa default
+
+    print(f"[matrix_task] RESULTADO: {result_data}")
+
+    # Cerrar conexión Django después de finalizar procesamiento pesado
+    try:
+        connection.close()
+    except Exception:
+        pass
+
+    print("[matrix_task] FIN")
+    # Devolver directamente el resultado de CuboVentas.run()
+    # El decorador @task_handler añadirá execution_time y manejará el estado final.
+    return result_data
+
 
 
 @job("default", timeout=DEFAULT_TIMEOUT, result_ttl=3600)

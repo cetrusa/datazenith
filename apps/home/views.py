@@ -22,9 +22,11 @@ from scripts.config import ConfigBasic
 from scripts.StaticPage import StaticPage, DinamicPage
 from scripts.extrae_bi.extrae_bi_insert import ExtraeBiConfig, ExtraeBiExtractor
 from scripts.extrae_bi.interface import InterfaceContable
+from scripts.extrae_bi.matrix import MatrixVentas
 from scripts.extrae_bi.cubo import CuboVentas  # Importación para LoadDataPageView
 from .tasks import (
     cubo_ventas_task,
+    matrix_task,
     interface_task,
     plano_task,
     extrae_bi_task,
@@ -1229,7 +1231,7 @@ class CheckTaskStatusView(BaseView):
 
                 # Si la tarea es interface_task y success es False, devolver error y NO mostrar link de descarga
                 if (
-                    task_name in ["interface_task", "plano_task"]
+                    task_name in ["interface_task", "plano_task", "matrix_task"]
                     and isinstance(result, dict)
                     and not result.get("success", True)
                 ):
@@ -1532,7 +1534,7 @@ class CheckTaskStatusView(BaseView):
                 "tiempo_ejecucion": f"{result.get('execution_time', 0):.2f} segundos",
             }
 
-        elif task_name in ["interface_task", "plano_task"]:
+        elif task_name in ["interface_task", "plano_task", "matrix_task"]:
             # Resumen especial para Interface Contable
             db_name = job.args[0] if len(job.args) > 0 else "desconocida"
             fecha_ini = job.args[1] if len(job.args) > 1 else "desconocida"
@@ -1841,6 +1843,16 @@ class InterfacePage(ReporteGenericoPage):
     def dispatch(self, request, *args, **kwargs):
         return super().dispatch(request, *args, **kwargs)
 
+class MatrixPage(ReporteGenericoPage):
+    template_name = "home/matrix.html"
+    permiso = "permisos.matrix"
+    id_reporte = 0  # Si aplica, puedes asignar un id específico
+    form_url = "home_app:matrix"
+    task_func = matrix_task
+
+    @method_decorator(permission_required("permisos.matrix", raise_exception=True))
+    def dispatch(self, request, *args, **kwargs):
+        return super().dispatch(request, *args, **kwargs)
 
 class PlanoPage(ReporteGenericoPage):
     template_name = "home/plano.html"

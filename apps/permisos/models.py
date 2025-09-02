@@ -24,6 +24,7 @@ class PermisosBarra(models.Model):
             ("panel_interface", _("Panel de Interfaces Contables")),
             ("cubo", _("Generar cubo de ventas")),
             ("proveedor", _("Generar cubo de ventas para proveedor")),
+            ("matrix", _("Generar Matrix de Ventas")),
             ("interface", _("Generar interface contable")),
             ("plano", _("Generar archivo plano")),
             ("cargue_plano", _("Cargar archivo plano")),

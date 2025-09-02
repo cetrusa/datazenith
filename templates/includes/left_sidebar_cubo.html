@@ -41,6 +41,13 @@
         </a>
       </li>
       {% endif %}
+      {% if perms.permisos.matrix %}
+      <li class="nav-item">
+        <a class="nav-link text-white align-middle px-0" href="{% url 'home_app:matrix' %}">
+          <i class="fas fa-file-alt me-2"></i> <span class="ms-1 d-none d-sm-inline">Matrix de Ventas</span>
+        </a>
+      </li>
+      {% endif %}
       <!-- Agrega más elementos de menú aquí según sea necesario -->
     </ul>
 
