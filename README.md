@@ -81,6 +81,24 @@ docker compose -f docker-compose.rq.yml up -d
 
 Esto levanta los servicios web, worker, redis y scheduler.
 
+### Arranque rápido con script (Windows)
+
+Se incluye `start_server.bat` para levantar el stack y, si Docker Desktop no está activo, iniciarlo y esperar hasta que esté listo.
+
+Uso (desde la carpeta del repo):
+
+```powershell
+./start_server.bat rq          # usa docker-compose.rq.yml
+./start_server.bat server      # usa docker-compose.server.yml (abre http://localhost:30000)
+./start_server.bat local       # usa docker-compose.local.yml
+./start_server.bat rq --logs   # levanta y sigue logs
+```
+
+Detalles:
+- Detecta automáticamente `docker compose` o `docker-compose`.
+- Si Docker Desktop no responde, intenta abrirlo y espera hasta 120s.
+- Con perfil `server` abre el navegador en el puerto 30000.
+
 ### Migraciones y superusuario
 
 ```bash
@@ -109,6 +127,18 @@ python manage.py createsuperuser
 - Mantén actualizados los requirements en todos los archivos usados por Docker.
 - Si agregas nuevas extensiones de archivo a limpiar, actualiza la función en `utils.py`.
 - Revisa los logs para monitorear la actividad de limpieza y posibles errores.
+
+### Timeouts para tareas largas (RQ/Nginx/Gunicorn)
+
+- Las tareas RQ usan un timeout configurable por entorno `RQ_TASK_TIMEOUT` (por defecto 28800s en server) y toman como fallback `RQ_QUEUES['default']['DEFAULT_TIMEOUT']`.
+- En `adminbi/settings/prod.py` los timeouts de RQ están parametrizados vía variables de entorno (`RQ_DEFAULT_TIMEOUT`, `RQ_RESULT_TTL`, `RQ_FAILURE_TTL`).
+- En `nginx.conf` se ampliaron los `proxy_read_timeout`/`proxy_send_timeout` para rutas generales, evitando cortes en respuestas lentas. Ajusta según tu necesidad.
+- Gunicorn ya está configurado con `--timeout 28800` en `docker-compose.server.yml`.
+
+Si una tarea se corta en producción pero no en local, verifica:
+- Que el timeout del decorador `@job(..., timeout=...)` no sea menor al configurado.
+- Valores de `RQ_DEFAULT_TIMEOUT` y `RQ_TASK_TIMEOUT` en el entorno de server.
+- Los timeouts de Nginx (`proxy_read_timeout`) para la ruta usada por la vista.
 
 ### Calidad: bloqueo de archivos de 0 bytes
 

@@ -14,8 +14,18 @@ from rq import get_current_job
 # Configuración de logging
 logger = logging.getLogger(__name__)
 
+from django.conf import settings
+
 # --- Constantes y Tipos (Ajustar según necesidad) ---
-DEFAULT_TIMEOUT = 7200  # 2 horas (Aumentado para tareas potencialmente largas)
+# Tomar timeout desde entorno o settings RQ_QUEUES; fallback 7200
+DEFAULT_TIMEOUT = int(
+    os.getenv(
+        "RQ_TASK_TIMEOUT",
+        getattr(getattr(settings, "RQ_QUEUES", {}), "get", lambda *_: {})(
+            "default", {}
+        ).get("DEFAULT_TIMEOUT", 7200),
+    )
+)
 DEFAULT_BATCH_SIZE = 50000
 # DEFAULT_RETRY_COUNT = 3 # No usado directamente
 # JOB_PROGRESS_KEY_PREFIX = "job_progress_" # No usado directamente

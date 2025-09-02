@@ -14,6 +14,9 @@ services:
       - ./staticfiles:/code/staticfiles
       - ./logs:/code/logs
       - ./secret.json:/code/secret.json
+    environment:
+      - RQ_DEFAULT_TIMEOUT=28800
+      - RQ_TASK_TIMEOUT=28800
     depends_on:
       - redis
     command: ["gunicorn", "--bind", "0.0.0.0:30000", "--workers", "4", "--timeout", "28800", "--max-requests", "1000", "--max-requests-jitter", "50", "--access-logfile", "/code/logs/access.log", "--error-logfile", "/code/logs/error.log", "--log-level", "info", "adminbi.wsgi:application"]
@@ -29,6 +32,9 @@ services:
       - ./secret.json:/code/secret.json
     depends_on:
       - redis
+    environment:
+      - RQ_DEFAULT_TIMEOUT=28800
+      - RQ_TASK_TIMEOUT=28800
     command: ["python", "manage.py", "rqworker", "default"]
 
   scheduler:
@@ -42,6 +48,9 @@ services:
       - ./secret.json:/code/secret.json
     depends_on:
       - redis
+    environment:
+      - RQ_DEFAULT_TIMEOUT=28800
+      - RQ_TASK_TIMEOUT=28800
     command: ["python", "manage.py", "rqscheduler"]
 
   redis:

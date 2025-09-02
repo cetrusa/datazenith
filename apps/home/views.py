@@ -10,6 +10,7 @@ import traceback
 from django.http import HttpResponse, FileResponse, JsonResponse
 import io
 from django.views.generic import View, TemplateView
+from django.conf import settings
 from django.utils.decorators import method_decorator
 from apps.users.decorators import registrar_auditoria
 from django.views.decorators.csrf import csrf_exempt, csrf_protect
@@ -866,14 +867,33 @@ class DownloadFileView(LoginRequiredMixin, View):
                     f"Archivo grande ({file_size/1024/1024:.2f}MB) descargado: {file_path} por usuario {user_id}"
                 )
 
-            # Servir el archivo de manera eficiente usando streaming
-            response = FileResponse(
-                open(file_path, "rb"), as_attachment=True, filename=file_name
+            # Si está habilitado X-Accel-Redirect (Nginx), delegar a Nginx para servir el archivo
+            use_x_accel = bool(
+                int(os.getenv("USE_X_ACCEL_REDIRECT", "1" if getattr(settings, "USE_X_ACCEL_REDIRECT", False) else "0"))
             )
 
-            # Optimizar cabeceras para mejor rendimiento de descarga
-            response["Content-Length"] = file_size
-            response["Content-Type"] = self._get_content_type(file_name)
+            if use_x_accel and hasattr(settings, "MEDIA_ROOT"):
+                rel_path = os.path.relpath(file_path, settings.MEDIA_ROOT)
+                rel_path = rel_path.replace("\\", "/")  # Normalizar a slashes
+                internal_path = f"/protected_media/{rel_path}"
+
+                from django.http import HttpResponse
+
+                response = HttpResponse()
+                response["X-Accel-Redirect"] = internal_path
+                response["Content-Disposition"] = f"attachment; filename=\"{file_name}\""
+                response["Content-Type"] = self._get_content_type(file_name)
+                # Es opcional enviar Content-Length; Nginx puede calcularlo del archivo
+                response["Content-Length"] = file_size
+            else:
+                # Fallback: servir el archivo con streaming desde Django
+                response = FileResponse(
+                    open(file_path, "rb"), as_attachment=True, filename=file_name
+                )
+                # Desactivar el buffering de Nginx para stream continuo en archivos grandes
+                response["X-Accel-Buffering"] = "no"
+                response["Content-Length"] = file_size
+                response["Content-Type"] = self._get_content_type(file_name)
 
             # Añadir cabeceras de caché para clientes
             response["Cache-Control"] = (

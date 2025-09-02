@@ -21,12 +21,6 @@ class Conexion:
 
     @staticmethod
     def ConexionMariadb3(user, password, host, port, database):
-        import os
-        # Permitir configuración dinámica por variables de entorno
-        pool_size = int(os.getenv("DB_POOL_SIZE", 20))
-        max_overflow = int(os.getenv("DB_MAX_OVERFLOW", 25))
-        pool_timeout = int(os.getenv("DB_POOL_TIMEOUT", 120))
-        pool_recycle = int(os.getenv("DB_POOL_RECYCLE", 3600))
         """
         Crea una conexión optimizada a MariaDB/MySQL con pool de conexiones.
 
@@ -40,6 +34,15 @@ class Conexion:
         Returns:
             Engine: Objeto Engine de SQLAlchemy para ejecutar consultas.
         """
+        import os
+        # Permitir configuración dinámica por variables de entorno
+        pool_size = int(os.getenv("DB_POOL_SIZE", 20))
+        max_overflow = int(os.getenv("DB_MAX_OVERFLOW", 25))
+        pool_timeout = int(os.getenv("DB_POOL_TIMEOUT", 120))
+        pool_recycle = int(os.getenv("DB_POOL_RECYCLE", 3600))
+        read_timeout_env = int(os.getenv("DB_READ_TIMEOUT", 300))
+        write_timeout_env = int(os.getenv("DB_WRITE_TIMEOUT", 300))
+
         # Crear una clave única para esta conexión
         connection_key = f"{user}@{host}:{port}/{database}"
         current_time = time.time()
@@ -83,8 +86,8 @@ class Conexion:
                     "client_flag": pymysql.constants.CLIENT.MULTI_STATEMENTS,
                     # Configuración de timeout para evitar conexiones bloqueadas
                     "connect_timeout": 60,
-                    "read_timeout": 300,  # 5 minutos
-                    "write_timeout": 300,  # 5 minutos
+                    "read_timeout": read_timeout_env,  # por defecto 5 minutos (ajustable)
+                    "write_timeout": write_timeout_env,  # por defecto 5 minutos (ajustable)
                 }
 
                 # Crear engine con configuración optimizada para conexiones frecuentes

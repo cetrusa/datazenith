@@ -131,16 +131,23 @@ LOGGING = {
 # CELERY_TASK_TIME_LIMIT = 7200
 # CELERY_TASK_EAGER_PROPAGATES = True
 
+import os
+RQ_DEFAULT_TIMEOUT = int(os.getenv("RQ_DEFAULT_TIMEOUT", 28800))  # 8h por defecto
+RQ_RESULT_TTL = int(os.getenv("RQ_RESULT_TTL", 86400))  # 24h
+RQ_FAILURE_TTL = int(os.getenv("RQ_FAILURE_TTL", 86400))  # 24h
+
 RQ_QUEUES = {
     "default": {
         "HOST": "redis",
         "PORT": 6379,
         "DB": 0,
-        "DEFAULT_TIMEOUT": 3600,  # Aumentado a 1 hora
-        "RESULT_TTL": 86400,  # Mantener trabajos completados por 24 horas
-        "FAILURE_TTL": 86400,  # Mantener trabajos fallidos por 24 horas
-        "JOB_TIMEOUT": 3600,  # Tiempo máximo de ejecución de job: 1 hora
-        "CONNECTION_TIMEOUT": 30,  # Timeout de conexión a Redis en segundos
+        # Nota: Las tareas ya especifican timeout explícito (p.ej. 7200s). Este DEFAULT_TIMEOUT
+        # es un límite superior por defecto y debe ser >= al timeout especificado en los @job.
+        "DEFAULT_TIMEOUT": RQ_DEFAULT_TIMEOUT,
+        "RESULT_TTL": RQ_RESULT_TTL,
+        "FAILURE_TTL": RQ_FAILURE_TTL,
+        # "JOB_TIMEOUT": RQ_DEFAULT_TIMEOUT,  # Opcional: mantener igual al default
+        "CONNECTION_TIMEOUT": 30,
     },
 }
 
@@ -149,3 +156,6 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 FILE_UPLOAD_MAX_MEMORY_SIZE = 104857600  # 100 MB
 DATA_UPLOAD_MAX_MEMORY_SIZE = 104857600  # 100 MB
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+
+# Desactivar X-Accel-Redirect por defecto para no requerir configuración adicional en Nginx
+USE_X_ACCEL_REDIRECT = False
