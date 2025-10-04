@@ -1244,6 +1244,7 @@ class CheckTaskStatusView(BaseView):
                     return JsonResponse(
                         {
                             "status": "failed",
+                            "state": "FAILED",
                             "result": result,
                             "error_message": error_message,
                             "summary": self._generate_summary(job, result),
@@ -1312,6 +1313,7 @@ class CheckTaskStatusView(BaseView):
                     return JsonResponse(
                         {
                             "status": "completed",
+                            "state": "COMPLETED",
                             "result": result,
                             "progress": 100,
                             "meta": result.get("metadata", {}),
@@ -1326,6 +1328,7 @@ class CheckTaskStatusView(BaseView):
                 return JsonResponse(
                     {
                         "status": "completed",
+                        "state": "COMPLETED",
                         "result": result,
                         "progress": 100,
                         "meta": result.get("metadata", {}),
@@ -1353,6 +1356,7 @@ class CheckTaskStatusView(BaseView):
                 return JsonResponse(
                     {
                         "status": "failed",
+                        "state": "FAILED",
                         "result": job.result,
                         "error_info": error_info,
                     },
@@ -1372,7 +1376,7 @@ class CheckTaskStatusView(BaseView):
                     if "stage" in job.meta:
                         stage = job.meta.get("stage")
                     if "status" in job.meta:
-                        stage = job.meta.get("status")
+                        meta["status"] = job.meta.get("status")
 
                 file_ready = False
                 if hasattr(job, "meta") and job.meta and "file_path" in job.meta:
@@ -1411,6 +1415,7 @@ class CheckTaskStatusView(BaseView):
                     )
                     status_data = {
                         "status": "partial_success",
+                        "state": "PARTIAL_SUCCESS",
                         "progress": 100,
                         "stage": "Archivo generado, procesando metadatos",
                         "meta": meta,
@@ -1421,6 +1426,7 @@ class CheckTaskStatusView(BaseView):
                 else:
                     status_data = {
                         "status": job.get_status(),
+                        "state": job.get_status().upper(),
                         "progress": progress,
                         "stage": stage,
                         "meta": meta,
@@ -1442,6 +1448,7 @@ class CheckTaskStatusView(BaseView):
             return JsonResponse(
                 {
                     "status": "notfound",
+                    "state": "NOTFOUND",
                     "error": "Tarea no encontrada. Puede que haya expirado o se haya completado hace mucho tiempo.",
                 }
             )
@@ -1451,7 +1458,7 @@ class CheckTaskStatusView(BaseView):
             logger.error(
                 f"Error al comprobar estado de tarea {task_id}: {str(e)}\n{traceback.format_exc()}"
             )
-            return JsonResponse({"status": "error", "error": str(e)}, status=500)
+            return JsonResponse({"status": "error", "state": "ERROR", "error": str(e)}, status=500)
 
     def _get_readable_status(self, status):
         """Convierte el estado de la tarea en un texto más amigable"""
@@ -1681,8 +1688,11 @@ class ReporteGenericoPage(BaseView):
         # Permitir actualización solo de base de datos (AJAX o selector)
         if database_name and not (IdtReporteIni and IdtReporteFin):
             request.session["database_name"] = database_name
+            # Limpiar caché de configuración para reflejar el cambio inmediatamente
+            from scripts.config import ConfigBasic
+            ConfigBasic.clear_cache(database_name=database_name)
             print(
-                "[ReporteGenericoPage] post: Solo cambio de base de datos, actualizado en sesión."
+                "[ReporteGenericoPage] post: Solo cambio de base de datos, actualizado en sesión y caché limpiado."
             )
             return JsonResponse(
                 {
@@ -1700,6 +1710,14 @@ class ReporteGenericoPage(BaseView):
                 status=400,
             )
         try:
+            # Limpiar caché de configuración para esta base de datos antes de encolar
+            # Esto asegura que la tarea use la configuración más reciente
+            from scripts.config import ConfigBasic
+            ConfigBasic.clear_cache(database_name=database_name)
+            print(
+                f"[ReporteGenericoPage] post: Caché limpiado para database_name={database_name}"
+            )
+            
             print(
                 f"[ReporteGenericoPage] post: Llamando a task_func.delay con database_name={database_name}, IdtReporteIni={IdtReporteIni}, IdtReporteFin={IdtReporteFin}, user_id={user_id}, id_reporte={self.id_reporte}, batch_size={batch_size}"
             )

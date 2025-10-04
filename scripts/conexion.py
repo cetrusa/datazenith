@@ -1,11 +1,16 @@
-import sys
-import time
+import hashlib
 import logging
-import sqlalchemy
-import pymysql
-from sqlalchemy.pool import QueuePool
+import os
+import time
+from contextlib import suppress
 from threading import Lock
+from typing import Any, Dict, Optional
+
+import pymysql
+import sqlalchemy
+from cachetools import TTLCache  # type: ignore[import]
 from sqlalchemy.exc import OperationalError
+from sqlalchemy.pool import QueuePool
 
 
 class Conexion:
@@ -15,10 +20,49 @@ class Conexion:
     """
 
     # Caché de conexiones para reutilizar engines entre llamadas
-    _connection_cache = {}
-    _cache_timeout = 1800  # 30 minutos en segundos
-    _last_connection_time = {}
-    _cache_lock = Lock()  # Lock para operaciones thread-safe en la caché
+    _cache_lock = Lock()
+    _cache_ttl_seconds = 300
+    _connection_cache: TTLCache[str, sqlalchemy.engine.Engine] = TTLCache(
+        maxsize=256, ttl=_cache_ttl_seconds
+    )
+    _connection_labels: Dict[str, str] = {}
+    _connection_timestamps: Dict[str, float] = {}
+
+    @classmethod
+    def _build_cache_key(cls, label: str) -> str:
+        return hashlib.sha1(label.encode("utf-8")).hexdigest()
+
+    @classmethod
+    def _store_engine(
+        cls,
+        cache_key: str,
+        engine: sqlalchemy.engine.Engine,
+        label: str,
+    ) -> None:
+        cls._connection_cache[cache_key] = engine
+        cls._connection_labels[cache_key] = label
+        cls._connection_timestamps[cache_key] = time.time()
+
+    @classmethod
+    def _get_cached_engine(
+        cls, cache_key: str
+    ) -> Optional[sqlalchemy.engine.Engine]:
+        try:
+            engine = cls._connection_cache[cache_key]
+        except KeyError:
+            cls._connection_labels.pop(cache_key, None)
+            cls._connection_timestamps.pop(cache_key, None)
+            return None
+        return engine
+
+    @classmethod
+    def _evict_cached_engine(cls, cache_key: str) -> None:
+        engine = cls._connection_cache.pop(cache_key, None)
+        if engine is not None:
+            with suppress(Exception):
+                engine.dispose()
+        cls._connection_labels.pop(cache_key, None)
+        cls._connection_timestamps.pop(cache_key, None)
 
     @staticmethod
     def ConexionMariadb3(user, password, host, port, database):
@@ -35,68 +79,75 @@ class Conexion:
         Returns:
             Engine: Objeto Engine de SQLAlchemy para ejecutar consultas.
         """
-        import os
-        # Permitir configuración dinámica por variables de entorno
+        def _timeout_from_env(
+            env_name: str, default: int, minimum: int, maximum: int
+        ) -> int:
+            raw_value = os.getenv(env_name)
+            if raw_value is None:
+                return default
+            try:
+                value = int(raw_value)
+            except ValueError:
+                logging.warning(
+                    "Valor de timeout inválido para %s: %s. Usando valor por defecto %s.",
+                    env_name,
+                    raw_value,
+                    default,
+                )
+                return default
+            return max(minimum, min(value, maximum))
+
         pool_size = int(os.getenv("DB_POOL_SIZE", 20))
         max_overflow = int(os.getenv("DB_MAX_OVERFLOW", 25))
         pool_timeout = int(os.getenv("DB_POOL_TIMEOUT", 120))
-        # RDS suele cortar a las 8h; reciclamos antes (valor por defecto seguro)
         pool_recycle = int(os.getenv("DB_POOL_RECYCLE", 28000))
-        # Timeouts por defecto elevados para cargas pesadas (hasta 30 min)
-        connect_timeout_env = int(os.getenv("DB_CONNECT_TIMEOUT", 60))
-        read_timeout_env = int(os.getenv("DB_READ_TIMEOUT", 1800))
-        write_timeout_env = int(os.getenv("DB_WRITE_TIMEOUT", 1800))
 
-        # Crear una clave única para esta conexión
-        connection_key = f"{user}@{host}:{port}/{database}"
-        current_time = time.time()
+        connect_timeout = _timeout_from_env("DB_CONNECT_TIMEOUT", 20, 5, 60)
+        read_timeout = _timeout_from_env("DB_READ_TIMEOUT", 120, 30, 120)
+        write_timeout = _timeout_from_env("DB_WRITE_TIMEOUT", 120, 30, 120)
 
-        # Usar lock para asegurar que no haya conflictos de escritura en la caché
+        connection_label = f"{user}@{host}:{port}/{database}"
+        cache_key = Conexion._build_cache_key(connection_label)
+
         with Conexion._cache_lock:
-            # Verificar si ya existe una conexión en caché y no ha expirado
-            if (
-                connection_key in Conexion._connection_cache
-                and (
-                    current_time - Conexion._last_connection_time.get(connection_key, 0)
-                )
-                < Conexion._cache_timeout
-            ):
-                logging.debug(f"Reutilizando conexión existente para {connection_key}")
-                # Hacer ping para verificar conexión antes de retornarla
+            engine = Conexion._get_cached_engine(cache_key)
+            if engine is not None:
                 try:
-                    engine = Conexion._connection_cache[connection_key]
-                    # Intentar una consulta simple para verificar conexión
-                    with engine.connect() as conn:
-                        conn.execute(sqlalchemy.text("SELECT 1"))
-                    # Actualizar timestamp para extender vida de la conexión
-                    Conexion._last_connection_time[connection_key] = current_time
-                    return engine
-                except Exception as e:
-                    logging.warning(
-                        f"Conexión en caché inválida para {connection_key}: {e}"
+                    with engine.connect():
+                        pass
+                    Conexion._connection_timestamps[cache_key] = time.time()
+                    logging.debug(
+                        "Reutilizando conexión existente para %s (cache_key=%s)",
+                        connection_label,
+                        cache_key,
                     )
-                    # Eliminar conexión fallida de la caché
-                    Conexion.clear_connection_cache(connection_key)
-                    # Continuar para crear una nueva
+                    return engine
+                except Exception as exc:
+                    logging.warning(
+                        "Conexión en caché inválida para %s: %s. Regenerando...",
+                        connection_label,
+                        exc,
+                    )
+                    Conexion._evict_cached_engine(cache_key)
 
-            # Si no hay conexión en caché, ha expirado o falló, crear una nueva
-            logging.debug(f"Creando nueva conexión para {connection_key}")
+            logging.debug(
+                "Creando nueva conexión para %s (cache_key=%s)",
+                connection_label,
+                cache_key,
+            )
+
             try:
-                # Configuración optimizada para conexiones
                 connect_args = {
                     "charset": "utf8mb4",
                     "autocommit": True,
-                    # Optimizaciones para reducir latencia
                     "client_flag": pymysql.constants.CLIENT.MULTI_STATEMENTS,
-                    # Configuración de timeout para evitar conexiones bloqueadas
-                    "connect_timeout": connect_timeout_env,
-                    "read_timeout": read_timeout_env,  # ajustable por entorno
-                    "write_timeout": write_timeout_env,  # ajustable por entorno
+                    "connect_timeout": connect_timeout,
+                    "read_timeout": read_timeout,
+                    "write_timeout": write_timeout,
                 }
 
-                # Soporte opcional para SSL (por ejemplo, en RDS)
                 if os.getenv("DB_SSL_MODE", "false").lower() == "true":
-                    ssl_args = {}
+                    ssl_args: Dict[str, str] = {}
                     ssl_ca = os.getenv("DB_SSL_CA")
                     ssl_cert = os.getenv("DB_SSL_CERT")
                     ssl_key = os.getenv("DB_SSL_KEY")
@@ -106,10 +157,8 @@ class Conexion:
                         ssl_args["cert"] = ssl_cert
                     if ssl_key:
                         ssl_args["key"] = ssl_key
-                    # Si no se proveen archivos, habilita TLS sin verificación estricta
                     connect_args["ssl"] = ssl_args or {}
 
-                # Crear engine con configuración optimizada para conexiones frecuentes
                 engine = sqlalchemy.create_engine(
                     sqlalchemy.engine.url.URL.create(
                         drivername="mysql+pymysql",
@@ -120,36 +169,37 @@ class Conexion:
                         database=database,
                     ),
                     connect_args=connect_args,
-                    # Configuración optimizada del pool de conexiones
-                    poolclass=QueuePool,  # Especificar explícitamente QueuePool para mejor control
-                    pool_size=pool_size,  # Dinámico por entorno
-                    max_overflow=max_overflow,  # Dinámico por entorno
-                    pool_timeout=pool_timeout,  # Dinámico por entorno
-                    pool_recycle=pool_recycle,  # Dinámico por entorno
-                    pool_pre_ping=True,  # Verificar si las conexiones están activas
-                    echo=False,  # No mostrar SQL en logs (optimiza rendimiento)
-                    echo_pool=False,  # No mostrar actividad del pool en logs
-                    future=True,  # Usar funcionalidades más recientes y optimizadas
-                    pool_reset_on_return="commit",  # Comportamiento más seguro para el estado de conexiones
+                    poolclass=QueuePool,
+                    pool_size=pool_size,
+                    max_overflow=max_overflow,
+                    pool_timeout=pool_timeout,
+                    pool_recycle=pool_recycle,
+                    pool_pre_ping=True,
+                    echo=False,
+                    echo_pool=False,
+                    future=True,
+                    pool_reset_on_return="commit",
                 )
-                # Aplicar opciones de ejecución por defecto (streaming) para evitar cargas en memoria
+
                 try:
                     engine = engine.execution_options(stream_results=True)
-                except Exception as ex:
-                    logging.debug(f"No se pudieron aplicar execution_options al engine: {ex}")
-                # Guardar la conexión en caché
-                Conexion._connection_cache[connection_key] = engine
-                Conexion._last_connection_time[connection_key] = current_time
+                except Exception as exc:
+                    logging.debug(
+                        "No se pudieron aplicar execution_options al engine de %s: %s",
+                        connection_label,
+                        exc,
+                    )
+
+                Conexion._store_engine(cache_key, engine, connection_label)
                 return engine
-            except Exception as e:
-                # Evitar deadlocks: no llamar a métodos que bloqueen nuevamente el lock aquí
+            except Exception as exc:
                 pool_snapshot = {"total_cached": len(Conexion._connection_cache)}
                 logging.error(
-                    f"Error al conectar con la base de datos {database} en {host}: {e}. "
-                    f"Estado de caché/pool: {pool_snapshot}"
-                )
-                print(
-                    f"Error al conectar con la base de datos {database} en {host}: {e}"
+                    "Error al conectar con la base de datos %s en %s: %s. Estado de caché/pool: %s",
+                    database,
+                    host,
+                    exc,
+                    pool_snapshot,
                 )
                 raise
 
@@ -160,21 +210,50 @@ class Conexion:
         """
         with Conexion._cache_lock:
             metrics = []
-            for key, engine in Conexion._connection_cache.items():
-                pool = getattr(engine, "pool", None)
-                pool_data = {}
-                if pool and hasattr(pool, "size") and hasattr(pool, "checkedin"):
-                    pool_data = {
-                        "size": pool.size(),
-                        "checked_in": pool.checkedin(),
-                        "checked_out": pool.checkedout(),
-                        "overflow": pool.overflow(),
-                    }
-                metrics.append({
-                    "connection_key": key,
-                    "pool": pool_data
-                })
-            return metrics
+            snapshot = list(Conexion._connection_cache.items())
+
+        for cache_key, engine in snapshot:
+            pool = getattr(engine, "pool", None)
+            if not pool:
+                continue
+
+            labels = {
+                "connection": Conexion._connection_labels.get(cache_key, cache_key)
+            }
+
+            try:
+                metrics.extend(
+                    [
+                        {
+                            "metric": "db_pool_size",
+                            "labels": labels.copy(),
+                            "value": pool.size(),
+                        },
+                        {
+                            "metric": "db_pool_checked_in",
+                            "labels": labels.copy(),
+                            "value": pool.checkedin(),
+                        },
+                        {
+                            "metric": "db_pool_checked_out",
+                            "labels": labels.copy(),
+                            "value": pool.checkedout(),
+                        },
+                        {
+                            "metric": "db_pool_overflow",
+                            "labels": labels.copy(),
+                            "value": pool.overflow(),
+                        },
+                    ]
+                )
+            except Exception as exc:
+                logging.debug(
+                    "No se pudieron obtener métricas del pool para %s: %s",
+                    labels.get("connection"),
+                    exc,
+                )
+
+        return metrics
 
     @staticmethod
     def ConexionSqlite(db_path: str = "mydata.db"):
@@ -187,26 +266,30 @@ class Conexion:
         Returns:
             Engine: Objeto Engine de SQLAlchemy para ejecutar consultas.
         """
-        connection_key = f"sqlite:///{db_path}"
-        current_time = time.time()
+        connection_label = f"sqlite:///{db_path}"
+        cache_key = Conexion._build_cache_key(connection_label)
+
         with Conexion._cache_lock:
-            if (
-                connection_key in Conexion._connection_cache
-                and (
-                    current_time - Conexion._last_connection_time.get(connection_key, 0)
-                )
-                < Conexion._cache_timeout
-            ):
+            engine = Conexion._get_cached_engine(cache_key)
+            if engine is not None:
                 try:
-                    engine = Conexion._connection_cache[connection_key]
-                    with engine.connect() as conn:
-                        conn.execute(sqlalchemy.text("SELECT 1"))
-                    Conexion._last_connection_time[connection_key] = current_time
+                    with engine.connect():
+                        pass
+                    Conexion._connection_timestamps[cache_key] = time.time()
+                    logging.debug(
+                        "Reutilizando conexión SQLite para %s (cache_key=%s)",
+                        connection_label,
+                        cache_key,
+                    )
                     return engine
-                except Exception as e:
-                    logging.warning(f"Conexión SQLite en caché inválida: {e}")
-                    Conexion.clear_connection_cache(connection_key)
-            # Crear nueva conexión SQLite
+                except Exception as exc:
+                    logging.warning(
+                        "Conexión SQLite en caché inválida (%s): %s",
+                        connection_label,
+                        exc,
+                    )
+                    Conexion._evict_cached_engine(cache_key)
+
             try:
                 engine = sqlalchemy.create_engine(
                     f"sqlite:///{db_path}",
@@ -224,12 +307,10 @@ class Conexion:
                     echo=False,
                     future=True,
                 )
-                Conexion._connection_cache[connection_key] = engine
-                Conexion._last_connection_time[connection_key] = current_time
+                Conexion._store_engine(cache_key, engine, connection_label)
                 return engine
-            except Exception as e:
-                logging.error(f"Error al conectar con SQLite {db_path}: {e}")
-                print(f"Error al conectar con SQLite {db_path}: {e}")
+            except Exception as exc:
+                logging.error("Error al conectar con SQLite %s: %s", db_path, exc)
                 raise
 
     @staticmethod
@@ -260,8 +341,8 @@ class Conexion:
             try:
                 engine = Conexion.ConexionMariadb3(user, password, host, port, database)
                 # Probar la conexión con una consulta simple
-                with engine.connect() as conn:
-                    conn.execute(sqlalchemy.text("SELECT 1"))
+                with engine.connect():
+                    pass
                 return engine
             except Exception as e:
                 last_error = e
@@ -326,30 +407,25 @@ class Conexion:
                 Si no se proporciona, se limpian todas las conexiones.
         """
         with Conexion._cache_lock:
-            if connection_key and connection_key in Conexion._connection_cache:
-                # Cerrar explícitamente la conexión antes de eliminarla
-                try:
-                    Conexion._connection_cache[connection_key].dispose()
+            if connection_key:
+                cache_key = (
+                    connection_key
+                    if connection_key in Conexion._connection_cache
+                    else Conexion._build_cache_key(connection_key)
+                )
+                if cache_key in Conexion._connection_cache:
+                    Conexion._evict_cached_engine(cache_key)
                     logging.info(
-                        f"Conexión {connection_key} cerrada y eliminada de la caché"
+                        "Conexión %s (cache_key=%s) eliminada de la caché",
+                        Conexion._connection_labels.get(cache_key, connection_key),
+                        cache_key,
                     )
-                except Exception as e:
-                    logging.warning(f"Error al cerrar conexión {connection_key}: {e}")
-
-                del Conexion._connection_cache[connection_key]
-                if connection_key in Conexion._last_connection_time:
-                    del Conexion._last_connection_time[connection_key]
-            elif not connection_key:
-                # Cerrar todas las conexiones
-                for key, engine in list(Conexion._connection_cache.items()):
-                    try:
-                        engine.dispose()
-                        logging.info(f"Conexión {key} cerrada")
-                    except Exception as e:
-                        logging.warning(f"Error al cerrar conexión {key}: {e}")
-
+            else:
+                for cache_key in list(Conexion._connection_cache.keys()):
+                    Conexion._evict_cached_engine(cache_key)
                 Conexion._connection_cache.clear()
-                Conexion._last_connection_time.clear()
+                Conexion._connection_labels.clear()
+                Conexion._connection_timestamps.clear()
                 logging.info("Caché de conexiones limpiada completamente")
 
     @staticmethod
@@ -367,14 +443,12 @@ class Conexion:
                 "connections": {},
             }
 
-            for key in Conexion._connection_cache:
-                age = current_time - Conexion._last_connection_time.get(
-                    key, current_time
-                )
-                engine = Conexion._connection_cache[key]
+            for cache_key, engine in list(Conexion._connection_cache.items()):
+                label = Conexion._connection_labels.get(cache_key, cache_key)
+                timestamp = Conexion._connection_timestamps.get(cache_key)
+                age = current_time - timestamp if timestamp else None
 
-                # Intentar obtener métricas del pool si está disponible
-                pool_status = {}
+                pool_status: Dict[str, Any] = {}
                 try:
                     pool = engine.pool
                     if hasattr(pool, "size") and hasattr(pool, "checkedin"):
@@ -384,15 +458,21 @@ class Conexion:
                             "overflow": pool.overflow(),
                             "checkedout": pool.checkedout(),
                         }
-                except:
-                    pass
+                except Exception as exc:
+                    logging.debug(
+                        "No se pudieron obtener métricas de pool para %s: %s",
+                        label,
+                        exc,
+                    )
 
-                status["connections"][key] = {
-                    "age_seconds": round(age, 2),
+                status["connections"][label] = {
+                    "age_seconds": round(age, 2) if age is not None else None,
                     "expires_in": (
-                        round(Conexion._cache_timeout - age, 2)
-                        if age < Conexion._cache_timeout
+                        round(Conexion._cache_ttl_seconds - age, 2)
+                        if age is not None and age < Conexion._cache_ttl_seconds
                         else "expired"
+                        if age is not None
+                        else None
                     ),
                     "pool": pool_status,
                 }

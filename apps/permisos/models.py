@@ -36,6 +36,7 @@ class PermisosBarra(models.Model):
             ("amovildesk", _("Puede ver Informe Amovildesk")),
             ("reportes", _("Puede ver Reportes")),
             ("cargue_infoventas", _("Cargar Archivo Infoventas")),
+            ("cargue_maestras", _("Cargar Tablas Maestras")),
         )
         verbose_name = _("Permiso")
         verbose_name_plural = _("Permisos")

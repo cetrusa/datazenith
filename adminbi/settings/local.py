@@ -46,6 +46,10 @@ STATICFILES_DIRS = [BASE_DIR.child("static")]
 MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR.child("media")
 
+# Límites de tamaño para uploads grandes (200MB)
+DATA_UPLOAD_MAX_MEMORY_SIZE = 200 * 1024 * 1024  # 200 MB
+FILE_UPLOAD_MAX_MEMORY_SIZE = 200 * 1024 * 1024  # 200 MB
+
 # EMAIL SETTINGS
 EMAIL_USE_TLS = True
 EMAIL_HOST = "smtp.gmail.com"

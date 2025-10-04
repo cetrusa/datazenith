@@ -16,12 +16,23 @@ class CheckCargueTaskStatusView(View):
     Compatible con tasks que retornan dict estándar (success, message, warnings, etc).
     """
 
+    def get(self, request, *args, **kwargs):
+        """Maneja peticiones GET para polling de estado"""
+        task_id = request.GET.get("task_id") or request.session.get("task_id")
+        return self._check_task_status(task_id)
+
     def post(self, request, *args, **kwargs):
+        """Maneja peticiones POST para verificar estado"""
         task_id = request.POST.get("task_id") or request.session.get("task_id")
-        print(f"[CHECKTASKSTATUS] POST recibido. task_id={task_id}")
+        return self._check_task_status(task_id)
+
+    def _check_task_status(self, task_id):
+        """Lógica común para verificar el estado de una tarea"""
+        print(f"[CHECKTASKSTATUS] Verificando estado. task_id={task_id}")
         if not task_id:
             print("[CHECKTASKSTATUS][ERROR] No task ID provided")
             return JsonResponse({"error": "No task ID provided"}, status=400)
+        
         connection = get_connection()
         try:
             job = Job.fetch(task_id, connection=connection)

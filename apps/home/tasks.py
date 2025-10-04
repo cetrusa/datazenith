@@ -2,8 +2,9 @@ import os
 import time
 import logging
 import traceback
+from datetime import datetime
 from functools import wraps
-from typing import Dict, Any, Optional, Callable, TypeVar
+from typing import Dict, Any, Optional, Callable, TypeVar, List
 
 # RQ Imports
 from django_rq import job
@@ -16,8 +17,10 @@ from scripts.extrae_bi.cargue_zip import CargueZip
 from scripts.extrae_bi.interface import InterfaceContable
 from scripts.extrae_bi.matrix import MatrixVentas
 from scripts.extrae_bi.plano import InterfacePlano
+from scripts.cargue.cargue_infoproducto import ArchivoFuente, CargueInfoProducto
 from scripts.cargue.cargue_infoproveedor import CargueInfoVentas
 from scripts.cargue.cargue_infoventas_insert import CargueInfoVentasInsert
+from scripts.extrae_bi.cargue_maestras import cargar_tablas_maestras, cargar_tabla_individual
 
 # from scripts.StaticPage import StaticPage # No parece usarse
 from scripts.extrae_bi.cargue_plano_tsol import CarguePlano
@@ -835,4 +838,316 @@ def cargue_infoventas_task(
                 )
 
     print(f"[cargue_infoventas_task] FIN: {resultado}")
+    return resultado
+
+
+@job("default", timeout=DEFAULT_TIMEOUT, result_ttl=3600)
+@task_handler
+def cargue_maestras_task(database_name, tablas_seleccionadas=None):
+    """
+    Tarea RQ para cargar tablas maestras (dimensiones) desde archivos Excel.
+    
+    Args:
+        database_name: Nombre de la base de datos
+        tablas_seleccionadas: Lista de tablas específicas a cargar. Si es None, carga todas.
+    """
+    job = get_current_job()
+    job_id = job.id if job else None
+
+    print(f"[cargue_maestras_task] INICIO: database_name={database_name}, tablas_seleccionadas={tablas_seleccionadas}, job_id={job_id}")
+
+    resultado = {
+        "status": "error",
+        "message": "",
+        "data": {},
+        "total_tiempo": 0,
+        "job_id": job_id,
+        "success": False
+    }
+
+    start_time = time.time()
+
+    try:
+        # Validar archivos Excel requeridos
+        archivos_requeridos = [
+            "media/PROVEE-TSOL.xlsx",
+            "media/023-COLGATE PALMOLIVE.xlsx", 
+            "media/rutero_distrijass_total.xlsx"
+        ]
+        
+        archivos_faltantes = []
+        for archivo in archivos_requeridos:
+            if not os.path.exists(archivo):
+                archivos_faltantes.append(archivo)
+        
+        if archivos_faltantes:
+            raise FileNotFoundError(f"Archivos faltantes: {', '.join(archivos_faltantes)}")
+
+        # Actualizar progreso inicial
+        update_job_progress(job_id, 10, "processing", 
+                          meta={"stage": "Validando archivos Excel"})
+
+        # Cargar tablas
+        if tablas_seleccionadas:
+            # Carga individual de tablas seleccionadas
+            print(f"[cargue_maestras_task] Cargando tablas específicas: {tablas_seleccionadas}")
+            
+            resultados_tablas = {}
+            total_tablas = len(tablas_seleccionadas)
+            
+            for i, tabla in enumerate(tablas_seleccionadas):
+                try:
+                    progreso = 20 + (i * 70 // total_tablas)
+                    update_job_progress(job_id, progreso, "processing", 
+                                      meta={"stage": f"Cargando tabla: {tabla}"})
+                    
+                    registros = cargar_tabla_individual(database_name, tabla)
+                    resultados_tablas[tabla] = {
+                        'status': 'exitoso',
+                        'registros': registros
+                    }
+                    print(f"[cargue_maestras_task] Tabla {tabla} cargada exitosamente: {registros} registros")
+                    
+                except Exception as e:
+                    resultados_tablas[tabla] = {
+                        'status': 'error',
+                        'error': str(e)
+                    }
+                    print(f"[cargue_maestras_task] Error cargando tabla {tabla}: {e}")
+            
+            resultado["data"] = resultados_tablas
+        else:
+            # Carga completa de todas las tablas
+            print(f"[cargue_maestras_task] Cargando todas las tablas maestras")
+            
+            update_job_progress(job_id, 20, "processing", 
+                              meta={"stage": "Cargando todas las tablas maestras"})
+            
+            def progress_callback(progreso, mensaje, meta_extra=None):
+                meta = {"stage": mensaje}
+                if meta_extra:
+                    meta.update(meta_extra)
+                update_job_progress(job_id, progreso, "processing", meta=meta)
+            
+            # Importar y usar la clase de cargue directamente para tener control del progreso
+            from scripts.extrae_bi.cargue_maestras import CargueTablasMaestras
+            try:
+                cargador = CargueTablasMaestras(database_name)
+                resultados_completos = cargador.cargar_todas_las_tablas(progress_callback)
+                resultado["data"] = resultados_completos
+            except Exception as e:
+                print(f"[cargue_maestras_task] Error en carga completa: {e}")
+                resultado["data"] = {
+                    'status': 'error',
+                    'error': str(e),
+                    'detalles': getattr(e, 'args', [''])[0]
+                }
+
+        # Finalizar
+        resultado["total_tiempo"] = time.time() - start_time
+        
+        # Verificar si hubo errores
+        errores = [tabla for tabla, info in resultado["data"].items() 
+                  if info.get('status') == 'error']
+        exitosos = [tabla for tabla, info in resultado["data"].items() 
+                   if info.get('status') == 'exitoso']
+        
+        if errores:
+            update_job_progress(job_id, 100, "completed_with_errors", 
+                              meta={"stage": f"Completado con errores: {len(errores)} fallaron, {len(exitosos)} exitosos"})
+            resultado["status"] = "completed_with_errors"
+            resultado["message"] = f"Proceso completado con errores en {len(errores)} tablas: {', '.join(errores)}"
+            resultado["success"] = False
+        else:
+            update_job_progress(job_id, 100, "completed", 
+                              meta={"stage": f"Completado exitosamente: {len(exitosos)} tablas cargadas"})
+            resultado["status"] = "success"
+            resultado["message"] = f"Todas las tablas cargadas exitosamente: {', '.join(exitosos)}"
+            resultado["success"] = True
+
+        print(f"[cargue_maestras_task] COMPLETADO: {resultado['status']} - {resultado['message']}")
+
+    except Exception as e:
+        resultado["total_tiempo"] = time.time() - start_time
+        resultado["message"] = f"Error en carga de maestras: {str(e)}"
+        resultado["success"] = False
+        
+        update_job_progress(job_id, 100, "failed", 
+                          meta={"stage": f"Error: {str(e)}"})
+        
+        print(f"[cargue_maestras_task] ERROR: {str(e)}")
+        logger.error(f"Error en cargue_maestras_task: {str(e)}", exc_info=True)
+
+    print(f"[cargue_maestras_task] FIN: {resultado}")
+    return resultado
+
+
+@job("default", timeout=DEFAULT_TIMEOUT, result_ttl=3600)
+@task_handler
+def cargue_infoproducto_task(
+    database_name: str,
+    fecha_reporte: str,
+    archivos: List[Dict[str, Any]],
+):
+    """Procesa archivos InfoProducto y los carga a la tabla fact_infoproducto."""
+
+    job = get_current_job()
+    job_id = job.id if job else None
+
+    update_job_progress(
+        job_id,
+        5,
+        status="processing",
+        meta={"stage": "Validando parámetros InfoProducto"},
+    )
+
+    try:
+        fecha_obj = datetime.strptime(fecha_reporte, "%Y-%m-%d").date()
+    except ValueError as exc:
+        raise ValueError(
+            f"Formato de fecha inválido '{fecha_reporte}'. Se espera AAAA-MM-DD."
+        ) from exc
+
+    if not archivos:
+        raise ValueError("No se proporcionaron archivos para el cargue de InfoProducto.")
+
+    fuentes: List[ArchivoFuente] = []
+    for item in archivos:
+        path = item.get("path")
+        if not path:
+            raise ValueError("Cada archivo enviado debe incluir la ruta 'path'.")
+        if not os.path.exists(path):
+            raise FileNotFoundError(f"No se encontró el archivo a procesar: {path}")
+
+        fuente_id = item.get("fuente_id")
+        if not fuente_id:
+            raise ValueError("Cada archivo debe definir 'fuente_id'.")
+
+        fuentes.append(
+            ArchivoFuente(
+                path=path,
+                original_name=item.get("original_name", os.path.basename(path)),
+                fuente_id=fuente_id,
+                fuente_nombre=item.get(
+                    "fuente_nombre", fuente_id.replace("_", " ").title()
+                ),
+                sede=item.get("sede"),
+            )
+        )
+
+    if not fuentes:
+        raise ValueError("Ninguno de los archivos aportados es válido para el cargue.")
+
+    def progress_callback(percent: int, stage: str, meta: Optional[Dict[str, Any]] = None):
+        meta_data = {"stage": stage}
+        if meta:
+            meta_data.update(meta)
+        update_job_progress(
+            job_id,
+            max(0, min(100, int(percent))),
+            status="processing",
+            meta=meta_data,
+        )
+
+    cargador = CargueInfoProducto(
+        database_name=database_name,
+        fecha_reporte=fecha_obj,
+        progress_callback=progress_callback,
+    )
+
+    update_job_progress(
+        job_id,
+        15,
+        status="processing",
+        meta={"stage": "Iniciando lectura de archivos InfoProducto"},
+    )
+
+    resultado = cargador.cargar_archivos(fuentes)
+
+    update_job_progress(
+        job_id,
+        100,
+        status="completed" if resultado.get("success") else "failed",
+        meta={
+            "stage": resultado.get("metadata", {}).get(
+                "stage", "Carga InfoProducto finalizada"
+            ),
+            "resultado": resultado,
+        },
+    )
+
+    return resultado
+
+
+@job("default", timeout=DEFAULT_TIMEOUT, result_ttl=3600)
+@task_handler  
+def cargue_tabla_individual_task(database_name, nombre_tabla):
+    """
+    Tarea RQ para cargar una tabla maestra específica.
+    
+    Args:
+        database_name: Nombre de la base de datos
+        nombre_tabla: Nombre de la tabla a cargar
+    """
+    job = get_current_job()
+    job_id = job.id if job else None
+
+    print(f"[cargue_tabla_individual_task] INICIO: database_name={database_name}, tabla={nombre_tabla}, job_id={job_id}")
+
+    resultado = {
+        "status": "error",
+        "message": "",
+        "data": {},
+        "job_id": job_id
+    }
+
+    start_time = time.time()
+
+    try:
+        update_job_progress(job_id, 10, "processing", 
+                          meta={"stage": f"Iniciando carga de tabla: {nombre_tabla}"})
+
+        # Validar archivos Excel
+        archivos_requeridos = [
+            "media/PROVEE-TSOL.xlsx",
+            "media/023-COLGATE PALMOLIVE.xlsx", 
+            "media/rutero_distrijass_total.xlsx"
+        ]
+        
+        for archivo in archivos_requeridos:
+            if not os.path.exists(archivo):
+                raise FileNotFoundError(f"Archivo requerido no encontrado: {archivo}")
+
+        update_job_progress(job_id, 25, "processing", 
+                          meta={"stage": f"Cargando tabla: {nombre_tabla}"})
+
+        # Cargar tabla específica
+        registros = cargar_tabla_individual(database_name, nombre_tabla)
+        
+        resultado["data"] = {
+            nombre_tabla: {
+                'status': 'exitoso',
+                'registros': registros,
+                'tiempo': time.time() - start_time
+            }
+        }
+        
+        resultado["status"] = "success"
+        resultado["message"] = f"Tabla {nombre_tabla} cargada exitosamente: {registros} registros"
+        
+        update_job_progress(job_id, 100, "completed", 
+                          meta={"stage": f"Completado: {registros} registros cargados"})
+
+        print(f"[cargue_tabla_individual_task] COMPLETADO: {nombre_tabla} - {registros} registros")
+
+    except Exception as e:
+        resultado["message"] = f"Error cargando tabla {nombre_tabla}: {str(e)}"
+        
+        update_job_progress(job_id, 100, "failed", 
+                          meta={"stage": f"Error: {str(e)}"})
+        
+        print(f"[cargue_tabla_individual_task] ERROR: {str(e)}")
+        logger.error(f"Error en cargue_tabla_individual_task para {nombre_tabla}: {str(e)}", exc_info=True)
+
+    print(f"[cargue_tabla_individual_task] FIN: {resultado}")
     return resultado

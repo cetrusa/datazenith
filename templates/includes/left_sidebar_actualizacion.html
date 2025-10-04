@@ -29,6 +29,22 @@
       </li>
       {% endif %}
 
+      {% if perms.permisos.cargue_infoventas %}
+      <li class="nav-item">
+        <a href="{% url 'cargues_app:cargue_infoventas' %}" class="nav-link text-white align-middle px-0">
+          <i class="fas fa-file-upload me-2"></i><span class="ms-1 d-none d-sm-inline">Cargue InfoVentas</span>
+        </a>
+      </li>
+      {% endif %}
+
+      {% if perms.permisos.cargue_maestras or perms.permisos.cargue_infoproducto %}
+      <li class="nav-item">
+        <a href="{% url 'cargues_app:cargue_archivos_maestros' %}" class="nav-link text-white align-middle px-0">
+          <i class="fas fa-database me-2"></i><span class="ms-1 d-none d-sm-inline">Archivos Maestros</span>
+        </a>
+      </li>
+      {% endif %}
+
       <!-- Agrega más elementos de menú aquí según sea necesario -->
     </ul>
 

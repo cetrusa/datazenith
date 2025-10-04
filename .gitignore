@@ -173,6 +173,7 @@ main.py
 requirements copy.txt
 requirements._funcionaltxt
 requirements312.txt
+*.sql
 
 # pytype static type analyzer
 .pytype/
