@@ -74,7 +74,6 @@ def default_permissions_loader(
             UserPermission.objects.filter(
                 user_id=user_id, empresa__name=database_name
             )
-            .select_related("empresa")
             .only("proveedores", "macrozonas")
             .first()
         )

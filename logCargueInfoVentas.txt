@@ -1,0 +1,48 @@
+2025-10-09 04:51:18,201 \U0001f680 Iniciando cargue del archivo: D:\Python\DataZenithBi\Info proveedores 2025\Info proveedores.xlsx
+2025-10-09 04:51:18,201 \u26a0\ufe0f No se pudieron detectar fechas desde el nombre. Se usará el mes actual.
+2025-10-09 04:51:18,202 \U0001f4c5 Rango de fechas detectado: 2025-10-01 \u2192 2025-10-31
+2025-10-09 04:51:18,229 Creando nueva conexión para cetrusa@dbmariam04.chqxl6ahrk6r.us-east-1.rds.amazonaws.com:3307/powerbi_adm (cache_key=33ff95078a8a92efd9e7f3bdeed02e8334069d35)
+2025-10-09 04:51:20,360 Reutilizando conexión existente para cetrusa@dbmariam04.chqxl6ahrk6r.us-east-1.rds.amazonaws.com:3307/powerbi_adm (cache_key=33ff95078a8a92efd9e7f3bdeed02e8334069d35)
+2025-10-09 04:51:21,086 Reutilizando conexión existente para cetrusa@dbmariam04.chqxl6ahrk6r.us-east-1.rds.amazonaws.com:3307/powerbi_adm (cache_key=33ff95078a8a92efd9e7f3bdeed02e8334069d35)
+2025-10-09 04:51:21,807 Reutilizando conexión existente para cetrusa@dbmariam04.chqxl6ahrk6r.us-east-1.rds.amazonaws.com:3307/powerbi_adm (cache_key=33ff95078a8a92efd9e7f3bdeed02e8334069d35)
+2025-10-09 04:51:22,538 Reutilizando conexión existente para cetrusa@dbmariam04.chqxl6ahrk6r.us-east-1.rds.amazonaws.com:3307/powerbi_adm (cache_key=33ff95078a8a92efd9e7f3bdeed02e8334069d35)
+2025-10-09 04:51:23,266 Reutilizando conexión existente para cetrusa@dbmariam04.chqxl6ahrk6r.us-east-1.rds.amazonaws.com:3307/powerbi_adm (cache_key=33ff95078a8a92efd9e7f3bdeed02e8334069d35)
+2025-10-09 04:51:24,001 Reutilizando conexión existente para cetrusa@dbmariam04.chqxl6ahrk6r.us-east-1.rds.amazonaws.com:3307/powerbi_adm (cache_key=33ff95078a8a92efd9e7f3bdeed02e8334069d35)
+2025-10-09 04:51:24,718 Reutilizando conexión existente para cetrusa@dbmariam04.chqxl6ahrk6r.us-east-1.rds.amazonaws.com:3307/powerbi_adm (cache_key=33ff95078a8a92efd9e7f3bdeed02e8334069d35)
+2025-10-09 04:51:26,563 Error al obtener permisos para distrijass/SYSTEM: Requested setting INSTALLED_APPS, but settings are not configured. You must either define the environment variable DJANGO_SETTINGS_MODULE or call settings.configure() before accessing settings.
+Traceback (most recent call last):
+  File "D:\Python\DataZenithBi\adminbi\scripts\config.py", line 70, in default_permissions_loader
+    from apps.users.models import UserPermission  # type: ignore
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\Python\DataZenithBi\adminbi\apps\users\models.py", line 4, in <module>
+    from apps.permisos.models import ConfEmpresas
+  File "D:\Python\DataZenithBi\adminbi\apps\permisos\models.py", line 7, in <module>
+    from django.contrib.auth.models import Permission
+  File "D:\Python\DataZenithBi\venv\Lib\site-packages\django\contrib\auth\models.py", line 3, in <module>
+    from django.contrib.auth.base_user import AbstractBaseUser, BaseUserManager
+  File "D:\Python\DataZenithBi\venv\Lib\site-packages\django\contrib\auth\base_user.py", line 57, in <module>
+    class AbstractBaseUser(models.Model):
+  File "D:\Python\DataZenithBi\venv\Lib\site-packages\django\db\models\base.py", line 129, in __new__
+    app_config = apps.get_containing_app_config(module)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\Python\DataZenithBi\venv\Lib\site-packages\django\apps\registry.py", line 260, in get_containing_app_config
+    self.check_apps_ready()
+  File "D:\Python\DataZenithBi\venv\Lib\site-packages\django\apps\registry.py", line 137, in check_apps_ready
+    settings.INSTALLED_APPS
+  File "D:\Python\DataZenithBi\venv\Lib\site-packages\django\conf\__init__.py", line 102, in __getattr__
+    self._setup(name)
+  File "D:\Python\DataZenithBi\venv\Lib\site-packages\django\conf\__init__.py", line 82, in _setup
+    raise ImproperlyConfigured(
+django.core.exceptions.ImproperlyConfigured: Requested setting INSTALLED_APPS, but settings are not configured. You must either define the environment variable DJANGO_SETTINGS_MODULE or call settings.configure() before accessing settings.
+2025-10-09 04:51:26,656 ConfigService caching result for c768946ac343eda3a318220012479544f6a3a62b en 8.454s
+2025-10-09 04:51:26,658 Creando nueva conexión para cetrusa@dbmariam04.chqxl6ahrk6r.us-east-1.rds.amazonaws.com:3307/bi_distrijass (cache_key=b59195f79f3c7b9cf5011728e5f9a1e5cd1d8dce)
+2025-10-09 04:52:40,163 \u2705 Cargue completado correctamente.
+2025-10-09 04:52:40,163 \U0001f4ca Filas insertadas: 0
+2025-10-09 04:52:40,164 \u26a0\ufe0f Filas duplicadas: 0
+2025-10-09 04:52:40,164 \U0001f9f9 Ejecutando mantenimiento post-cargue (sp_infoventas_full_maintenance)...
+2025-10-09 04:52:40,164 \u274c Error ejecutando mantenimiento: 'CargueInfoVentasInsert' object has no attribute 'engine_mysql'
+Traceback (most recent call last):
+  File "D:\Python\DataZenithBi\adminbi\cargue_infoventas_main.py", line 167, in run_cargue
+    with cargador.engine_mysql.raw_connection() as conn:
+         ^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'CargueInfoVentasInsert' object has no attribute 'engine_mysql'. Did you mean: 'engine_mysql_bi'?
