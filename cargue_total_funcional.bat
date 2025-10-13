@@ -27,6 +27,7 @@ set "RUTA_UNC=\%SERVIDOR_UNC%\%UNIDAD_COMPARTIDA%"
 set "RUTA_BASE=%RUTA_UNC%\Distrijass\Sistema Info"
 set "CARPETA_DESTINO=D:\Python\DataZenithBi\Info proveedores 2025"
 set "ARCHIVO_DESTINO=%CARPETA_DESTINO%\Info proveedores.xlsx"
+set "ARCHIVO_UTILIZADO="
 
 echo Configuracion activa:
 echo   Servidor UNC ............: %SERVIDOR_UNC%
@@ -41,7 +42,14 @@ REM ------------------------------------------------------------
 echo [%date% %time%] Verificando conectividad con %SERVIDOR_UNC%...
 ping -n 1 %SERVIDOR_UNC% >nul 2>&1
 if !ERRORLEVEL! neq 0 (
-	echo ERROR: No se puede contactar al servidor %SERVIDOR_UNC%.
+	echo ADVERTENCIA: No se puede contactar al servidor %SERVIDOR_UNC%.
+	if exist "%ARCHIVO_DESTINO%" (
+		echo Se continuara con el archivo local existente.
+		set "ARCHIVO_UTILIZADO=%ARCHIVO_DESTINO%"
+		set "ARCHIVO_ORIGEN="
+		goto ejecutar_python
+	)
+	echo No hay archivo local disponible. Proceso cancelado.
 	exit /b 1
 )
 
@@ -60,10 +68,16 @@ if "!ARCHIVO_ORIGEN!"=="" (
 )
 
 if "!ARCHIVO_ORIGEN!"=="" (
-	echo ERROR: No se encontro el archivo origen en las rutas esperadas.
+	echo ADVERTENCIA: No se encontro el archivo origen en las rutas esperadas.
+	if exist "%ARCHIVO_DESTINO%" (
+		echo Se continuara con el archivo local existente: %ARCHIVO_DESTINO%
+		set "ARCHIVO_UTILIZADO=%ARCHIVO_DESTINO%"
+		goto ejecutar_python
+	)
 	echo    Revisar:
 	echo      %RUTA_BASE%\Información\Impactos\info proveedores.xlsx
 	echo      %RUTA_BASE%\Informacion\Impactos\info proveedores.xlsx
+	echo No hay archivo local disponible. Proceso cancelado.
 	exit /b 1
 )
 
@@ -81,16 +95,33 @@ if not exist "%CARPETA_DESTINO%" (
 echo [%date% %time%] Copiando archivo al destino local...
 copy /Y "!ARCHIVO_ORIGEN!" "%ARCHIVO_DESTINO%" >nul
 if !ERRORLEVEL! neq 0 (
-	echo ERROR: Fallo la copia del archivo (codigo !ERRORLEVEL!).
+	echo ADVERTENCIA: Fallo la copia del archivo (codigo !ERRORLEVEL!).
+	if exist "%ARCHIVO_DESTINO%" (
+		echo Se utilizara el archivo destino ya existente.
+		set "ARCHIVO_UTILIZADO=%ARCHIVO_DESTINO%"
+		goto ejecutar_python
+	)
+	echo No hay copia local disponible. Proceso cancelado.
 	exit /b 1
 )
 
 echo Copia completada: %ARCHIVO_DESTINO%
 echo.
+set "ARCHIVO_UTILIZADO=%ARCHIVO_DESTINO%"
 
 REM ------------------------------------------------------------
 REM Paso 3: Ejecutar cargue Python (incluye procedimientos)
 REM ------------------------------------------------------------
+:ejecutar_python
+if not defined ARCHIVO_UTILIZADO (
+	set "ARCHIVO_UTILIZADO=%ARCHIVO_DESTINO%"
+)
+
+if not exist "%ARCHIVO_UTILIZADO%" (
+	echo ERROR: No se encuentra el archivo de datos requerido: %ARCHIVO_UTILIZADO%.
+	exit /b 1
+)
+
 echo [%date% %time%] Iniciando fase de cargue Python...
 cd /d "D:\Python\DataZenithBi\adminbi"
 
@@ -105,9 +136,9 @@ if not exist "%PYTHON_BIN%" (
 	set "PYTHON_BIN=python"
 )
 
-echo Ejecutando: %PYTHON_BIN% cargue_infoventas_main.py --base distrijass --archivo "%ARCHIVO_DESTINO%"
+echo Ejecutando: %PYTHON_BIN% cargue_infoventas_main.py --base distrijass --archivo "%ARCHIVO_UTILIZADO%"
 echo.
-"%PYTHON_BIN%" cargue_infoventas_main.py --base distrijass --archivo "%ARCHIVO_DESTINO%"
+"%PYTHON_BIN%" cargue_infoventas_main.py --base distrijass --archivo "%ARCHIVO_UTILIZADO%"
 set "RESULTADO_PYTHON=!ERRORLEVEL!"
 
 echo.
@@ -127,8 +158,12 @@ echo.
 echo ============================================================
 echo   RESUMEN FINAL
 echo ============================================================
-echo Archivo origen .............: !ARCHIVO_ORIGEN!
-echo Archivo procesado ..........: %ARCHIVO_DESTINO%
+if defined ARCHIVO_ORIGEN (
+	echo Archivo origen .............: !ARCHIVO_ORIGEN!
+) else (
+	echo Archivo origen .............: (no disponible en servidor)
+)
+echo Archivo procesado ..........: %ARCHIVO_UTILIZADO%
 echo Procedimientos ejecutados ..: sp_infoventas_full_maintenance (desde Python)
 echo ============================================================
 
