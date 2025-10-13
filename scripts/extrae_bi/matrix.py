@@ -4,6 +4,7 @@ import time
 import gc
 import logging
 import uuid
+from decimal import Decimal
 from sqlalchemy import create_engine, text
 from sqlalchemy.exc import SQLAlchemyError
 from openpyxl import Workbook
@@ -137,7 +138,13 @@ class MatrixVentas:
                 ]
                 df_all = pd.DataFrame(all_rows)
                 if not df_all.empty:
-                    df_all = df_all.astype(str)
+                    object_columns = df_all.select_dtypes(include=["object"]).columns
+                    for column in object_columns:
+                        df_all[column] = df_all[column].apply(
+                            lambda value: float(value)
+                            if isinstance(value, Decimal)
+                            else value
+                        )
                     df_all.to_excel(
                         writer,
                         sheet_name=hoja,
