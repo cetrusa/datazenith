@@ -212,20 +212,28 @@ class Conexion:
             connection: Conexión SQLAlchemy donde aplicar los timeouts
         """
         timeout_commands = [
-            "SET SESSION wait_timeout = 7200",
-            "SET SESSION interactive_timeout = 7200", 
-            "SET SESSION net_read_timeout = 1800",
-            "SET SESSION net_write_timeout = 1800",
-            "SET SESSION max_execution_time = 7200000",  # 2 horas en milisegundos
+            # Timeouts de sesión MySQL (en segundos)
+            "SET SESSION wait_timeout = 7200",                    # 2 horas
+            "SET SESSION interactive_timeout = 7200",             # 2 horas
+            "SET SESSION net_read_timeout = 3600",                # 1 hora
+            "SET SESSION net_write_timeout = 3600",               # 1 hora
+            "SET SESSION max_execution_time = 7200000",           # 2 horas en milisegundos
+            # Configuraciones adicionales para consultas largas
+            "SET SESSION long_query_time = 3600",                 # Log consultas > 1 hora
+            "SET SESSION tmp_table_size = 1073741824",            # 1GB para tablas temporales
+            "SET SESSION max_heap_table_size = 1073741824",       # 1GB para tablas en memoria
             "SET SESSION TRANSACTION ISOLATION LEVEL READ UNCOMMITTED"  # Nivel de aislamiento
         ]
         
         for command in timeout_commands:
             try:
                 connection.execute(sqlalchemy.text(command))
-                logging.debug(f"Configurado timeout: {command}")
+                logging.debug(f"Configurado: {command}")
             except Exception as e:
-                logging.warning(f"No se pudo configurar timeout {command}: {e}")
+                # Solo advertir, no fallar por un comando específico
+                logging.warning(f"No se pudo configurar: {command} - Error: {e}")
+        
+        logging.info("Configuración de timeouts extendidos aplicada correctamente")
 
     @staticmethod
     def ConexionMariadbExtendida(user, password, host, port, database):
@@ -242,15 +250,127 @@ class Conexion:
         Returns:
             Engine: Objeto Engine de SQLAlchemy configurado para consultas largas.
         """
-        engine = Conexion.ConexionMariadb3(user, password, host, port, database)
-        
-        # Configurar engine específicamente para consultas largas
-        # Removemos isolation_level que causa el error de evento 'engine_connect'
-        engine = engine.execution_options(
-            autocommit=True
-        )
-        
-        return engine
+        # Configurar timeouts extendidos para conexiones largas
+        def _timeout_from_env(
+            env_name: str, default: int, minimum: int, maximum: int
+        ) -> int:
+            raw_value = os.getenv(env_name)
+            if raw_value is None:
+                return default
+            try:
+                value = int(raw_value)
+            except ValueError:
+                logging.warning(
+                    "Valor de timeout inválido para %s: %s. Usando valor por defecto %s.",
+                    env_name,
+                    raw_value,
+                    default,
+                )
+                return default
+            return max(minimum, min(value, maximum))
+
+        pool_size = int(os.getenv("DB_POOL_SIZE", 20))
+        max_overflow = int(os.getenv("DB_MAX_OVERFLOW", 25))
+        pool_timeout = int(os.getenv("DB_POOL_TIMEOUT", 300))  # Aumentamos a 5 minutos
+        pool_recycle = int(os.getenv("DB_POOL_RECYCLE", 28000))
+
+        # Timeouts extendidos específicos para consultas largas
+        connect_timeout = _timeout_from_env("DB_CONNECT_TIMEOUT_EXTENDED", 60, 10, 120)
+        read_timeout = _timeout_from_env("DB_READ_TIMEOUT_EXTENDED", 7200, 300, 7200)  # 2 horas
+        write_timeout = _timeout_from_env("DB_WRITE_TIMEOUT_EXTENDED", 7200, 300, 7200)  # 2 horas
+
+        connection_label = f"{user}@{host}:{port}/{database}_extended"
+        cache_key = Conexion._build_cache_key(connection_label)
+
+        with Conexion._cache_lock:
+            engine = Conexion._get_cached_engine(cache_key)
+            if engine is not None:
+                try:
+                    with engine.connect():
+                        pass
+                    Conexion._connection_timestamps[cache_key] = time.time()
+                    logging.debug(
+                        "Reutilizando conexión extendida para %s (cache_key=%s)",
+                        connection_label,
+                        cache_key,
+                    )
+                    return engine
+                except Exception as exc:
+                    logging.warning(
+                        "Conexión extendida en caché inválida para %s: %s. Regenerando...",
+                        connection_label,
+                        exc,
+                    )
+                    Conexion._evict_cached_engine(cache_key)
+
+            logging.debug(
+                "Creando nueva conexión extendida para %s (cache_key=%s)",
+                connection_label,
+                cache_key,
+            )
+
+            try:
+                connect_args = {
+                    "charset": "utf8mb4",
+                    "autocommit": True,
+                    "client_flag": pymysql.constants.CLIENT.MULTI_STATEMENTS,
+                    "connect_timeout": connect_timeout,
+                    "read_timeout": read_timeout,
+                    "write_timeout": write_timeout,
+                }
+
+                if os.getenv("DB_SSL_MODE", "false").lower() == "true":
+                    ssl_args: Dict[str, str] = {}
+                    ssl_ca = os.getenv("DB_SSL_CA")
+                    ssl_cert = os.getenv("DB_SSL_CERT")
+                    ssl_key = os.getenv("DB_SSL_KEY")
+                    if ssl_ca:
+                        ssl_args["ca"] = ssl_ca
+                    if ssl_cert:
+                        ssl_args["cert"] = ssl_cert
+                    if ssl_key:
+                        ssl_args["key"] = ssl_key
+                    connect_args["ssl"] = ssl_args or {}
+
+                engine = sqlalchemy.create_engine(
+                    sqlalchemy.engine.url.URL.create(
+                        drivername="mysql+pymysql",
+                        username=user,
+                        password=password,
+                        host=host,
+                        port=port,
+                        database=database,
+                    ),
+                    connect_args=connect_args,
+                    poolclass=QueuePool,
+                    pool_size=pool_size,
+                    max_overflow=max_overflow,
+                    pool_timeout=pool_timeout,
+                    pool_recycle=pool_recycle,
+                    pool_pre_ping=True,
+                    echo=False,
+                    echo_pool=False,
+                    future=True,
+                    pool_reset_on_return="commit",
+                )
+
+                # Configurar engine específicamente para consultas largas
+                engine = engine.execution_options(
+                    autocommit=True
+                )
+
+                Conexion._store_engine(cache_key, engine, connection_label)
+                return engine
+            except Exception as exc:
+                pool_snapshot = {"total_cached": len(Conexion._connection_cache)}
+                logging.error(
+                    "Error al conectar con la base de datos extendida %s en %s: %s. Estado de caché/pool: %s",
+                    database,
+                    host,
+                    exc,
+                    pool_snapshot,
+                )
+                raise
 
     @staticmethod
     def export_pool_metrics():
