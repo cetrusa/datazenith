@@ -131,7 +131,7 @@ class MatrixVentas:
             # Ejecutar el query (puede ser CALL o SELECT)
             with self.engine_mysql.connect() as conn:
                 # Configurar timeouts extendidos usando método centralizado
-                con.Conexion.configurar_timeouts_extendidos(conn)
+                con.configurar_timeouts_extendidos(conn)
                 
                 result = conn.execute(query)
                 columns = list(result.keys())
