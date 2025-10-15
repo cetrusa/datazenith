@@ -1,15 +1,17 @@
-2025-10-09 04:51:18,201 \U0001f680 Iniciando cargue del archivo: D:\Python\DataZenithBi\Info proveedores 2025\Info proveedores.xlsx
-2025-10-09 04:51:18,201 \u26a0\ufe0f No se pudieron detectar fechas desde el nombre. Se usará el mes actual.
-2025-10-09 04:51:18,202 \U0001f4c5 Rango de fechas detectado: 2025-10-01 \u2192 2025-10-31
-2025-10-09 04:51:18,229 Creando nueva conexión para cetrusa@dbmariam04.chqxl6ahrk6r.us-east-1.rds.amazonaws.com:3307/powerbi_adm (cache_key=33ff95078a8a92efd9e7f3bdeed02e8334069d35)
-2025-10-09 04:51:20,360 Reutilizando conexión existente para cetrusa@dbmariam04.chqxl6ahrk6r.us-east-1.rds.amazonaws.com:3307/powerbi_adm (cache_key=33ff95078a8a92efd9e7f3bdeed02e8334069d35)
-2025-10-09 04:51:21,086 Reutilizando conexión existente para cetrusa@dbmariam04.chqxl6ahrk6r.us-east-1.rds.amazonaws.com:3307/powerbi_adm (cache_key=33ff95078a8a92efd9e7f3bdeed02e8334069d35)
-2025-10-09 04:51:21,807 Reutilizando conexión existente para cetrusa@dbmariam04.chqxl6ahrk6r.us-east-1.rds.amazonaws.com:3307/powerbi_adm (cache_key=33ff95078a8a92efd9e7f3bdeed02e8334069d35)
-2025-10-09 04:51:22,538 Reutilizando conexión existente para cetrusa@dbmariam04.chqxl6ahrk6r.us-east-1.rds.amazonaws.com:3307/powerbi_adm (cache_key=33ff95078a8a92efd9e7f3bdeed02e8334069d35)
-2025-10-09 04:51:23,266 Reutilizando conexión existente para cetrusa@dbmariam04.chqxl6ahrk6r.us-east-1.rds.amazonaws.com:3307/powerbi_adm (cache_key=33ff95078a8a92efd9e7f3bdeed02e8334069d35)
-2025-10-09 04:51:24,001 Reutilizando conexión existente para cetrusa@dbmariam04.chqxl6ahrk6r.us-east-1.rds.amazonaws.com:3307/powerbi_adm (cache_key=33ff95078a8a92efd9e7f3bdeed02e8334069d35)
-2025-10-09 04:51:24,718 Reutilizando conexión existente para cetrusa@dbmariam04.chqxl6ahrk6r.us-east-1.rds.amazonaws.com:3307/powerbi_adm (cache_key=33ff95078a8a92efd9e7f3bdeed02e8334069d35)
-2025-10-09 04:51:26,563 Error al obtener permisos para distrijass/SYSTEM: Requested setting INSTALLED_APPS, but settings are not configured. You must either define the environment variable DJANGO_SETTINGS_MODULE or call settings.configure() before accessing settings.
+2025-10-15 04:27:55,565 \U0001f680\U0001f680\U0001f680 INICIO FUNCIÓN run_cargue - DEBUG LOG \U0001f680\U0001f680\U0001f680
+2025-10-15 04:27:55,565 \U0001f680 Iniciando cargue del archivo: D:\Python\DataZenithBi\Info proveedores 2025\Info proveedores.xlsx
+2025-10-15 04:27:55,566 \u26a0\ufe0f No se pudieron detectar fechas desde el nombre. Se usará el mes actual.
+2025-10-15 04:27:55,566 \U0001f4c5 Rango de fechas detectado: 2025-10-01 \u2192 2025-10-31
+2025-10-15 04:27:55,566 \U0001f527 Fase 1: Creando instancia del cargador...
+2025-10-15 04:27:55,587 Creando nueva conexión para cetrusa@dbmariam04.chqxl6ahrk6r.us-east-1.rds.amazonaws.com:3307/powerbi_adm (cache_key=33ff95078a8a92efd9e7f3bdeed02e8334069d35)
+2025-10-15 04:27:57,775 Reutilizando conexión existente para cetrusa@dbmariam04.chqxl6ahrk6r.us-east-1.rds.amazonaws.com:3307/powerbi_adm (cache_key=33ff95078a8a92efd9e7f3bdeed02e8334069d35)
+2025-10-15 04:27:58,526 Reutilizando conexión existente para cetrusa@dbmariam04.chqxl6ahrk6r.us-east-1.rds.amazonaws.com:3307/powerbi_adm (cache_key=33ff95078a8a92efd9e7f3bdeed02e8334069d35)
+2025-10-15 04:27:59,278 Reutilizando conexión existente para cetrusa@dbmariam04.chqxl6ahrk6r.us-east-1.rds.amazonaws.com:3307/powerbi_adm (cache_key=33ff95078a8a92efd9e7f3bdeed02e8334069d35)
+2025-10-15 04:28:00,029 Reutilizando conexión existente para cetrusa@dbmariam04.chqxl6ahrk6r.us-east-1.rds.amazonaws.com:3307/powerbi_adm (cache_key=33ff95078a8a92efd9e7f3bdeed02e8334069d35)
+2025-10-15 04:28:00,781 Reutilizando conexión existente para cetrusa@dbmariam04.chqxl6ahrk6r.us-east-1.rds.amazonaws.com:3307/powerbi_adm (cache_key=33ff95078a8a92efd9e7f3bdeed02e8334069d35)
+2025-10-15 04:28:01,532 Reutilizando conexión existente para cetrusa@dbmariam04.chqxl6ahrk6r.us-east-1.rds.amazonaws.com:3307/powerbi_adm (cache_key=33ff95078a8a92efd9e7f3bdeed02e8334069d35)
+2025-10-15 04:28:02,283 Reutilizando conexión existente para cetrusa@dbmariam04.chqxl6ahrk6r.us-east-1.rds.amazonaws.com:3307/powerbi_adm (cache_key=33ff95078a8a92efd9e7f3bdeed02e8334069d35)
+2025-10-15 04:28:04,127 Error al obtener permisos para distrijass/SYSTEM: Requested setting INSTALLED_APPS, but settings are not configured. You must either define the environment variable DJANGO_SETTINGS_MODULE or call settings.configure() before accessing settings.
 Traceback (most recent call last):
   File "D:\Python\DataZenithBi\adminbi\scripts\config.py", line 70, in default_permissions_loader
     from apps.users.models import UserPermission  # type: ignore
@@ -18,31 +20,118 @@ Traceback (most recent call last):
     from apps.permisos.models import ConfEmpresas
   File "D:\Python\DataZenithBi\adminbi\apps\permisos\models.py", line 7, in <module>
     from django.contrib.auth.models import Permission
-  File "D:\Python\DataZenithBi\venv\Lib\site-packages\django\contrib\auth\models.py", line 3, in <module>
+  File "D:\Python\DataZenithBi\adminbi\.venv\Lib\site-packages\django\contrib\auth\models.py", line 3, in <module>
     from django.contrib.auth.base_user import AbstractBaseUser, BaseUserManager
-  File "D:\Python\DataZenithBi\venv\Lib\site-packages\django\contrib\auth\base_user.py", line 57, in <module>
+  File "D:\Python\DataZenithBi\adminbi\.venv\Lib\site-packages\django\contrib\auth\base_user.py", line 57, in <module>
     class AbstractBaseUser(models.Model):
-  File "D:\Python\DataZenithBi\venv\Lib\site-packages\django\db\models\base.py", line 129, in __new__
+  File "D:\Python\DataZenithBi\adminbi\.venv\Lib\site-packages\django\db\models\base.py", line 129, in __new__
     app_config = apps.get_containing_app_config(module)
                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "D:\Python\DataZenithBi\venv\Lib\site-packages\django\apps\registry.py", line 260, in get_containing_app_config
+  File "D:\Python\DataZenithBi\adminbi\.venv\Lib\site-packages\django\apps\registry.py", line 260, in get_containing_app_config
     self.check_apps_ready()
-  File "D:\Python\DataZenithBi\venv\Lib\site-packages\django\apps\registry.py", line 137, in check_apps_ready
+  File "D:\Python\DataZenithBi\adminbi\.venv\Lib\site-packages\django\apps\registry.py", line 137, in check_apps_ready
     settings.INSTALLED_APPS
-  File "D:\Python\DataZenithBi\venv\Lib\site-packages\django\conf\__init__.py", line 102, in __getattr__
+  File "D:\Python\DataZenithBi\adminbi\.venv\Lib\site-packages\django\conf\__init__.py", line 102, in __getattr__
     self._setup(name)
-  File "D:\Python\DataZenithBi\venv\Lib\site-packages\django\conf\__init__.py", line 82, in _setup
+  File "D:\Python\DataZenithBi\adminbi\.venv\Lib\site-packages\django\conf\__init__.py", line 82, in _setup
     raise ImproperlyConfigured(
 django.core.exceptions.ImproperlyConfigured: Requested setting INSTALLED_APPS, but settings are not configured. You must either define the environment variable DJANGO_SETTINGS_MODULE or call settings.configure() before accessing settings.
-2025-10-09 04:51:26,656 ConfigService caching result for c768946ac343eda3a318220012479544f6a3a62b en 8.454s
-2025-10-09 04:51:26,658 Creando nueva conexión para cetrusa@dbmariam04.chqxl6ahrk6r.us-east-1.rds.amazonaws.com:3307/bi_distrijass (cache_key=b59195f79f3c7b9cf5011728e5f9a1e5cd1d8dce)
-2025-10-09 04:52:40,163 \u2705 Cargue completado correctamente.
-2025-10-09 04:52:40,163 \U0001f4ca Filas insertadas: 0
-2025-10-09 04:52:40,164 \u26a0\ufe0f Filas duplicadas: 0
-2025-10-09 04:52:40,164 \U0001f9f9 Ejecutando mantenimiento post-cargue (sp_infoventas_full_maintenance)...
-2025-10-09 04:52:40,164 \u274c Error ejecutando mantenimiento: 'CargueInfoVentasInsert' object has no attribute 'engine_mysql'
+2025-10-15 04:28:04,240 ConfigService caching result for c768946ac343eda3a318220012479544f6a3a62b en 8.674s
+2025-10-15 04:28:04,244 Creando nueva conexión para cetrusa@dbmariam04.chqxl6ahrk6r.us-east-1.rds.amazonaws.com:3307/bi_distrijass (cache_key=b59195f79f3c7b9cf5011728e5f9a1e5cd1d8dce)
+2025-10-15 04:28:04,245 \u2705 Cargador creado exitosamente
+2025-10-15 04:28:04,246 \U0001f527 Fase 2: Ejecutando proceso de cargue...
+2025-10-15 04:30:05,523 \u2705 Cargue completado correctamente.
+2025-10-15 04:30:05,523 \U0001f4ca Registros procesados: 236035
+2025-10-15 04:30:05,523 \U0001f4ca Registros insertados: 236035
+2025-10-15 04:30:05,523 \U0001f4ca Registros actualizados: 0
+2025-10-15 04:30:05,523 \U0001f4ca Registros preservados: 0
+2025-10-15 04:30:05,523 \U0001f527 Fase 3: Iniciando mantenimiento post-cargue...
+2025-10-15 04:30:05,524 \U0001f9f9 === INICIANDO MANTENIMIENTO POST-CARGUE ===
+2025-10-15 04:30:06,775 \U0001f4ca Registros en infoventas ANTES del mantenimiento: 236035
+2025-10-15 04:30:06,901 \U0001f527 Método 1: Ejecutando con raw_connection y reintentos...
+2025-10-15 04:30:06,902 \u267b\ufe0f Preparando ejecución del procedimiento con hasta 3 intentos...
+2025-10-15 04:30:06,902    \u25b6\ufe0f Intento 1/3 de ejecución del procedimiento...
+2025-10-15 04:32:07,659 Exception during reset or similar
 Traceback (most recent call last):
-  File "D:\Python\DataZenithBi\adminbi\cargue_infoventas_main.py", line 167, in run_cargue
-    with cargador.engine_mysql.raw_connection() as conn:
-         ^^^^^^^^^^^^^^^^^^^^^
-AttributeError: 'CargueInfoVentasInsert' object has no attribute 'engine_mysql'. Did you mean: 'engine_mysql_bi'?
+  File "D:\Python\DataZenithBi\adminbi\.venv\Lib\site-packages\pymysql\connections.py", line 779, in _read_bytes
+    data = self._rfile.read(num_bytes)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\USUARIO\AppData\Local\Programs\Python\Python312\Lib\socket.py", line 707, in readinto
+    return self._sock.recv_into(b)
+           ^^^^^^^^^^^^^^^^^^^^^^^
+TimeoutError: timed out
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "D:\Python\DataZenithBi\adminbi\cargue_infoventas_main.py", line 158, in ejecutar_procedimiento_con_reintentos
+    cursor.execute(sentencia_sql)
+  File "D:\Python\DataZenithBi\adminbi\.venv\Lib\site-packages\pymysql\cursors.py", line 153, in execute
+    result = self._query(query)
+             ^^^^^^^^^^^^^^^^^^
+  File "D:\Python\DataZenithBi\adminbi\.venv\Lib\site-packages\pymysql\cursors.py", line 322, in _query
+    conn.query(q)
+  File "D:\Python\DataZenithBi\adminbi\.venv\Lib\site-packages\pymysql\connections.py", line 558, in query
+    self._affected_rows = self._read_query_result(unbuffered=unbuffered)
+                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\Python\DataZenithBi\adminbi\.venv\Lib\site-packages\pymysql\connections.py", line 822, in _read_query_result
+    result.read()
+  File "D:\Python\DataZenithBi\adminbi\.venv\Lib\site-packages\pymysql\connections.py", line 1200, in read
+    first_packet = self.connection._read_packet()
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\Python\DataZenithBi\adminbi\.venv\Lib\site-packages\pymysql\connections.py", line 739, in _read_packet
+    packet_header = self._read_bytes(4)
+                    ^^^^^^^^^^^^^^^^^^^
+  File "D:\Python\DataZenithBi\adminbi\.venv\Lib\site-packages\pymysql\connections.py", line 785, in _read_bytes
+    raise err.OperationalError(
+pymysql.err.OperationalError: (2013, 'Lost connection to MySQL server during query (timed out)')
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "D:\Python\DataZenithBi\adminbi\.venv\Lib\site-packages\sqlalchemy\pool\base.py", line 988, in _finalize_fairy
+    fairy._reset(
+  File "D:\Python\DataZenithBi\adminbi\.venv\Lib\site-packages\sqlalchemy\pool\base.py", line 1445, in _reset
+    pool._dialect.do_commit(self)
+  File "D:\Python\DataZenithBi\adminbi\.venv\Lib\site-packages\sqlalchemy\engine\default.py", line 695, in do_commit
+    dbapi_connection.commit()
+  File "D:\Python\DataZenithBi\adminbi\.venv\Lib\site-packages\pymysql\connections.py", line 477, in commit
+    self._execute_command(COMMAND.COM_QUERY, "COMMIT")
+  File "D:\Python\DataZenithBi\adminbi\.venv\Lib\site-packages\pymysql\connections.py", line 840, in _execute_command
+    raise err.InterfaceError(0, "")
+pymysql.err.InterfaceError: (0, '')
+2025-10-15 04:32:07,707    \u26a0\ufe0f Error de base de datos (código 2013): (2013, 'Lost connection to MySQL server during query (timed out)')
+2025-10-15 04:32:07,709    \u23f3 Reintentando en 60 segundos...
+2025-10-15 04:33:07,709    \u25b6\ufe0f Intento 2/3 de ejecución del procedimiento...
+2025-10-15 04:34:25,444 \U0001f4cb Resultados parciales del procedimiento: (('bi_distrijass.infoventas_2023_fact', 'optimize', 'note', 'Table does not support optimize, doing recreate + analyze instead'), ('bi_distrijass.infoventas_2023_fact', 'optimize', 'status', 'OK'), ('bi_distrijass.infoventas_2023_dev', 'optimize', 'note', 'Table does not support optimize, doing recreate + analyze instead'), ('bi_distrijass.infoventas_2023_dev', 'optimize', 'status', 'OK'))
+2025-10-15 04:36:25,456 Exception during reset or similar
+Traceback (most recent call last):
+  File "D:\Python\DataZenithBi\adminbi\cargue_infoventas_main.py", line 177, in ejecutar_procedimiento_con_reintentos
+    conn.commit()
+  File "D:\Python\DataZenithBi\adminbi\.venv\Lib\site-packages\pymysql\connections.py", line 477, in commit
+    self._execute_command(COMMAND.COM_QUERY, "COMMIT")
+  File "D:\Python\DataZenithBi\adminbi\.venv\Lib\site-packages\pymysql\connections.py", line 840, in _execute_command
+    raise err.InterfaceError(0, "")
+pymysql.err.InterfaceError: (0, '')
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "D:\Python\DataZenithBi\adminbi\.venv\Lib\site-packages\sqlalchemy\pool\base.py", line 988, in _finalize_fairy
+    fairy._reset(
+  File "D:\Python\DataZenithBi\adminbi\.venv\Lib\site-packages\sqlalchemy\pool\base.py", line 1445, in _reset
+    pool._dialect.do_commit(self)
+  File "D:\Python\DataZenithBi\adminbi\.venv\Lib\site-packages\sqlalchemy\engine\default.py", line 695, in do_commit
+    dbapi_connection.commit()
+  File "D:\Python\DataZenithBi\adminbi\.venv\Lib\site-packages\pymysql\connections.py", line 477, in commit
+    self._execute_command(COMMAND.COM_QUERY, "COMMIT")
+  File "D:\Python\DataZenithBi\adminbi\.venv\Lib\site-packages\pymysql\connections.py", line 840, in _execute_command
+    raise err.InterfaceError(0, "")
+pymysql.err.InterfaceError: (0, '')
+2025-10-15 04:36:25,457    \u26a0\ufe0f Error de base de datos (código 0): (0, '')
+2025-10-15 04:36:25,459    \u2139\ufe0f Código 0 recibido; se asume ejecución finalizada por cierre de resultados.
+2025-10-15 04:36:26,283 \U0001f4ca Registros en infoventas DESPUÉS del mantenimiento: 0
+2025-10-15 04:36:26,409 \u2705 Mantenimiento completado. Tabla infoventas limpia.
+2025-10-15 04:36:26,409 \U0001f389 === MANTENIMIENTO COMPLETADO EXITOSAMENTE ===
+2025-10-15 04:36:26,410 \U0001f389 PROCESO COMPLETADO EXITOSAMENTE en 510.84 segundos
+2025-10-15 04:36:26,410 \U0001f512 Engine de base de datos cerrado correctamente.

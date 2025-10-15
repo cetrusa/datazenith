@@ -204,6 +204,54 @@ class Conexion:
                 raise
 
     @staticmethod
+    def configurar_timeouts_extendidos(connection):
+        """
+        Configura timeouts extendidos para consultas de larga duración.
+        
+        Args:
+            connection: Conexión SQLAlchemy donde aplicar los timeouts
+        """
+        timeout_commands = [
+            "SET SESSION wait_timeout = 7200",
+            "SET SESSION interactive_timeout = 7200", 
+            "SET SESSION net_read_timeout = 1800",
+            "SET SESSION net_write_timeout = 1800",
+            "SET SESSION max_execution_time = 7200000"  # 2 horas en milisegundos
+        ]
+        
+        for command in timeout_commands:
+            try:
+                connection.execute(sqlalchemy.text(command))
+                logging.debug(f"Configurado timeout: {command}")
+            except Exception as e:
+                logging.warning(f"No se pudo configurar timeout {command}: {e}")
+
+    @staticmethod
+    def ConexionMariadbExtendida(user, password, host, port, database):
+        """
+        Crea una conexión optimizada para consultas de larga duración.
+        
+        Args:
+            user (str): Nombre de usuario para la conexión.
+            password (str): Contraseña del usuario.
+            host (str): Host donde se encuentra la base de datos.
+            port (int): Puerto para la conexión.
+            database (str): Nombre de la base de datos.
+
+        Returns:
+            Engine: Objeto Engine de SQLAlchemy configurado para consultas largas.
+        """
+        engine = Conexion.ConexionMariadb3(user, password, host, port, database)
+        
+        # Configurar engine específicamente para consultas largas
+        engine = engine.execution_options(
+            autocommit=True,
+            isolation_level="READ_UNCOMMITTED"
+        )
+        
+        return engine
+
+    @staticmethod
     def export_pool_metrics():
         """
         Devuelve un resumen de los pools activos para monitoreo externo (por ejemplo, Prometheus).

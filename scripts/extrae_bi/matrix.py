@@ -94,7 +94,7 @@ class MatrixVentas:
                 raise ValueError(
                     "Configuración de conexión a MySQL/MariaDB incompleta."
                 )
-            self.engine_mysql = con.ConexionMariadb3(
+            self.engine_mysql = con.ConexionMariadbExtendida(
                 str(self.config["nmUsrIn"]),
                 str(self.config["txPassIn"]),
                 str(self.config["hostServerIn"]),
@@ -130,6 +130,9 @@ class MatrixVentas:
         try:
             # Ejecutar el query (puede ser CALL o SELECT)
             with self.engine_mysql.connect() as conn:
+                # Configurar timeouts extendidos usando método centralizado
+                con.Conexion.configurar_timeouts_extendidos(conn)
+                
                 result = conn.execute(query)
                 columns = list(result.keys())
                 all_rows = [
@@ -301,3 +304,19 @@ class MatrixVentas:
                 "execution_time": execution_time,
                 "metadata": {},
             }
+        finally:
+            # Limpieza explícita de conexiones
+            self._cleanup_connections()
+
+    def _cleanup_connections(self):
+        """Limpia explícitamente las conexiones para evitar sesiones activas persistentes."""
+        try:
+            if hasattr(self, 'engine_mysql') and self.engine_mysql:
+                logger.info("[MatrixVentas] Cerrando conexiones de base de datos...")
+                self.engine_mysql.dispose()
+                logger.info("[MatrixVentas] Conexiones cerradas correctamente.")
+        except Exception as e:
+            logger.warning(f"[MatrixVentas] Error al cerrar conexiones: {e}")
+        finally:
+            # Forzar garbage collection para liberar memoria
+            gc.collect()

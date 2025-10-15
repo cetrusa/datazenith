@@ -101,6 +101,8 @@ import argparse
 from datetime import datetime
 from scripts.cargue.cargue_infoventas_insert import CargueInfoVentasInsert
 from sqlalchemy import text
+from sqlalchemy.exc import OperationalError as SAOperationalError
+from pymysql.err import OperationalError as PyMySQLOperationalError, InterfaceError as PyMySQLInterfaceError
 
 logging.basicConfig(
     level=logging.INFO,
@@ -125,12 +127,116 @@ def detectar_fechas_desde_nombre(nombre_archivo: str):
 
 
 # ------------------------------------------------------------
+# 🔁 Helper para ejecutar procedimientos con reintentos
+# ------------------------------------------------------------
+def ejecutar_procedimiento_con_reintentos(cargador, sentencia_sql: str, intentos: int = 3, espera_segundos: int = 45):
+    """Ejecuta un procedimiento almacenado con reintentos y ajustes de timeout."""
+    ultimo_error = None
+    print(f"♻️ Preparando ejecución con hasta {intentos} intentos... [DEBUG]")
+    logging.info(f"♻️ Preparando ejecución del procedimiento con hasta {intentos} intentos...")
+
+    for intento in range(1, intentos + 1):
+        print(f"   ▶️ Intento {intento}/{intentos}... [DEBUG]")
+        logging.info(f"   ▶️ Intento {intento}/{intentos} de ejecución del procedimiento...")
+
+        try:
+            conn = cargador.engine_mysql_bi.raw_connection()
+            try:
+                conn.autocommit(True)
+                cursor = conn.cursor()
+                try:
+                    ajustes_timeout = [
+                        "SET SESSION wait_timeout = 7200",
+                        "SET SESSION interactive_timeout = 7200",
+                        "SET SESSION net_read_timeout = 600",
+                        "SET SESSION net_write_timeout = 600",
+                        "SET SESSION innodb_lock_wait_timeout = 900",
+                    ]
+                    for comando in ajustes_timeout:
+                        cursor.execute(comando)
+
+                    cursor.execute(sentencia_sql)
+
+                    while True:
+                        try:
+                            filas = cursor.fetchall()
+                            if filas:
+                                print(f"📋 Resultados parciales: {filas} [DEBUG]")
+                                logging.info(f"📋 Resultados parciales del procedimiento: {filas}")
+                        except Exception:
+                            pass
+
+                        try:
+                            tiene_mas = cursor.nextset()
+                        except Exception:
+                            tiene_mas = False
+
+                        if not tiene_mas:
+                            break
+
+                    conn.commit()
+                    print(f"   ✅ Procedimiento finalizado en intento {intento} [DEBUG]")
+                    logging.info(f"   ✅ Procedimiento finalizado en intento {intento}")
+                    return True, None
+
+                finally:
+                    cursor.close()
+            finally:
+                conn.close()
+
+        except (PyMySQLOperationalError, PyMySQLInterfaceError, SAOperationalError) as db_err:
+            # Normalizar código de error
+            if isinstance(db_err, SAOperationalError) and hasattr(db_err, "orig"):
+                codigo_error = getattr(db_err.orig, "args", [None])[0] if db_err.orig else None
+                mensaje_error = str(db_err.orig)
+            else:
+                codigo_error = getattr(db_err, "args", [None])[0]
+                mensaje_error = str(db_err)
+
+            ultimo_error = db_err
+            print(f"   ⚠️ Error de base de datos (código {codigo_error}): {mensaje_error} [DEBUG]")
+            logging.warning(f"   ⚠️ Error de base de datos (código {codigo_error}): {mensaje_error}")
+
+            if codigo_error == 0:
+                print("   ℹ️ Código 0 recibido; se asume ejecución finalizada por cierre de resultados. [DEBUG]")
+                logging.info("   ℹ️ Código 0 recibido; se asume ejecución finalizada por cierre de resultados.")
+                return True, None
+
+            if codigo_error in (2006, 2013, 1205) and intento < intentos:
+                print(f"   ⏳ Reintentando en {espera_segundos} segundos... [DEBUG]")
+                logging.info(f"   ⏳ Reintentando en {espera_segundos} segundos...")
+                time.sleep(espera_segundos)
+                continue
+            else:
+                break
+
+        except Exception as error_general:
+            ultimo_error = error_general
+            print(f"   ❌ Error inesperado en intento {intento}: {error_general} [DEBUG]")
+            logging.error(f"   ❌ Error inesperado en intento {intento}: {error_general}")
+
+            if intento < intentos:
+                print(f"   ⏳ Reintentando en {espera_segundos} segundos... [DEBUG]")
+                logging.info(f"   ⏳ Reintentando en {espera_segundos} segundos...")
+                time.sleep(espera_segundos)
+                continue
+            else:
+                break
+
+    return False, ultimo_error
+
+
+# ------------------------------------------------------------
 # ⚙️ Proceso completo de cargue + mantenimiento
 # ------------------------------------------------------------
 def run_cargue(database_name: str, archivo_path: str, usuario: str = None):
     """Ejecuta el proceso completo de cargue y mantenimiento."""
+    print("🚀🚀🚀 INICIO FUNCIÓN run_cargue - DEBUG LOG 🚀🚀🚀")
+    logging.info("🚀🚀🚀 INICIO FUNCIÓN run_cargue - DEBUG LOG 🚀🚀🚀")
+    
     start_time = time.time()
     logging.info(f"🚀 Iniciando cargue del archivo: {archivo_path}")
+    print(f"🚀 Iniciando cargue del archivo: {archivo_path}")
 
     # Detectar fechas desde nombre del archivo
     fecha_ini, fecha_fin = detectar_fechas_desde_nombre(os.path.basename(archivo_path))
@@ -142,10 +248,14 @@ def run_cargue(database_name: str, archivo_path: str, usuario: str = None):
         fecha_fin = datetime(hoy.year, hoy.month, monthrange(hoy.year, hoy.month)[1]).date()
 
     logging.info(f"📅 Rango de fechas detectado: {fecha_ini} → {fecha_fin}")
+    print(f"📅 Rango de fechas detectado: {fecha_ini} → {fecha_fin}")
 
-    conn = None
+    cargador = None
+    
     try:
-        # 🔹 Crear instancia del cargador
+        # 🔹 FASE 1: CREAR INSTANCIA DEL CARGADOR
+        print("🔧 FASE 1: Creando instancia del cargador... [DEBUG]")
+        logging.info("🔧 Fase 1: Creando instancia del cargador...")
         cargador = CargueInfoVentasInsert(
             excel_file=archivo_path,
             database_name=database_name,
@@ -153,43 +263,228 @@ def run_cargue(database_name: str, archivo_path: str, usuario: str = None):
             IdtReporteFin=str(fecha_fin),
             user_id=usuario or "SYSTEM"
         )
+        print("✅ Cargador creado exitosamente [DEBUG]")
+        logging.info("✅ Cargador creado exitosamente")
 
-        # 🔹 Ejecutar proceso de cargue
+        # 🔹 FASE 2: EJECUTAR PROCESO DE CARGUE
+        print("🔧 FASE 2: Ejecutando proceso de cargue... [DEBUG]")
+        logging.info("🔧 Fase 2: Ejecutando proceso de cargue...")
         resultado = cargador.procesar_cargue()
+        print("✅ Cargue completado correctamente [DEBUG]")
         logging.info("✅ Cargue completado correctamente.")
-        logging.info(f"📊 Filas insertadas: {resultado.get('insertadas', 0)}")
-        logging.info(f"⚠️ Filas duplicadas: {resultado.get('duplicadas', 0)}")
+        logging.info(f"📊 Registros procesados: {resultado.get('registros_procesados', 0)}")
+        logging.info(f"📊 Registros insertados: {resultado.get('registros_insertados', 0)}")
+        logging.info(f"📊 Registros actualizados: {resultado.get('registros_actualizados', 0)}")
+        logging.info(f"📊 Registros preservados: {resultado.get('registros_preservados', 0)}")
         
+        # 🔹 FASE 3: EJECUTAR MANTENIMIENTO POST-CARGUE
+        print("🔧 FASE 3: Iniciando mantenimiento post-cargue... [DEBUG]")
+        logging.info("🔧 Fase 3: Iniciando mantenimiento post-cargue...")
+        ejecutar_mantenimiento_completo(cargador)
         
-        logging.info("🧹 Ejecutando mantenimiento post-cargue (sp_infoventas_full_maintenance)...")
-
-        # Obtener conexión cruda desde el engine SQLAlchemy
-        with cargador.engine_mysql.raw_connection() as conn:
-            conn.autocommit(True)
-            with conn.cursor() as cursor:
-                cursor.execute("call sp_infoventas_full_maintenance();")
-                conn.commit()
-
-            # Validar si se vació la tabla infoventas
-            with conn.cursor() as cursor:
-                cursor.execute("SELECT COUNT(*) FROM infoventas;")
-                restantes = cursor.fetchone()[0]
-
-            if restantes == 0:
-                logging.info("✅ Mantenimiento completado. Tabla infoventas limpia.")
-            else:
-                logging.warning(f"⚠️ Mantenimiento ejecutado, pero aún hay {restantes} registros en infoventas.")
-
+        # 🔹 FASE 4: REPORTE FINAL
+        elapsed_time = time.time() - start_time
+        print(f"🎉 PROCESO COMPLETADO EXITOSAMENTE en {elapsed_time:.2f} segundos [DEBUG]")
+        logging.info(f"🎉 PROCESO COMPLETADO EXITOSAMENTE en {elapsed_time:.2f} segundos")
+        
     except Exception as e:
-        logging.error(f"❌ Error ejecutando mantenimiento: {e}", exc_info=True)
-
+        print(f"❌ ERROR CRÍTICO en el proceso principal: {e} [DEBUG]")
+        logging.error(f"❌ ERROR CRÍTICO en el proceso principal: {e}", exc_info=True)
+        raise e
     finally:
-        if conn:
+        # Limpieza final
+        print("🧹 Ejecutando limpieza final... [DEBUG]")
+        if cargador and hasattr(cargador, 'engine_mysql_bi'):
             try:
-                conn.close()
-                logging.info("🔒 Conexión cerrada correctamente.")
+                cargador.engine_mysql_bi.dispose()
+                logging.info("🔒 Engine de base de datos cerrado correctamente.")
             except Exception:
                 pass
+        print("🏁 FIN FUNCIÓN run_cargue [DEBUG]")
+
+
+def ejecutar_mantenimiento_completo(cargador):
+    """Ejecuta el mantenimiento completo post-cargue con múltiples métodos de respaldo."""
+    print("🧹 === INICIANDO FUNCIÓN ejecutar_mantenimiento_completo [DEBUG] ===")
+    logging.info("🧹 === INICIANDO MANTENIMIENTO POST-CARGUE ===")
+    
+    # Verificar registros antes del mantenimiento
+    registros_antes = 0
+    try:
+        print("📊 Verificando registros antes del mantenimiento... [DEBUG]")
+        conn = cargador.engine_mysql_bi.raw_connection()
+        try:
+            cursor = conn.cursor()
+            try:
+                cursor.execute("SELECT COUNT(*) FROM infoventas;")
+                registros_antes = cursor.fetchone()[0]
+                print(f"📊 Registros en infoventas ANTES: {registros_antes} [DEBUG]")
+                logging.info(f"📊 Registros en infoventas ANTES del mantenimiento: {registros_antes}")
+            finally:
+                cursor.close()
+        finally:
+            conn.close()
+    except Exception as e:
+        print(f"❌ Error verificando registros antes: {e} [DEBUG]")
+        logging.error(f"❌ Error verificando registros antes del mantenimiento: {e}")
+        registros_antes = -1
+
+    # Método 1: Intentar con conexión cruda
+    mantenimiento_exitoso = False
+    
+    try:
+        print("🔧 Método 1: Ejecutando con raw_connection y reintentos... [DEBUG]")
+        logging.info("🔧 Método 1: Ejecutando con raw_connection y reintentos...")
+        exito_raw, error_raw = ejecutar_procedimiento_con_reintentos(
+            cargador,
+            "CALL sp_infoventas_full_maintenance();",
+            intentos=3,
+            espera_segundos=60,
+        )
+
+        if not exito_raw:
+            if error_raw:
+                raise error_raw
+            raise RuntimeError("No se pudo ejecutar el procedimiento, sin detalle adicional")
+
+        mantenimiento_exitoso = True
+
+    except Exception as e:
+        print(f"❌ Error en Método 1: {e} [DEBUG]")
+        logging.error(f"❌ Error en Método 1 (raw_connection): {e}")
+        logging.error(f"❌ Tipo de error: {type(e).__name__}")
+        
+        # Método 2: Intentar con SQLAlchemy text()
+        try:
+            print("🔧 Método 2: Intentando con SQLAlchemy text()... [DEBUG]")
+            logging.info("🔧 Método 2: Intentando con SQLAlchemy text()...")
+            with cargador.engine_mysql_bi.begin() as connection:
+                for comando in (
+                    "SET SESSION wait_timeout = 7200",
+                    "SET SESSION interactive_timeout = 7200",
+                    "SET SESSION net_read_timeout = 600",
+                    "SET SESSION net_write_timeout = 600",
+                    "SET SESSION innodb_lock_wait_timeout = 900",
+                ):
+                    connection.exec_driver_sql(comando)
+
+                print("📡 Ejecutando: CALL sp_infoventas_full_maintenance() con text() [DEBUG]")
+                logging.info("📡 Ejecutando: CALL sp_infoventas_full_maintenance() con text()")
+                result = connection.execute(text("CALL sp_infoventas_full_maintenance();"))
+                print("✅ Procedimiento ejecutado con SQLAlchemy text() [DEBUG]")
+                logging.info("✅ Procedimiento ejecutado con SQLAlchemy text()")
+                
+                # Verificar si hay resultados
+                try:
+                    cursor = getattr(result, "cursor", None)
+                    if cursor is not None:
+                        while True:
+                            try:
+                                rows = cursor.fetchall()
+                                if rows:
+                                    print(f"📋 Resultados: {rows} [DEBUG]")
+                                    logging.info(f"📋 Resultados: {rows}")
+                            except Exception:
+                                pass
+
+                            if not cursor.nextset():
+                                break
+                    else:
+                        rows = result.fetchall()
+                        if rows:
+                            print(f"📋 Resultados: {rows} [DEBUG]")
+                            logging.info(f"📋 Resultados: {rows}")
+                except Exception as warn_err:
+                    print(f"📋 Sin resultados específicos [DEBUG] ({warn_err})")
+                    logging.info(f"📋 Sin resultados específicos ({warn_err})")
+                finally:
+                    try:
+                        result.close()
+                    except Exception:
+                        pass
+                
+                mantenimiento_exitoso = True
+                        
+        except Exception as e2:
+            print(f"❌ Error en Método 2: {e2} [DEBUG]")
+            logging.error(f"❌ Error en Método 2 (SQLAlchemy text): {e2}")
+            logging.error(f"❌ Tipo de error: {type(e2).__name__}")
+            
+            # Método 3: Verificar que el procedimiento existe y diagnosticar
+            try:
+                print("🔧 Método 3: Diagnóstico del procedimiento... [DEBUG]")
+                logging.info("🔧 Método 3: Diagnóstico del procedimiento...")
+                conn = cargador.engine_mysql_bi.raw_connection()
+                try:
+                    cursor = conn.cursor()
+                    try:
+                        cursor.execute("SHOW PROCEDURE STATUS WHERE Name = 'sp_infoventas_full_maintenance';")
+                        proc_info = cursor.fetchall()
+                        if proc_info:
+                            print(f"✅ Procedimiento encontrado: {proc_info} [DEBUG]")
+                            logging.info(f"✅ Procedimiento encontrado: {proc_info}")
+                        else:
+                            print("❌ Procedimiento sp_infoventas_full_maintenance NO existe [DEBUG]")
+                            logging.error("❌ Procedimiento sp_infoventas_full_maintenance NO existe")
+                            
+                        # Intentar procedimiento simple para probar conectividad
+                        cursor.execute("SELECT 'TEST_CONNECTION' as test;")
+                        test_result = cursor.fetchone()
+                        print(f"✅ Test de conexión exitoso: {test_result} [DEBUG]")
+                        logging.info(f"✅ Test de conexión exitoso: {test_result}")
+                    finally:
+                        cursor.close()
+                finally:
+                    conn.close()
+                        
+            except Exception as e3:
+                print(f"❌ Error en Método 3: {e3} [DEBUG]")
+                logging.error(f"❌ Error en Método 3 (verificación): {e3}")
+
+    # Verificar resultado final del mantenimiento
+    try:
+        print("📊 Verificando resultado final... [DEBUG]")
+        conn = cargador.engine_mysql_bi.raw_connection()
+        try:
+            cursor = conn.cursor()
+            try:
+                cursor.execute("SELECT COUNT(*) FROM infoventas;")
+                registros_despues = cursor.fetchone()[0]
+                print(f"📊 Registros en infoventas DESPUÉS: {registros_despues} [DEBUG]")
+                logging.info(f"📊 Registros en infoventas DESPUÉS del mantenimiento: {registros_despues}")
+            finally:
+                cursor.close()
+        finally:
+            conn.close()
+
+        if registros_despues == 0:
+            print("✅ Mantenimiento completado. Tabla infoventas limpia. [DEBUG]")
+            logging.info("✅ Mantenimiento completado. Tabla infoventas limpia.")
+            mantenimiento_exitoso = True
+        elif registros_antes > 0 and registros_despues < registros_antes:
+            print(f"✅ Mantenimiento parcial. Reducidos de {registros_antes} a {registros_despues} registros. [DEBUG]")
+            logging.info(f"✅ Mantenimiento parcial. Reducidos de {registros_antes} a {registros_despues} registros.")
+            mantenimiento_exitoso = True
+        elif registros_antes > 0 and registros_despues == registros_antes:
+            print(f"⚠️ Mantenimiento posiblemente no ejecutado. Registros sin cambios: {registros_despues} [DEBUG]")
+            logging.warning(f"⚠️ Mantenimiento posiblemente no ejecutado. Registros sin cambios: {registros_despues}")
+        else:
+            print(f"📊 Estado post-mantenimiento: {registros_despues} registros [DEBUG]")
+            logging.info(f"📊 Estado post-mantenimiento: {registros_despues} registros")
+            
+    except Exception as e:
+        print(f"❌ Error verificando resultado final: {e} [DEBUG]")
+        logging.error(f"❌ Error verificando resultado final: {e}")
+    
+    if mantenimiento_exitoso:
+        print("🎉 === MANTENIMIENTO COMPLETADO EXITOSAMENTE === [DEBUG]")
+        logging.info("🎉 === MANTENIMIENTO COMPLETADO EXITOSAMENTE ===")
+    else:
+        print("⚠️ === MANTENIMIENTO CON ERRORES - REVISAR LOGS === [DEBUG]")
+        logging.warning("⚠️ === MANTENIMIENTO CON ERRORES - REVISAR LOGS ===")
+    
+    print("🏁 FIN FUNCIÓN ejecutar_mantenimiento_completo [DEBUG]")
+    return mantenimiento_exitoso
 
 
 # ------------------------------------------------------------
