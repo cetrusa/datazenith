@@ -216,7 +216,8 @@ class Conexion:
             "SET SESSION interactive_timeout = 7200", 
             "SET SESSION net_read_timeout = 1800",
             "SET SESSION net_write_timeout = 1800",
-            "SET SESSION max_execution_time = 7200000"  # 2 horas en milisegundos
+            "SET SESSION max_execution_time = 7200000",  # 2 horas en milisegundos
+            "SET SESSION TRANSACTION ISOLATION LEVEL READ UNCOMMITTED"  # Nivel de aislamiento
         ]
         
         for command in timeout_commands:
@@ -244,9 +245,9 @@ class Conexion:
         engine = Conexion.ConexionMariadb3(user, password, host, port, database)
         
         # Configurar engine específicamente para consultas largas
+        # Removemos isolation_level que causa el error de evento 'engine_connect'
         engine = engine.execution_options(
-            autocommit=True,
-            isolation_level="READ_UNCOMMITTED"
+            autocommit=True
         )
         
         return engine
