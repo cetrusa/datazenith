@@ -141,7 +141,13 @@ class MatrixVentas:
                 ]
                 df_all = pd.DataFrame(all_rows)
                 if not df_all.empty:
-                    # Conversión simple y segura: solo Decimal a float
+                    # PRIMERO: Manejo específico para la columna problemática ANTES de otras conversiones
+                    if 'Cod. produccto' in df_all.columns:
+                        # Forzar como string para preservar ceros iniciales
+                        df_all['Cod. produccto'] = df_all['Cod. produccto'].astype(str)
+                        logger.info("Columna 'Cod. produccto' convertida a texto para preservar códigos")
+                    
+                    # SEGUNDO: Conversión de Decimal a float en las demás columnas
                     object_columns = df_all.select_dtypes(include=["object"]).columns
                     for column in object_columns:
                         df_all[column] = df_all[column].apply(
@@ -149,13 +155,6 @@ class MatrixVentas:
                             if isinstance(value, Decimal)
                             else value
                         )
-                    
-                    # Manejo específico para la columna problemática con carácter extra
-                    if 'Cod. produccto' in df_all.columns:
-                        # Forzar como string para preservar ceros iniciales
-                        df_all['Cod. produccto'] = df_all['Cod. produccto'].astype(str)
-                        logger.info("Columna 'Cod. produccto' convertida a texto para preservar códigos")
-                    
                     df_all.to_excel(
                         writer,
                         sheet_name=hoja,
