@@ -141,41 +141,20 @@ class MatrixVentas:
                 ]
                 df_all = pd.DataFrame(all_rows)
                 if not df_all.empty:
-                    # Función mejorada para detectar y convertir solo valores numéricos reales
-                    def convert_value_smart(value):
-                        # Si es Decimal, convertir a float
-                        if isinstance(value, Decimal):
-                            return float(value)
-                        
-                        # Si es string, analizar cuidadosamente
-                        if isinstance(value, str):
-                            # Preservar strings que empiezan con cero (códigos)
-                            if value.startswith('0') and len(value) > 1 and not '.' in value:
-                                return value  # Mantener como string (códigos como "001234")
-                            
-                            # Preservar strings que contienen letras
-                            if any(c.isalpha() for c in value):
-                                return value  # Mantener como string
-                                
-                            # Si parece un número sin ceros iniciales, intentar convertir
-                            try:
-                                # Solo convertir si no pierde información
-                                float_val = float(value)
-                                # Si la conversión de vuelta a string es igual, es seguro convertir
-                                if str(float_val) == value or str(int(float_val)) == value:
-                                    return float_val
-                                else:
-                                    return value  # Mantener como string si hay pérdida de info
-                            except (ValueError, TypeError):
-                                return value  # Mantener como string si no se puede convertir
-                        
-                        # Para otros tipos, devolver sin cambios
-                        return value
-                    
-                    # Aplicar la conversión inteligente solo a columnas object
+                    # Conversión simple y segura: solo Decimal a float
                     object_columns = df_all.select_dtypes(include=["object"]).columns
                     for column in object_columns:
-                        df_all[column] = df_all[column].apply(convert_value_smart)
+                        df_all[column] = df_all[column].apply(
+                            lambda value: float(value)
+                            if isinstance(value, Decimal)
+                            else value
+                        )
+                    
+                    # Manejo específico para la columna problemática con carácter extra
+                    if 'Cod. produccto' in df_all.columns:
+                        # Forzar como string para preservar ceros iniciales
+                        df_all['Cod. produccto'] = df_all['Cod. produccto'].astype(str)
+                        logger.info("Columna 'Cod. produccto' convertida a texto para preservar códigos")
                     
                     df_all.to_excel(
                         writer,
