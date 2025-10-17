@@ -1,46 +1,231 @@
+<!-- 
+  reporte_bi.html - Template para vista temporal de Power BI con URLs públicas
+  
+  CONTEXTO REQUERIDO:
+  - url_powerbi: URL pública del reporte de Power BI para la empresa seleccionada
+  - selected_database: Objeto con información de la empresa (name, nmEmpresa, id)
+  - form_url: URL para el selector de base de datos (compatible con database_selector.html)
+  
+  FUNCIONALIDAD:
+  - Carga reportes de Power BI usando URLs públicas (sin tokens de autenticación)
+  - Solución temporal mientras se resuelven problemas de tokens vencidos
+  - Compatible con el selector de empresas existente
+-->
 {% extends 'black.html' %}
 {% load static %}
 
 {% block title %}
-Reporte de Bi
+{% if selected_database.nmEmpresa %}BI - {{selected_database.nmEmpresa}}{% else %}BI Dashboard{% endif %}
 {% endblock title %}
+
 {% block barra_lateral %}
 {% include 'includes/left_sidebar_bi.html' %}
 {% endblock barra_lateral %}
+
 {% block window %}
-<!-- Mensajes de alerta -->
-{% if messages %}
-<div class="alert alert-warning" role="alert">
-  {% for message in messages %}
-    <p>{{ message }}</p>
-  {% endfor %}
-</div>
-{% endif %}
-<div class="embed-responsive embed-responsive-21by9">
-  <iframe class="embed-responsive-item" src="{{url_powerbi}}?embed=true&chromeless=true"
-    title="{{StaticPage.nmEmpresa}}" allowfullscreen="true" id="powerbi-iframe"></iframe>
+<!-- 
+  IMPORTANTE: Para que el selector de base de datos funcione correctamente en esta página, 
+  la vista de Django que renderiza esta plantilla DEBE pasar la variable de contexto 'form_url'.
+  Esta variable debe contener el nombre de la URL (ej: 'home_app:database_select') 
+  de la vista que maneja la actualización de la base de datos en la sesión del servidor.
+-->
+<div class="container-fluid mt-4">
+    {% if error_message %}
+    <div class="alert alert-danger">
+        <p>{{ error_message }}</p>
+    </div>
+    {% else %}
+    
+    <!-- Mensajes de alerta -->
+    {% if messages %}
+    <div class="alert alert-warning" role="alert">
+      {% for message in messages %}
+        <p>{{ message }}</p>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    <!-- Modal de carga (Bootstrap) -->
+    <div class="modal fade" id="loadingModal" tabindex="-1" aria-labelledby="loadingModalLabel" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
+      <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+          <div class="modal-body text-center">
+            <div class="spinner-border text-primary mb-3" role="status">
+              <span class="visually-hidden">Cargando...</span>
+            </div>
+            <div>
+              <strong>Preparando los datos para su visualización...</strong>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Contenedor del reporte usando iframe para URL pública -->
+    <div id="reportContainer" style="height: 85vh; width: 100%;">
+        {% if url_powerbi %}
+        <iframe 
+            class="embed-responsive-item" 
+            src="{{url_powerbi}}"
+            title="{% if selected_database.nmEmpresa %}{{selected_database.nmEmpresa}} - Dashboard BI{% else %}Dashboard BI{% endif %}" 
+            allowfullscreen="true" 
+            id="powerbi-iframe"
+            style="width: 100%; height: 100%; border: none;"
+            onload="handleIframeLoad()"
+            onerror="handleIframeError()">
+        </iframe>
+        {% else %}
+        <div class="alert alert-warning text-center">
+            <i class="fas fa-exclamation-triangle fa-3x mb-3"></i>
+            <h4>URL de Power BI no configurada</h4>
+            {% if selected_database.nmEmpresa %}
+            <p>No se encontró una URL pública de Power BI configurada para <strong>{{selected_database.nmEmpresa}}</strong>.</p>
+            {% else %}
+            <p>No se encontró una URL pública de Power BI configurada para esta empresa.</p>
+            {% endif %}
+            <p>Contacte al administrador para configurar la URL en el sistema.</p>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Bootstrap JS si no está cargado -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script type="text/javascript">
+        // Variables globales
+        var loadingModal;
+        var powerbiIframe = document.getElementById('powerbi-iframe');
+
+        // Función auto-ejecutable para inicializar
+        (function () {
+            // Solo mostrar modal de carga si hay URL de Power BI
+            {% if url_powerbi %}
+            // Mostrar el modal de carga
+            loadingModal = new bootstrap.Modal(document.getElementById('loadingModal'));
+            loadingModal.show();
+            {% endif %}
+
+            // Obtener la base de datos seleccionada de sessionStorage para usarla en el reporte si es necesario
+            var database = window.sessionStorage.getItem("database_name");
+            console.log("Base de datos seleccionada (para reporte BI):", database);
+
+            if (!database) {
+                console.warn("No se ha seleccionado una base de datos para el reporte BI");
+            }
+
+            {% if url_powerbi %}
+            // Si la URL necesita ser actualizada dinámicamente
+            updatePowerBIUrl();
+            {% else %}
+            console.warn("No hay URL de Power BI configurada para esta empresa");
+            {% endif %}
+        })();
+
+        // Función para manejar la carga exitosa del iframe
+        function handleIframeLoad() {
+            console.log("Reporte BI cargado correctamente");
+            
+            // Ocultar modal de carga
+            setTimeout(function() {
+                if (loadingModal) {
+                    loadingModal.hide();
+                }
+            }, 1000);
+        }
+
+        // Función para manejar errores del iframe
+        function handleIframeError() {
+            console.error("Error al cargar el reporte BI");
+            var reportContainer = document.getElementById('reportContainer');
+            reportContainer.innerHTML = '<div class="alert alert-danger">Ocurrió un error al cargar el reporte. Por favor, verifique su conexión o contacte al administrador.</div>';
+            if (loadingModal) {
+                loadingModal.hide();
+            }
+        }
+
+        // Función para construir URL de Power BI con parámetros de control
+        function buildPowerBIUrl(baseUrl) {
+            if (!baseUrl) return '';
+            
+            // Usar la URL original sin modificaciones agresivas
+            var urlParts = baseUrl.split('?');
+            var url = urlParts[0];
+            var existingParams = urlParts[1] || '';
+            
+            // Parámetros básicos y seguros que funcionan con URLs públicas
+            var controlParams = [
+                'chromeless=1',                // Oculta barra superior
+                'filterPaneEnabled=false'      // Oculta panel de filtros
+            ];
+            
+            // Combinar parámetros existentes con los de control
+            var allParams = existingParams;
+            for (var i = 0; i < controlParams.length; i++) {
+                if (allParams) {
+                    allParams += '&' + controlParams[i];
+                } else {
+                    allParams = controlParams[i];
+                }
+            }
+            
+            var finalUrl = url + '?' + allParams;
+            console.log("URL segura con controles básicos:", finalUrl);
+            return finalUrl;
+        }
+
+        // Función para actualizar la URL del Power BI si es necesaria
+        function updatePowerBIUrl() {
+            // Esta función puede ser llamada si necesitas actualizar la URL dinámicamente
+            var currentUrl = "{{url_powerbi|default:''}}";
+            if (currentUrl && currentUrl !== "None" && currentUrl !== "") {
+                var iframe = document.getElementById('powerbi-iframe');
+                if (iframe) {
+                    var controlledUrl = buildPowerBIUrl(currentUrl);
+                    iframe.src = controlledUrl;
+                    console.log("URL de Power BI configurada:", controlledUrl);
+                }
+            } else {
+                console.error("URL de Power BI no disponible");
+                handleIframeError();
+            }
+        }
+
+        // Función original para compatibilidad con posibles llamadas AJAX
+        function handleServerResponse(status, responseText) {
+            if (status === 200) {
+                try {
+                    // Parsea la respuesta JSON
+                    var jsonResponse = JSON.parse(responseText);
+                    
+                    // Obtiene la URL de la clave 'url_powerbi'
+                    var powerbiUrl = jsonResponse.url_powerbi;
+                    console.log("Nueva URL recibida:", powerbiUrl);
+                    
+                    if (powerbiUrl) {
+                        // Mostrar modal de carga
+                        if (loadingModal) {
+                            loadingModal.show();
+                        }
+                        
+                        // Construir URL con parámetros de control y establecerla en el iframe
+                        var controlledUrl = buildPowerBIUrl(powerbiUrl);
+                        powerbiIframe.src = controlledUrl;
+                        console.log("URL controlada establecida:", controlledUrl);
+                    }
+                } catch (error) {
+                    console.error("Error parseando respuesta JSON:", error);
+                    handleIframeError();
+                }
+            } else {
+                console.error("Error en la solicitud:", status, responseText);
+                handleIframeError();
+            }
+        }
+    </script>
+    {% endif %}
 </div>
 {% endblock window %}
 
+{# Eliminar cualquier bloque script personalizado que intente sincronizar la DB en esta página #}
 {% block script %}
-<script>
-  function handleServerResponse(status, responseText) {
-    if (status === 200) {
-      // Parsea la respuesta JSON
-      var jsonResponse = JSON.parse(responseText);
-
-      // Obtiene la URL de la clave 'url_powerbi'
-      var powerbiUrl = jsonResponse.url_powerbi;
-      console.log(this.status, powerbiUrl);
-
-      // Obtiene el elemento iframe
-      var powerbi_iframe = document.getElementById("powerbi-iframe");
-
-      // Establece la URL recibida como el atributo src del iframe
-      powerbi_iframe.src = powerbiUrl;
-    } else {
-      console.error("Error en la solicitud:", responseText);
-    }
-  }
-</script>
+{# Dejar vacío o añadir scripts específicos de esta página que NO interfieran con database_selector.html #}
 {% endblock script %}

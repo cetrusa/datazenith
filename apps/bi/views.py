@@ -176,3 +176,81 @@ class IncrustarBiPage(home_views.ReporteGenericoPage):
 
         # Redirect back to the GET view of this page
         return redirect(reverse_lazy("bi_app:reporte_embed"))
+
+
+class ReporteBiPublicoPage(home_views.ReporteGenericoPage):
+    """
+    Vista temporal para mostrar Power BI usando URL pública (sin tokens de autenticación).
+    Esta vista consume la url_powerbi desde el config de cada empresa.
+    Basada en EmbedReportPage original.
+    """
+    template_name = "bi/reporte_bi.html"
+    login_url = reverse_lazy('users_app:user-login')
+
+    @method_decorator(registrar_auditoria)
+    @method_decorator(permission_required('permisos.informe_bi', raise_exception=True))
+    def dispatch(self, request, *args, **kwargs):
+        return super().dispatch(request, *args, **kwargs)
+
+    def post(self, request, *args, **kwargs):
+        """
+        Maneja la solicitud POST para actualizar la base de datos seleccionada
+        o devolver la URL de Power BI vía AJAX.
+        """
+        database_name = request.POST.get('database_select')
+
+        if not database_name:
+            return redirect('home_app:panel_cubo')
+
+        request.session['database_name'] = database_name
+        logger.info(f"Usuario {request.user.id} seleccionó base de datos: {database_name} en ReporteBiPublicoPage")
+        
+        try:
+            config = ConfigBasic(database_name, request.user.id)
+            url_powerbi = config.config.get("url_powerbi")
+            
+            if url_powerbi:
+                logger.info(f"URL Power BI obtenida para {database_name}: {url_powerbi}")
+                return JsonResponse({'url_powerbi': url_powerbi})
+            else:
+                logger.warning(f"URL Power BI no encontrada para {database_name}")
+                return JsonResponse({
+                    'success': False, 
+                    'error_message': f"No se encontró URL pública de Power BI configurada para la empresa {database_name}."
+                })
+                
+        except Exception as e:
+            logger.error(f"Error al obtener configuración Power BI para {database_name}: {e}")
+            return JsonResponse({
+                'success': False, 
+                'error_message': f"Error: no se pudo ejecutar el script. Razón: {e}"
+            })
+
+    def get(self, request, *args, **kwargs):
+        return super().get(request, *args, **kwargs)
+
+    def get_context_data(self, **kwargs):
+        """Obtiene el contexto para la página incluyendo la URL de Power BI."""
+        context = super().get_context_data(**kwargs)
+        context['form_url'] = 'bi_app:reporte_bi_publico'
+        
+        # Get database from session para mostrar la URL inicial si existe
+        database_name = self.request.session.get("database_name")
+        
+        if database_name:
+            try:
+                config = ConfigBasic(database_name, self.request.user.id)
+                url_powerbi = config.config.get("url_powerbi")
+                
+                if url_powerbi:
+                    context["url_powerbi"] = url_powerbi
+                    
+                # Add StaticPage info
+                context["StaticPage"] = type('StaticPage', (), {
+                    'nmEmpresa': config.config.get("nm_empresa", database_name)
+                })()
+                    
+            except Exception as e:
+                logger.error(f"Error al obtener configuración Power BI para {database_name}: {e}")
+                
+        return context
