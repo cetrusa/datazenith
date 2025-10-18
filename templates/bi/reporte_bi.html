@@ -19,17 +19,101 @@
 {% endblock title %}
 
 {% block barra_lateral %}
+<div id="sidebar-container">
 {% include 'includes/left_sidebar_bi.html' %}
+</div>
 {% endblock barra_lateral %}
 
 {% block window %}
+<!-- CSS personalizado para control de sidebar -->
+<style>
+    /* Transiciones suaves para el sidebar */
+    #sidebar-container {
+        transition: transform 0.3s ease-in-out, width 0.3s ease-in-out;
+        position: fixed;
+        top: 0;
+        left: 0;
+        height: 100vh;
+        z-index: 1000;
+        background: inherit;
+    }
+    
+    /* Clase para ocultar sidebar */
+    .sidebar-hidden #sidebar-container {
+        transform: translateX(-100%);
+    }
+    
+    /* Ajuste del contenido principal cuando sidebar está oculto */
+    .sidebar-hidden .main-content {
+        margin-left: 0 !important;
+        width: 100% !important;
+    }
+    
+    /* Barra de control flotante */
+    .sidebar-toggle-bar {
+        position: fixed;
+        top: 20px;
+        left: 20px;
+        z-index: 1001;
+        background: rgba(40, 167, 69, 0.9);
+        color: white;
+        border: none;
+        border-radius: 8px;
+        padding: 10px 15px;
+        cursor: pointer;
+        box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+        transition: all 0.3s ease;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 14px;
+        backdrop-filter: blur(5px);
+    }
+    
+    .sidebar-toggle-bar:hover {
+        background: rgba(40, 167, 69, 1);
+        transform: translateY(-2px);
+        box-shadow: 0 6px 12px rgba(0,0,0,0.3);
+    }
+    
+    /* Cuando sidebar está oculto, mover el botón más a la izquierda */
+    .sidebar-hidden .sidebar-toggle-bar {
+        left: 20px;
+        background: rgba(108, 117, 125, 0.9);
+    }
+    
+    .sidebar-hidden .sidebar-toggle-bar:hover {
+        background: rgba(108, 117, 125, 1);
+    }
+    
+    /* Ajustes para contenido principal */
+    .main-content {
+        transition: margin-left 0.3s ease-in-out, width 0.3s ease-in-out;
+    }
+    
+    /* Icono rotación */
+    .toggle-icon {
+        transition: transform 0.3s ease;
+    }
+    
+    .sidebar-hidden .toggle-icon {
+        transform: rotate(180deg);
+    }
+</style>
+
+<!-- Barra de control flotante -->
+<button class="sidebar-toggle-bar" onclick="toggleSidebar()" title="Ocultar/Mostrar menú lateral (Ctrl + B)">
+    <i class="fas fa-bars toggle-icon"></i>
+    <span class="toggle-text">Ocultar menú</span>
+</button>
+
 <!-- 
   IMPORTANTE: Para que el selector de base de datos funcione correctamente en esta página, 
   la vista de Django que renderiza esta plantilla DEBE pasar la variable de contexto 'form_url'.
   Esta variable debe contener el nombre de la URL (ej: 'home_app:database_select') 
   de la vista que maneja la actualización de la base de datos en la sesión del servidor.
 -->
-<div class="container-fluid mt-4">
+<div class="container-fluid mt-4 main-content">
     {% if error_message %}
     <div class="alert alert-danger">
         <p>{{ error_message }}</p>
@@ -94,9 +178,50 @@
         // Variables globales
         var loadingModal;
         var powerbiIframe = document.getElementById('powerbi-iframe');
+        var sidebarHidden = false;
+
+        // Función para toggle del sidebar
+        function toggleSidebar() {
+            var body = document.body;
+            var toggleText = document.querySelector('.toggle-text');
+            var toggleIcon = document.querySelector('.toggle-icon');
+            
+            if (sidebarHidden) {
+                // Mostrar sidebar
+                body.classList.remove('sidebar-hidden');
+                toggleText.textContent = 'Ocultar menú';
+                toggleIcon.className = 'fas fa-bars toggle-icon';
+                sidebarHidden = false;
+                console.log("Sidebar mostrado");
+            } else {
+                // Ocultar sidebar
+                body.classList.add('sidebar-hidden');
+                toggleText.textContent = 'Mostrar menú';
+                toggleIcon.className = 'fas fa-arrow-right toggle-icon';
+                sidebarHidden = true;
+                console.log("Sidebar ocultado");
+            }
+            
+            // Guardar preferencia en localStorage
+            localStorage.setItem('powerbi-sidebar-hidden', sidebarHidden);
+        }
+
+        // Atajo de teclado para toggle sidebar (Ctrl + B)
+        document.addEventListener('keydown', function(event) {
+            if (event.ctrlKey && event.key === 'b') {
+                event.preventDefault();
+                toggleSidebar();
+            }
+        });
 
         // Función auto-ejecutable para inicializar
         (function () {
+            // Restaurar preferencia de sidebar del localStorage
+            var savedState = localStorage.getItem('powerbi-sidebar-hidden');
+            if (savedState === 'true') {
+                toggleSidebar();
+            }
+
             // Solo mostrar modal de carga si hay URL de Power BI
             {% if url_powerbi %}
             // Mostrar el modal de carga
@@ -112,10 +237,7 @@
                 console.warn("No se ha seleccionado una base de datos para el reporte BI");
             }
 
-            {% if url_powerbi %}
-            // Si la URL necesita ser actualizada dinámicamente
-            updatePowerBIUrl();
-            {% else %}
+            {% if not url_powerbi %}
             console.warn("No hay URL de Power BI configurada para esta empresa");
             {% endif %}
         })();
@@ -142,46 +264,14 @@
             }
         }
 
-        // Función para construir URL de Power BI con parámetros de control
-        function buildPowerBIUrl(baseUrl) {
-            if (!baseUrl) return '';
-            
-            // Usar la URL original sin modificaciones agresivas
-            var urlParts = baseUrl.split('?');
-            var url = urlParts[0];
-            var existingParams = urlParts[1] || '';
-            
-            // Parámetros básicos y seguros que funcionan con URLs públicas
-            var controlParams = [
-                'chromeless=1',                // Oculta barra superior
-                'filterPaneEnabled=false'      // Oculta panel de filtros
-            ];
-            
-            // Combinar parámetros existentes con los de control
-            var allParams = existingParams;
-            for (var i = 0; i < controlParams.length; i++) {
-                if (allParams) {
-                    allParams += '&' + controlParams[i];
-                } else {
-                    allParams = controlParams[i];
-                }
-            }
-            
-            var finalUrl = url + '?' + allParams;
-            console.log("URL segura con controles básicos:", finalUrl);
-            return finalUrl;
-        }
-
-        // Función para actualizar la URL del Power BI si es necesaria
+        // Función para actualizar la URL del Power BI si es necesaria (para uso futuro)
         function updatePowerBIUrl() {
-            // Esta función puede ser llamada si necesitas actualizar la URL dinámicamente
             var currentUrl = "{{url_powerbi|default:''}}";
             if (currentUrl && currentUrl !== "None" && currentUrl !== "") {
                 var iframe = document.getElementById('powerbi-iframe');
                 if (iframe) {
-                    var controlledUrl = buildPowerBIUrl(currentUrl);
-                    iframe.src = controlledUrl;
-                    console.log("URL de Power BI configurada:", controlledUrl);
+                    iframe.src = currentUrl;
+                    console.log("URL de Power BI actualizada:", currentUrl);
                 }
             } else {
                 console.error("URL de Power BI no disponible");
@@ -206,10 +296,9 @@
                             loadingModal.show();
                         }
                         
-                        // Construir URL con parámetros de control y establecerla en el iframe
-                        var controlledUrl = buildPowerBIUrl(powerbiUrl);
-                        powerbiIframe.src = controlledUrl;
-                        console.log("URL controlada establecida:", controlledUrl);
+                        // Establecer la URL directamente en el iframe
+                        powerbiIframe.src = powerbiUrl;
+                        console.log("URL establecida:", powerbiUrl);
                     }
                 } catch (error) {
                     console.error("Error parseando respuesta JSON:", error);

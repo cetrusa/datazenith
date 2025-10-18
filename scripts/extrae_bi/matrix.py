@@ -10,6 +10,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from openpyxl import Workbook
 from scripts.conexion import Conexion as con
 from scripts.config import ConfigBasic
+from scripts.text_cleaner import TextCleaner
 import ast
 import psutil
 
@@ -147,13 +148,19 @@ class MatrixVentas:
                         df_all['Cod. produccto'] = df_all['Cod. produccto'].astype(str)
                         logger.info("Columna 'Cod. produccto' convertida a texto para preservar códigos")
                     
-                    # SEGUNDO: Conversión de Decimal a float en las demás columnas
+                    # LIMPIEZA: Sanitizar todas las columnas de tipo object (strings) para eliminar
+                    # caracteres de control que puedan provocar errores en openpyxl al escribir a Excel.
                     object_columns = df_all.select_dtypes(include=["object"]).columns
-                    for column in object_columns:
+                    for col in object_columns:
+                        df_all[col] = df_all[col].apply(
+                            lambda v: TextCleaner.clean_for_excel(v) if isinstance(v, str) else v
+                        )
+
+                    # SEGUNDO: Conversión de Decimal a float en las demás columnas
+                    # Convertir Decimal a float donde aplique (evitar conversión en strings ya limpias)
+                    for column in df_all.columns:
                         df_all[column] = df_all[column].apply(
-                            lambda value: float(value)
-                            if isinstance(value, Decimal)
-                            else value
+                            lambda value: float(value) if isinstance(value, Decimal) else value
                         )
                     df_all.to_excel(
                         writer,

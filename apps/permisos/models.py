@@ -30,6 +30,7 @@ class PermisosBarra(models.Model):
             ("cargue_plano", _("Cargar archivo plano")),
             ("cargue_tsol", _("Cargue archivo plano TSOL")),
             ("informe_bi", _("Informe BI")),
+            ("informe_bi_embed", _("Informe BI Embed")),
             ("actualizar_base", _("Actualización de datos")),
             ("actualizacion_bi", _("Actualizar BI")),
             ("admin", _("Ir al Administrador")),

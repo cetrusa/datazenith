@@ -12,6 +12,7 @@ from scripts.conexion import Conexion as con
 from scripts.config import ConfigBasic
 from apps.home.models import Reporte
 import psutil
+from scripts.text_cleaner import TextCleaner
 
 logger = logging.getLogger(__name__)
 
@@ -444,7 +445,12 @@ class CuboVentas:
                             break
                         for row in rows:
                             # Convertir RowProxy a lista/tupla simple
-                            ws.append(tuple(row))
+                            # Limpiar valores string para evitar caracteres ilegales en openpyxl
+                            cleaned_row = tuple(
+                                TextCleaner.clean_for_excel(v) if isinstance(v, str) else v
+                                for v in row
+                            )
+                            ws.append(cleaned_row)
                         records_written += len(rows)
                         progress_percent = (
                             85 + (records_written / self.total_records_processed * 14)
