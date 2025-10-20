@@ -1,0 +1,34 @@
+{
+  "smtp": {
+    "servidor": "smtp.gmail.com",
+    "puerto": 587,
+    "usar_tls": true,
+    "usar_ssl": false
+  },
+  "credenciales": {
+    "usuario": "torredecontrolamovil@gmail.com",
+    "contrasena": "sfmnvcymrrtrpzgr",
+    "nota": "Usar contraseña de aplicación de Google, no la contraseña normal"
+  },
+  "destinatarios": {
+    "reportes_exito": [
+      "admonventas@distrijass.com.co",
+      "admonventas.distrijass@gmail.com"
+    ],
+    "reportes_error": [
+      "admonventas@distrijass.com.co",
+      "admonventas.distrijass@gmail.com"
+    ],
+    "copia_siempre": [
+      "admonventas@distrijass.com.co",
+      "admonventas.distrijass@gmail.com"
+    ]
+  },
+  "configuracion": {
+    "enviar_en_exito": true,
+    "enviar_en_error": true,
+    "incluir_detalles_tablas": true,
+    "formato": "html",
+    "asunto_plantilla": "[CARGUE BI] {status} - {fecha}"
+  }
+}

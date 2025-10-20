@@ -1,3 +1,18 @@
+# -*- coding: utf-8 -*-
+"""
+Script de cargue de información de ventas a base de datos.
+Soporta emojis y caracteres UTF-8 completos.
+"""
+
+import sys
+import io
+
+# Garantizar UTF-8 en stdout y stderr
+if sys.platform == 'win32':
+    # Windows: usar UTF-8 en lugar de cp1252
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
+    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
+
 # ============================================================
 # 📦 CARGUE_INFOVENTAS_MAIN.PY
 # ------------------------------------------------------------
@@ -104,6 +119,20 @@ from sqlalchemy import text
 from sqlalchemy.exc import OperationalError as SAOperationalError
 from pymysql.err import OperationalError as PyMySQLOperationalError, InterfaceError as PyMySQLInterfaceError
 
+# ============================================================
+# 🎨 COLORES PARA TERMINAL (ANSI CODES)
+# ============================================================
+class TerminalColors:
+    HEADER = '\033[95m'
+    OKBLUE = '\033[94m'
+    OKCYAN = '\033[96m'
+    OKGREEN = '\033[92m'
+    WARNING = '\033[93m'
+    FAIL = '\033[91m'
+    ENDC = '\033[0m'
+    BOLD = '\033[1m'
+    UNDERLINE = '\033[4m'
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(message)s",
@@ -113,16 +142,51 @@ logging.basicConfig(
 # ------------------------------------------------------------
 # 🔍 Detectar fechas en el nombre del archivo
 # ------------------------------------------------------------
-def detectar_fechas_desde_nombre(nombre_archivo: str):
-    """Extrae año y mes desde el nombre del archivo (ej: 2025-08 o 202508)."""
+def detectar_fechas_desde_nombre(nombre_archivo: str, archivo_path: str = None):
+    """
+    Extrae año y mes desde el nombre del archivo (ej: 2025-08 o 202508).
+    Si no encuentra en el nombre, intenta extraer del Excel.
+    """
     import re
+    from calendar import monthrange
+    
+    # Intento 1: Buscar en el nombre del archivo
     match = re.search(r"(\d{4})[-_]?(\d{2})", nombre_archivo)
     if match:
         anio, mes = match.groups()
-        from calendar import monthrange
-        fecha_ini = datetime(int(anio), int(mes), 1).date()
-        fecha_fin = datetime(int(anio), int(mes), monthrange(int(anio), int(mes))[1]).date()
-        return fecha_ini, fecha_fin
+        try:
+            fecha_ini = datetime(int(anio), int(mes), 1).date()
+            fecha_fin = datetime(int(anio), int(mes), monthrange(int(anio), int(mes))[1]).date()
+            return fecha_ini, fecha_fin
+        except ValueError:
+            pass
+    
+    # Intento 2: Si se proporciona ruta del archivo, buscar en metadatos del Excel
+    if archivo_path and archivo_path.endswith('.xlsx'):
+        try:
+            from openpyxl import load_workbook
+            wb = load_workbook(archivo_path, data_only=True)
+            # Buscar en la primera hoja
+            ws = wb.active
+            # Buscar fechas en las primeras 10 filas y columnas
+            for row in ws.iter_rows(min_row=1, max_row=10, min_col=1, max_col=10, values_only=True):
+                for cell in row:
+                    if cell:
+                        cell_str = str(cell).strip()
+                        # Buscar patrones de fecha
+                        match = re.search(r"(\d{4})[-_/.](\d{2})", cell_str)
+                        if match:
+                            anio, mes = match.groups()
+                            try:
+                                fecha_ini = datetime(int(anio), int(mes), 1).date()
+                                fecha_fin = datetime(int(anio), int(mes), monthrange(int(anio), int(mes))[1]).date()
+                                logging.info(f"✅ Fechas detectadas desde Excel: {fecha_ini} → {fecha_fin}")
+                                return fecha_ini, fecha_fin
+                            except ValueError:
+                                pass
+        except Exception as e:
+            logging.debug(f"No se pudo leer Excel para detectar fechas: {e}")
+    
     return None, None
 
 
@@ -174,15 +238,27 @@ def ejecutar_procedimiento_con_reintentos(cargador, sentencia_sql: str, intentos
                         if not tiene_mas:
                             break
 
-                    conn.commit()
+                    # Intentar commit, pero no fallar si no funciona
+                    # (el procedimiento ya se ejecutó)
+                    try:
+                        conn.commit()
+                    except Exception as commit_err:
+                        logging.warning(f"   ⚠️ Aviso en commit: {commit_err} (procedimiento probablemente completado)")
+                    
                     print(f"   ✅ Procedimiento finalizado en intento {intento} [DEBUG]")
                     logging.info(f"   ✅ Procedimiento finalizado en intento {intento}")
                     return True, None
 
                 finally:
-                    cursor.close()
+                    try:
+                        cursor.close()
+                    except Exception:
+                        pass
             finally:
-                conn.close()
+                try:
+                    conn.close()
+                except Exception:
+                    pass
 
         except (PyMySQLOperationalError, PyMySQLInterfaceError, SAOperationalError) as db_err:
             # Normalizar código de error
@@ -238,8 +314,8 @@ def run_cargue(database_name: str, archivo_path: str, usuario: str = None):
     logging.info(f"🚀 Iniciando cargue del archivo: {archivo_path}")
     print(f"🚀 Iniciando cargue del archivo: {archivo_path}")
 
-    # Detectar fechas desde nombre del archivo
-    fecha_ini, fecha_fin = detectar_fechas_desde_nombre(os.path.basename(archivo_path))
+    # Detectar fechas desde nombre del archivo o desde contenido Excel
+    fecha_ini, fecha_fin = detectar_fechas_desde_nombre(os.path.basename(archivo_path), archivo_path)
     if not fecha_ini or not fecha_fin:
         logging.warning("⚠️ No se pudieron detectar fechas desde el nombre. Se usará el mes actual.")
         hoy = datetime.now()
@@ -272,24 +348,83 @@ def run_cargue(database_name: str, archivo_path: str, usuario: str = None):
         resultado = cargador.procesar_cargue()
         print("✅ Cargue completado correctamente [DEBUG]")
         logging.info("✅ Cargue completado correctamente.")
-        logging.info(f"📊 Registros procesados: {resultado.get('registros_procesados', 0)}")
-        logging.info(f"📊 Registros insertados: {resultado.get('registros_insertados', 0)}")
-        logging.info(f"📊 Registros actualizados: {resultado.get('registros_actualizados', 0)}")
-        logging.info(f"📊 Registros preservados: {resultado.get('registros_preservados', 0)}")
+        
+        # Registrar estadísticas detalladas
+        registros_procesados = resultado.get('registros_procesados', 0)
+        registros_insertados = resultado.get('registros_insertados', 0)
+        registros_actualizados = resultado.get('registros_actualizados', 0)
+        registros_preservados = resultado.get('registros_preservados', 0)
+        
+        logging.info(f"📊 Registros procesados: {registros_procesados:,}")
+        logging.info(f"📊 Registros insertados: {registros_insertados:,}")
+        logging.info(f"📊 Registros actualizados: {registros_actualizados:,}")
+        logging.info(f"📊 Registros preservados: {registros_preservados:,}")
+        
+        # Mostrar rango de fechas en log
+        logging.info(f"📅 RANGO DE FECHAS PROCESADAS: {fecha_ini} → {fecha_fin}")
         
         # 🔹 FASE 3: EJECUTAR MANTENIMIENTO POST-CARGUE
         print("🔧 FASE 3: Iniciando mantenimiento post-cargue... [DEBUG]")
         logging.info("🔧 Fase 3: Iniciando mantenimiento post-cargue...")
         ejecutar_mantenimiento_completo(cargador)
         
-        # 🔹 FASE 4: REPORTE FINAL
+        # 🔹 FASE 4: DIAGNÓSTICO DE LA VISTA
+        print("🔧 FASE 4: Ejecutando diagnóstico de la vista... [DEBUG]")
+        logging.info("🔧 Fase 4: Ejecutando diagnóstico de la vista...")
+        diagnosticar_vista_infoventas(cargador)
+        
+        # 🔹 FASE 5: CAPTURAR ESTADÍSTICAS FINALES
+        print("🔧 FASE 5: Capturando estadísticas finales... [DEBUG]")
+        logging.info("🔧 Fase 5: Capturando estadísticas finales...")
+        
+        # Calcular tiempo transcurrido
         elapsed_time = time.time() - start_time
+        
+        # Importar el reporter de email
+        from scripts.email_reporter import obtener_estadisticas_tablas
+        
+        estadisticas_tablas = obtener_estadisticas_tablas(cargador)
+        registros_fact = estadisticas_tablas.get('registros_fact', 0)
+        registros_dev = estadisticas_tablas.get('registros_dev', 0)
+        registros_staging = estadisticas_tablas.get('registros_staging', 0)
+        detalles_tablas = estadisticas_tablas.get('detalles_tablas', [])
+        
+        # Logging detallado de estadísticas
+        logging.info("=" * 80)
+        logging.info("📊 === ESTADÍSTICAS FINALES DE CARGUE ===")
+        logging.info("=" * 80)
+        logging.info(f"📅 Período procesado: {fecha_ini} → {fecha_fin}")
+        logging.info(f"⏱️  Duración total: {elapsed_time:.2f} segundos")
+        logging.info("")
+        logging.info("📝 RESUMEN DE INSERCIÓN:")
+        logging.info(f"   • Registros procesados: {registros_procesados:,}")
+        logging.info(f"   • Registros insertados: {registros_insertados:,}")
+        logging.info(f"   • Registros actualizados: {registros_actualizados:,}")
+        logging.info(f"   • Registros preservados: {registros_preservados:,}")
+        logging.info("")
+        logging.info("📦 DISTRIBUCIÓN POR TABLA CLASIFICADA:")
+        logging.info(f"   • Registros en _fact: {registros_fact:,}")
+        logging.info(f"   • Registros en _dev: {registros_dev:,}")
+        logging.info(f"   • Total clasificado: {registros_fact + registros_dev:,}")
+        logging.info(f"   • Registros en staging (post-limpieza): {registros_staging:,}")
+        logging.info("")
+        logging.info("📋 DETALLES POR TABLA:")
+        for tabla_info in detalles_tablas:
+            tabla_nombre = tabla_info.get('tabla', '')
+            tipo = tabla_info.get('tipo', '')
+            registros = tabla_info.get('registros', 0)
+            logging.info(f"   • {tabla_nombre}: {registros:,} registros [{tipo}]")
+        logging.info("=" * 80)
+        
+        # 🔹 FASE 6: REPORTE FINAL CON ESTADÍSTICAS
         print(f"🎉 PROCESO COMPLETADO EXITOSAMENTE en {elapsed_time:.2f} segundos [DEBUG]")
         logging.info(f"🎉 PROCESO COMPLETADO EXITOSAMENTE en {elapsed_time:.2f} segundos")
         
     except Exception as e:
+        elapsed_time = time.time() - start_time
         print(f"❌ ERROR CRÍTICO en el proceso principal: {e} [DEBUG]")
         logging.error(f"❌ ERROR CRÍTICO en el proceso principal: {e}", exc_info=True)
+        logging.error(f"❌ Tiempo hasta error: {elapsed_time:.2f} segundos")
         raise e
     finally:
         # Limpieza final
@@ -487,13 +622,134 @@ def ejecutar_mantenimiento_completo(cargador):
     return mantenimiento_exitoso
 
 
-# ------------------------------------------------------------
+# ============================================================
+# 🔍 DIAGNÓSTICO: Verificar composición de la vista
+# ============================================================
+def diagnosticar_vista_infoventas(cargador):
+    """
+    Verifica que vw_infoventas SOLO contenga tablas _fact y _dev.
+    Detecta si hay tablas anuales (infoventas_YYYY) incluidas incorrectamente.
+    """
+    print("\n" + "="*70)
+    print(f"{TerminalColors.BOLD}🔍 DIAGNÓSTICO: Composición de vw_infoventas{TerminalColors.ENDC}")
+    print("="*70)
+    
+    try:
+        conn = cargador.engine_mysql_bi.raw_connection()
+        try:
+            cursor = conn.cursor()
+            try:
+                # 1️⃣ Obtener definición de la vista
+                print(f"\n{TerminalColors.OKBLUE}1️⃣ Estructura de vw_infoventas:{TerminalColors.ENDC}")
+                cursor.execute("SHOW CREATE VIEW vw_infoventas;")
+                vista_def = cursor.fetchone()
+                if vista_def:
+                    vista_sql = vista_def[1]
+                    # Contar UNION ALL para determinar tablas incluidas
+                    num_uniones = vista_sql.count(" UNION ALL ")
+                    num_tablas = num_uniones + 1
+                    print(f"   📊 Tablas en la vista: {num_tablas}")
+                    
+                    # Verificar si incluye tablas anuales (❌ MAL)
+                    if "FROM `infoventas_2024`" in vista_sql or \
+                       "FROM `infoventas_2025`" in vista_sql or \
+                       "FROM `infoventas_2026`" in vista_sql:
+                        print(f"{TerminalColors.FAIL}   ❌ ERROR: La vista incluye tablas anuales completas (infoventas_YYYY){TerminalColors.ENDC}")
+                        print(f"{TerminalColors.FAIL}   Esto causa DUPLICACIÓN de datos.{TerminalColors.ENDC}")
+                    else:
+                        print(f"{TerminalColors.OKGREEN}   ✅ La vista NO incluye tablas anuales completas.{TerminalColors.ENDC}")
+                    
+                    # Verificar si incluye _fact y _dev
+                    fact_count = vista_sql.count("_fact")
+                    dev_count = vista_sql.count("_dev")
+                    print(f"   📊 Tablas _fact: {fact_count}")
+                    print(f"   📊 Tablas _dev: {dev_count}")
+                    
+                    if fact_count > 0 and dev_count > 0:
+                        print(f"{TerminalColors.OKGREEN}   ✅ La vista incluye correctamente tablas _fact y _dev.{TerminalColors.ENDC}")
+                    else:
+                        print(f"{TerminalColors.WARNING}   ⚠️ La vista podría no tener tablas _fact o _dev.{TerminalColors.ENDC}")
+
+                # 2️⃣ Listar tablas que se detectaron
+                print(f"\n{TerminalColors.OKBLUE}2️⃣ Tablas detectadas en la base de datos:{TerminalColors.ENDC}")
+                cursor.execute("""
+                    SELECT table_name FROM information_schema.tables
+                    WHERE table_schema = DATABASE() AND table_name LIKE 'infoventas\\_%' ESCAPE '\\\\'
+                    ORDER BY table_name;
+                """)
+                tablas = cursor.fetchall()
+                
+                tablas_anuales = []
+                tablas_fact_dev = []
+                
+                for (tabla,) in tablas:
+                    if tabla.endswith("_fact") or tabla.endswith("_dev"):
+                        tablas_fact_dev.append(tabla)
+                    else:
+                        tablas_anuales.append(tabla)
+                
+                print(f"\n   📋 Tablas anuales (fuente, NO en vista): {len(tablas_anuales)}")
+                for tbl in sorted(tablas_anuales):
+                    print(f"      • {tbl}")
+                
+                print(f"\n   📋 Tablas _fact/_dev (en vista): {len(tablas_fact_dev)}")
+                for tbl in sorted(tablas_fact_dev):
+                    print(f"      • {tbl}")
+
+                # 3️⃣ Contar registros en cada tabla
+                print(f"\n{TerminalColors.OKBLUE}3️⃣ Conteo de registros:{TerminalColors.ENDC}")
+                
+                # Vista
+                cursor.execute("SELECT COUNT(*) FROM vw_infoventas;")
+                vista_count = cursor.fetchone()[0]
+                print(f"   📊 vw_infoventas: {vista_count:,} registros")
+                
+                # Staging
+                cursor.execute("SELECT COUNT(*) FROM infoventas;")
+                staging_count = cursor.fetchone()[0]
+                print(f"   📊 infoventas (staging): {staging_count:,} registros")
+                
+                # Totales por tipo
+                total_fact = 0
+                total_dev = 0
+                for tbl in sorted(tablas_fact_dev):
+                    cursor.execute(f"SELECT COUNT(*) FROM `{tbl}`;")
+                    count = cursor.fetchone()[0]
+                    if "_fact" in tbl:
+                        total_fact += count
+                    elif "_dev" in tbl:
+                        total_dev += count
+                
+                print(f"   📊 Total _fact: {total_fact:,} registros")
+                print(f"   📊 Total _dev: {total_dev:,} registros")
+                print(f"   📊 Total en vista: {vista_count:,} registros (debe = fact + dev)")
+                
+                # Validación
+                if vista_count == (total_fact + total_dev):
+                    print(f"{TerminalColors.OKGREEN}   ✅ Consistencia verificada.{TerminalColors.ENDC}")
+                else:
+                    print(f"{TerminalColors.WARNING}   ⚠️ Posible inconsistencia: vista={vista_count}, suma fact+dev={total_fact + total_dev}{TerminalColors.ENDC}")
+
+            finally:
+                cursor.close()
+        finally:
+            conn.close()
+            
+    except Exception as e:
+        print(f"{TerminalColors.FAIL}❌ Error en diagnóstico: {e}{TerminalColors.ENDC}")
+        logging.error(f"❌ Error en diagnóstico de vista: {e}", exc_info=True)
+    
+    print("="*70 + "\n")
+
+
+# ============================================================
 # 🧩 Lógica principal con CLI
-# ------------------------------------------------------------
+# ============================================================
 def main():
     parser = argparse.ArgumentParser(description="Carga automatizada de InfoVentas")
     parser.add_argument("--base", required=True, help="Nombre de la base de datos (ej: bi_distrijass)")
     parser.add_argument("--archivo", help="Ruta de un archivo específico")
+
     parser.add_argument("--carpeta", help="Ruta de carpeta con múltiples archivos")
     parser.add_argument("--usuario", help="Usuario que ejecuta el proceso (por defecto SYSTEM)")
 

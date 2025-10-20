@@ -25,84 +25,15 @@
 {% endblock barra_lateral %}
 
 {% block window %}
-<!-- CSS personalizado para control de sidebar -->
-<style>
-    /* Transiciones suaves para el sidebar */
-    #sidebar-container {
-        transition: transform 0.3s ease-in-out, width 0.3s ease-in-out;
-        position: fixed;
-        top: 0;
-        left: 0;
-        height: 100vh;
-        z-index: 1000;
-        background: inherit;
-    }
-    
-    /* Clase para ocultar sidebar */
-    .sidebar-hidden #sidebar-container {
-        transform: translateX(-100%);
-    }
-    
-    /* Ajuste del contenido principal cuando sidebar está oculto */
-    .sidebar-hidden .main-content {
-        margin-left: 0 !important;
-        width: 100% !important;
-    }
-    
-    /* Barra de control flotante */
-    .sidebar-toggle-bar {
-        position: fixed;
-        top: 20px;
-        left: 20px;
-        z-index: 1001;
-        background: rgba(40, 167, 69, 0.9);
-        color: white;
-        border: none;
-        border-radius: 8px;
-        padding: 10px 15px;
-        cursor: pointer;
-        box-shadow: 0 4px 8px rgba(0,0,0,0.2);
-        transition: all 0.3s ease;
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        font-size: 14px;
-        backdrop-filter: blur(5px);
-    }
-    
-    .sidebar-toggle-bar:hover {
-        background: rgba(40, 167, 69, 1);
-        transform: translateY(-2px);
-        box-shadow: 0 6px 12px rgba(0,0,0,0.3);
-    }
-    
-    /* Cuando sidebar está oculto, mover el botón más a la izquierda */
-    .sidebar-hidden .sidebar-toggle-bar {
-        left: 20px;
-        background: rgba(108, 117, 125, 0.9);
-    }
-    
-    .sidebar-hidden .sidebar-toggle-bar:hover {
-        background: rgba(108, 117, 125, 1);
-    }
-    
-    /* Ajustes para contenido principal */
-    .main-content {
-        transition: margin-left 0.3s ease-in-out, width 0.3s ease-in-out;
-    }
-    
-    /* Icono rotación */
-    .toggle-icon {
-        transition: transform 0.3s ease;
-    }
-    
-    .sidebar-hidden .toggle-icon {
-        transform: rotate(180deg);
-    }
-</style>
 
 <!-- Barra de control flotante -->
-<button class="sidebar-toggle-bar" onclick="toggleSidebar()" title="Ocultar/Mostrar menú lateral (Ctrl + B)">
+<button 
+    id="sidebar-toggle-btn"
+    class="sidebar-toggle-bar" 
+    aria-label="Alternar menú lateral (Ctrl+B)"
+    aria-expanded="false"
+    aria-controls="sidebar-container"
+    title="Ocultar/Mostrar menú lateral (Ctrl + B)">
     <i class="fas fa-bars toggle-icon"></i>
     <span class="toggle-text">Ocultar menú</span>
 </button>
@@ -175,144 +106,322 @@
     <!-- Bootstrap JS si no está cargado -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
     <script type="text/javascript">
-        // Variables globales
-        var loadingModal;
-        var powerbiIframe = document.getElementById('powerbi-iframe');
-        var sidebarHidden = false;
-
-        // Función para toggle del sidebar
-        function toggleSidebar() {
-            var body = document.body;
-            var toggleText = document.querySelector('.toggle-text');
-            var toggleIcon = document.querySelector('.toggle-icon');
+        // IIFE para evitar contaminación del scope global
+        (function() {
+            'use strict';
             
-            if (sidebarHidden) {
-                // Mostrar sidebar
-                body.classList.remove('sidebar-hidden');
-                toggleText.textContent = 'Ocultar menú';
-                toggleIcon.className = 'fas fa-bars toggle-icon';
-                sidebarHidden = false;
-                console.log("Sidebar mostrado");
-            } else {
-                // Ocultar sidebar
-                body.classList.add('sidebar-hidden');
-                toggleText.textContent = 'Mostrar menú';
-                toggleIcon.className = 'fas fa-arrow-right toggle-icon';
-                sidebarHidden = true;
-                console.log("Sidebar ocultado");
-            }
+            // Constantes y configuración
+            const CONFIG = {
+                LOCALSTORAGE_KEY: 'powerbi-sidebar-hidden',
+                LOADING_TIMEOUT: 15000, // 15 segundos
+                DEBUG_MODE: true
+            };
             
-            // Guardar preferencia en localStorage
-            localStorage.setItem('powerbi-sidebar-hidden', sidebarHidden);
-        }
-
-        // Atajo de teclado para toggle sidebar (Ctrl + B)
-        document.addEventListener('keydown', function(event) {
-            if (event.ctrlKey && event.key === 'b') {
-                event.preventDefault();
-                toggleSidebar();
-            }
-        });
-
-        // Función auto-ejecutable para inicializar
-        (function () {
-            // Restaurar preferencia de sidebar del localStorage
-            var savedState = localStorage.getItem('powerbi-sidebar-hidden');
-            if (savedState === 'true') {
-                toggleSidebar();
-            }
-
-            // Solo mostrar modal de carga si hay URL de Power BI
-            {% if url_powerbi %}
-            // Mostrar el modal de carga
-            loadingModal = new bootstrap.Modal(document.getElementById('loadingModal'));
-            loadingModal.show();
-            {% endif %}
-
-            // Obtener la base de datos seleccionada de sessionStorage para usarla en el reporte si es necesario
-            var database = window.sessionStorage.getItem("database_name");
-            console.log("Base de datos seleccionada (para reporte BI):", database);
-
-            if (!database) {
-                console.warn("No se ha seleccionado una base de datos para el reporte BI");
-            }
-
-            {% if not url_powerbi %}
-            console.warn("No hay URL de Power BI configurada para esta empresa");
-            {% endif %}
-        })();
-
-        // Función para manejar la carga exitosa del iframe
-        function handleIframeLoad() {
-            console.log("Reporte BI cargado correctamente");
+            // Logger simple y reutilizable
+            const Logger = {
+                debug: (msg) => { if (CONFIG.DEBUG_MODE) console.log('[PowerBI] ' + msg); },
+                warn: (msg) => { console.warn('[PowerBI] ' + msg); },
+                error: (msg) => { console.error('[PowerBI] ' + msg); }
+            };
             
-            // Ocultar modal de carga
-            setTimeout(function() {
-                if (loadingModal) {
-                    loadingModal.hide();
+            // Estado de la aplicación
+            let state = {
+                loadingModal: null,
+                powerbiIframe: null,
+                sidebarHidden: false,
+                loadingTimeout: null
+            };
+            
+            /**
+             * Función para alternar el sidebar
+             * Con validación de elementos y manejo seguro de localStorage
+             */
+            function toggleSidebar() {
+                const body = document.body;
+                const toggleText = document.querySelector('.toggle-text');
+                const toggleIcon = document.querySelector('.toggle-icon');
+                const toggleBtn = document.getElementById('sidebar-toggle-btn');
+                
+                // Validar que los elementos existan
+                if (!body || !toggleText || !toggleIcon || !toggleBtn) {
+                    Logger.error('Elementos necesarios no encontrados para toggle sidebar');
+                    return;
                 }
-            }, 1000);
-        }
-
-        // Función para manejar errores del iframe
-        function handleIframeError() {
-            console.error("Error al cargar el reporte BI");
-            var reportContainer = document.getElementById('reportContainer');
-            reportContainer.innerHTML = '<div class="alert alert-danger">Ocurrió un error al cargar el reporte. Por favor, verifique su conexión o contacte al administrador.</div>';
-            if (loadingModal) {
-                loadingModal.hide();
-            }
-        }
-
-        // Función para actualizar la URL del Power BI si es necesaria (para uso futuro)
-        function updatePowerBIUrl() {
-            var currentUrl = "{{url_powerbi|default:''}}";
-            if (currentUrl && currentUrl !== "None" && currentUrl !== "") {
-                var iframe = document.getElementById('powerbi-iframe');
-                if (iframe) {
-                    iframe.src = currentUrl;
-                    console.log("URL de Power BI actualizada:", currentUrl);
+                
+                state.sidebarHidden = !state.sidebarHidden;
+                
+                if (state.sidebarHidden) {
+                    body.classList.add('sidebar-hidden');
+                    toggleText.textContent = 'Mostrar menú';
+                    toggleIcon.className = 'fas fa-arrow-right toggle-icon';
+                    toggleBtn.setAttribute('aria-expanded', 'false');
+                    Logger.debug('Sidebar ocultado');
+                } else {
+                    body.classList.remove('sidebar-hidden');
+                    toggleText.textContent = 'Ocultar menú';
+                    toggleIcon.className = 'fas fa-bars toggle-icon';
+                    toggleBtn.setAttribute('aria-expanded', 'true');
+                    Logger.debug('Sidebar mostrado');
                 }
-            } else {
-                console.error("URL de Power BI no disponible");
-                handleIframeError();
-            }
-        }
-
-        // Función original para compatibilidad con posibles llamadas AJAX
-        function handleServerResponse(status, responseText) {
-            if (status === 200) {
+                
+                // Guardar preferencia en localStorage de forma segura
                 try {
-                    // Parsea la respuesta JSON
-                    var jsonResponse = JSON.parse(responseText);
-                    
-                    // Obtiene la URL de la clave 'url_powerbi'
-                    var powerbiUrl = jsonResponse.url_powerbi;
-                    console.log("Nueva URL recibida:", powerbiUrl);
-                    
-                    if (powerbiUrl) {
-                        // Mostrar modal de carga
-                        if (loadingModal) {
-                            loadingModal.show();
-                        }
-                        
-                        // Establecer la URL directamente en el iframe
-                        powerbiIframe.src = powerbiUrl;
-                        console.log("URL establecida:", powerbiUrl);
-                    }
-                } catch (error) {
-                    console.error("Error parseando respuesta JSON:", error);
-                    handleIframeError();
+                    localStorage.setItem(CONFIG.LOCALSTORAGE_KEY, state.sidebarHidden);
+                } catch (e) {
+                    Logger.warn('localStorage no disponible: ' + e.message);
                 }
-            } else {
-                console.error("Error en la solicitud:", status, responseText);
-                handleIframeError();
             }
-        }
+            
+            /**
+             * Restaurar estado del sidebar desde localStorage
+             */
+            function restoreSidebarState() {
+                try {
+                    const savedState = localStorage.getItem(CONFIG.LOCALSTORAGE_KEY);
+                    if (savedState === 'true') {
+                        state.sidebarHidden = true;
+                        const body = document.body;
+                        if (body) {
+                            body.classList.add('sidebar-hidden');
+                            const toggleText = document.querySelector('.toggle-text');
+                            const toggleIcon = document.querySelector('.toggle-icon');
+                            const toggleBtn = document.getElementById('sidebar-toggle-btn');
+                            if (toggleText) toggleText.textContent = 'Mostrar menú';
+                            if (toggleIcon) toggleIcon.className = 'fas fa-arrow-right toggle-icon';
+                            if (toggleBtn) toggleBtn.setAttribute('aria-expanded', 'false');
+                        }
+                        Logger.debug('Estado del sidebar restaurado desde localStorage');
+                    }
+                } catch (e) {
+                    Logger.warn('No se pudo restaurar estado del sidebar: ' + e.message);
+                }
+            }
+            
+            /**
+             * Manejar carga exitosa del iframe
+             */
+            function handleIframeLoad() {
+                Logger.debug('Reporte BI cargado correctamente');
+                clearTimeout(state.loadingTimeout);
+                
+                // Ocultar modal con pequeño delay
+                setTimeout(() => {
+                    if (state.loadingModal) {
+                        try {
+                            state.loadingModal.hide();
+                        } catch (e) {
+                            Logger.warn('Error al ocultar modal: ' + e.message);
+                        }
+                    }
+                }, 500);
+            }
+            
+            /**
+             * Manejar errores del iframe
+             */
+            function handleIframeError() {
+                Logger.error('Error al cargar el reporte BI');
+                clearTimeout(state.loadingTimeout);
+                
+                const reportContainer = document.getElementById('reportContainer');
+                if (reportContainer) {
+                    reportContainer.innerHTML = '<div class="alert alert-danger"><i class="fas fa-exclamation-circle"></i> Ocurrió un error al cargar el reporte. Por favor, verifique su conexión o contacte al administrador.</div>';
+                }
+                
+                if (state.loadingModal) {
+                    try {
+                        state.loadingModal.hide();
+                    } catch (e) {
+                        Logger.warn('Error al ocultar modal en error: ' + e.message);
+                    }
+                }
+            }
+            
+            /**
+             * Configurar timeout de carga para modal
+             */
+            function setupLoadingTimeout() {
+                state.loadingTimeout = setTimeout(() => {
+                    Logger.warn('Tiempo de carga de Power BI excedido');
+                    if (state.loadingModal) {
+                        try {
+                            state.loadingModal.hide();
+                        } catch (e) {
+                            Logger.warn('Error al ocultar modal en timeout: ' + e.message);
+                        }
+                    }
+                }, CONFIG.LOADING_TIMEOUT);
+            }
+            
+            /**
+             * Inicialización de la aplicación
+             */
+            function init() {
+                Logger.debug('Inicializando aplicación Power BI');
+                
+                // Validar existencia de iframe de Power BI
+                state.powerbiIframe = document.getElementById('powerbi-iframe');
+                if (!state.powerbiIframe) {
+                    Logger.debug('Power BI iframe no encontrado (probablemente sin URL configurada)');
+                } else {
+                    Logger.debug('Power BI iframe encontrado');
+                    setupLoadingTimeout();
+                }
+                
+                // Restaurar estado del sidebar
+                restoreSidebarState();
+                
+                // Mostrar modal de carga si hay URL de Power BI
+                const loadingModalEl = document.getElementById('loadingModal');
+                if (loadingModalEl && state.powerbiIframe) {
+                    try {
+                        state.loadingModal = new bootstrap.Modal(loadingModalEl);
+                        state.loadingModal.show();
+                    } catch (e) {
+                        Logger.warn('Error al mostrar modal: ' + e.message);
+                    }
+                }
+                
+                // Obtener base de datos seleccionada
+                const database = window.sessionStorage ? window.sessionStorage.getItem('database_name') : null;
+                Logger.debug('Base de datos seleccionada: ' + (database || 'ninguna'));
+            }
+            
+            /**
+             * Configurar manejadores de eventos
+             */
+            function setupEventHandlers() {
+                // Click en botón de toggle
+                const toggleBtn = document.getElementById('sidebar-toggle-btn');
+                if (toggleBtn) {
+                    toggleBtn.addEventListener('click', toggleSidebar);
+                    Logger.debug('Manejador de click para toggle button configurado');
+                } else {
+                    Logger.warn('Botón de toggle sidebar no encontrado');
+                }
+                
+                // Atajo de teclado Ctrl + B
+                document.addEventListener('keydown', (event) => {
+                    if (event.ctrlKey && event.key === 'b') {
+                        event.preventDefault();
+                        toggleSidebar();
+                    }
+                });
+                Logger.debug('Atajo de teclado Ctrl+B configurado');
+            }
+            
+            /**
+             * Punto de entrada - ejecutar cuando el DOM está listo
+             */
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', () => {
+                    setupEventHandlers();
+                    init();
+                });
+            } else {
+                // El DOM ya está listo
+                setupEventHandlers();
+                init();
+            }
+            
+        })(); // Fin de IIFE
     </script>
     {% endif %}
 </div>
 {% endblock window %}
+
+{% block style %}
+<!-- CSS personalizado para control de sidebar -->
+<style>
+    /* Transiciones suaves para el sidebar */
+    #sidebar-container {
+        transition: transform 0.3s ease-in-out, width 0.3s ease-in-out;
+        position: fixed;
+        top: 0;
+        left: 0;
+        height: 100vh;
+        z-index: 1000;
+        background: inherit;
+    }
+    
+    /* Clase para ocultar sidebar */
+    .sidebar-hidden #sidebar-container {
+        transform: translateX(-100%);
+    }
+    
+    /* Ajuste del contenido principal cuando sidebar está oculto */
+    .sidebar-hidden .main-content {
+        margin-left: 0 !important;
+        width: 100% !important;
+        max-width: 100% !important;
+    }
+    
+    /* Contenido normal con sidebar visible */
+    .main-content {
+        transition: margin-left 0.3s ease-in-out, width 0.3s ease-in-out, max-width 0.3s ease-in-out;
+    }
+    
+    /* Barra de control flotante */
+    .sidebar-toggle-bar {
+        position: fixed;
+        top: 20px;
+        left: 20px;
+        z-index: 1001;
+        background: rgba(40, 167, 69, 0.9);
+        color: white;
+        border: none;
+        border-radius: 8px;
+        padding: 10px 15px;
+        cursor: pointer;
+        box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+        transition: all 0.3s ease;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 14px;
+        backdrop-filter: blur(5px);
+    }
+    
+    .sidebar-toggle-bar:hover {
+        background: rgba(40, 167, 69, 1);
+        transform: translateY(-2px);
+        box-shadow: 0 6px 12px rgba(0,0,0,0.3);
+    }
+    
+    /* Cuando sidebar está oculto, cambiar color del botón */
+    .sidebar-hidden .sidebar-toggle-bar {
+        background: rgba(108, 117, 125, 0.9);
+    }
+    
+    .sidebar-hidden .sidebar-toggle-bar:hover {
+        background: rgba(108, 117, 125, 1);
+    }
+    
+    /* Icono rotación */
+    .toggle-icon {
+        transition: transform 0.3s ease;
+    }
+    
+    .sidebar-hidden .toggle-icon {
+        transform: rotate(180deg);
+    }
+    
+    /* Accesibilidad: Mostrar focus visible para teclado */
+    .sidebar-toggle-bar:focus-visible {
+        outline: 2px solid #0d6efd;
+        outline-offset: 2px;
+    }
+    
+    /* Contenedor del reporte - se expande con transición suave */
+    #reportContainer {
+        transition: width 0.3s ease-in-out;
+    }
+    
+    .sidebar-hidden #reportContainer {
+        width: 100% !important;
+    }
+</style>
+{% endblock style %}
 
 {# Eliminar cualquier bloque script personalizado que intente sincronizar la DB en esta página #}
 {% block script %}

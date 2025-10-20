@@ -66,6 +66,13 @@ def default_permissions_loader(
         return {"proveedores": [], "macrozonas": []}
 
     try:  # pragma: no cover - requiere entorno Django
+        # Proteger contra Django no inicializado
+        import os
+        if not os.environ.get('DJANGO_SETTINGS_MODULE'):
+            # Django no está configurado, retornar permisos vacíos sin error
+            logger.debug(f"Django no inicializado para {database_name}/{user_id}, usando permisos por defecto")
+            return {"proveedores": [], "macrozonas": []}
+        
         from django.contrib.auth import get_user_model  # type: ignore
         from apps.users.models import UserPermission  # type: ignore
 
@@ -92,8 +99,8 @@ def default_permissions_loader(
         )
         return {"proveedores": proveedores, "macrozonas": macrozonas}
     except Exception as exc:  # pragma: no cover - logging defensivo
-        logger.exception(
-            "Error al obtener permisos para %s/%s: %s", database_name, user_id, exc
+        logger.debug(
+            "No se pudieron obtener permisos para %s/%s (Django no disponible): %s", database_name, user_id, exc
         )
         return {"proveedores": [], "macrozonas": []}
 

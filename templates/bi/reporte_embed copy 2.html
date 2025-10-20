@@ -4,7 +4,6 @@
 
 {% block title %}BI{% endblock title %}
 
-<!-- Incluir el menú lateral izquierdo -->
 {% block barra_lateral %}
 {% include 'includes/left_sidebar_bi.html' %}
 {% endblock barra_lateral %}
@@ -137,19 +136,7 @@
 </div>
 {% endblock window %}
 
-{% block style %}
-<!-- Estilos básicos para el reporte embed -->
-<style>
-    /* Asegurar que no haya scroll horizontal */
-    body {
-        overflow-x: hidden;
-    }
-    
-    /* Asegurar que Power BI ocupe todo el espacio disponible */
-    #reportContainer iframe {
-        width: 100% !important;
-        height: 100% !important;
-        border: none;
-    }
-</style>
-{% endblock style %}
+{# Eliminar cualquier bloque script personalizado que intente sincronizar la DB en esta página #}
+{% block script %}
+{# Dejar vacío o añadir scripts específicos de esta página que NO interfieran con database_selector.html #}
+{% endblock script %}
