@@ -1,99 +1,37 @@
-2025-10-20 04:46:18,918 \U0001f680\U0001f680\U0001f680 INICIO FUNCIÓN run_cargue - DEBUG LOG \U0001f680\U0001f680\U0001f680
-2025-10-20 04:46:18,918 \U0001f680 Iniciando cargue del archivo: D:\Python\DataZenithBi\Info proveedores 2025\Info proveedores.xlsx
-2025-10-20 04:46:18,918 \u26a0\ufe0f No se pudieron detectar fechas desde el nombre. Se usará el mes actual.
-2025-10-20 04:46:18,918 \U0001f4c5 Rango de fechas detectado: 2025-10-01 \u2192 2025-10-31
-2025-10-20 04:46:18,918 \U0001f527 Fase 1: Creando instancia del cargador...
-2025-10-20 04:46:18,919 Creando nueva conexión para cetrusa@dbmariam04.chqxl6ahrk6r.us-east-1.rds.amazonaws.com:3307/powerbi_adm (cache_key=33ff95078a8a92efd9e7f3bdeed02e8334069d35)
-2025-10-20 04:46:20,944 Reutilizando conexión existente para cetrusa@dbmariam04.chqxl6ahrk6r.us-east-1.rds.amazonaws.com:3307/powerbi_adm (cache_key=33ff95078a8a92efd9e7f3bdeed02e8334069d35)
-2025-10-20 04:46:21,665 Reutilizando conexión existente para cetrusa@dbmariam04.chqxl6ahrk6r.us-east-1.rds.amazonaws.com:3307/powerbi_adm (cache_key=33ff95078a8a92efd9e7f3bdeed02e8334069d35)
-2025-10-20 04:46:22,386 Reutilizando conexión existente para cetrusa@dbmariam04.chqxl6ahrk6r.us-east-1.rds.amazonaws.com:3307/powerbi_adm (cache_key=33ff95078a8a92efd9e7f3bdeed02e8334069d35)
-2025-10-20 04:46:23,107 Reutilizando conexión existente para cetrusa@dbmariam04.chqxl6ahrk6r.us-east-1.rds.amazonaws.com:3307/powerbi_adm (cache_key=33ff95078a8a92efd9e7f3bdeed02e8334069d35)
-2025-10-20 04:46:23,827 Reutilizando conexión existente para cetrusa@dbmariam04.chqxl6ahrk6r.us-east-1.rds.amazonaws.com:3307/powerbi_adm (cache_key=33ff95078a8a92efd9e7f3bdeed02e8334069d35)
-2025-10-20 04:46:24,547 Reutilizando conexión existente para cetrusa@dbmariam04.chqxl6ahrk6r.us-east-1.rds.amazonaws.com:3307/powerbi_adm (cache_key=33ff95078a8a92efd9e7f3bdeed02e8334069d35)
-2025-10-20 04:46:25,268 Reutilizando conexión existente para cetrusa@dbmariam04.chqxl6ahrk6r.us-east-1.rds.amazonaws.com:3307/powerbi_adm (cache_key=33ff95078a8a92efd9e7f3bdeed02e8334069d35)
-2025-10-20 04:46:25,967 Error al obtener permisos para distrijass/SYSTEM: Requested setting INSTALLED_APPS, but settings are not configured. You must either define the environment variable DJANGO_SETTINGS_MODULE or call settings.configure() before accessing settings.
+2025-10-21 21:35:11,968 \U0001f680\U0001f680\U0001f680 INICIO FUNCIÓN run_cargue - DEBUG LOG \U0001f680\U0001f680\U0001f680
+2025-10-21 21:35:11,968 \U0001f680 Iniciando cargue del archivo: D:\Python\DataZenithBi\Info proveedores 2025\Info proveedores.xlsx
+2025-10-21 21:35:11,968 \U0001f4c5 Las fechas se detectarán automáticamente desde la columna 'Fecha' del Excel
+2025-10-21 21:35:11,968 \U0001f527 Fase 1: Creando instancia del cargador...
+2025-10-21 21:35:11,969 Creando nueva conexión para cetrusa@dbmariam04.chqxl6ahrk6r.us-east-1.rds.amazonaws.com:3307/powerbi_adm (cache_key=33ff95078a8a92efd9e7f3bdeed02e8334069d35)
+2025-10-21 21:35:13,889 Reutilizando conexión existente para cetrusa@dbmariam04.chqxl6ahrk6r.us-east-1.rds.amazonaws.com:3307/powerbi_adm (cache_key=33ff95078a8a92efd9e7f3bdeed02e8334069d35)
+2025-10-21 21:35:14,571 Reutilizando conexión existente para cetrusa@dbmariam04.chqxl6ahrk6r.us-east-1.rds.amazonaws.com:3307/powerbi_adm (cache_key=33ff95078a8a92efd9e7f3bdeed02e8334069d35)
+2025-10-21 21:35:15,254 Reutilizando conexión existente para cetrusa@dbmariam04.chqxl6ahrk6r.us-east-1.rds.amazonaws.com:3307/powerbi_adm (cache_key=33ff95078a8a92efd9e7f3bdeed02e8334069d35)
+2025-10-21 21:35:15,935 Reutilizando conexión existente para cetrusa@dbmariam04.chqxl6ahrk6r.us-east-1.rds.amazonaws.com:3307/powerbi_adm (cache_key=33ff95078a8a92efd9e7f3bdeed02e8334069d35)
+2025-10-21 21:35:16,617 Reutilizando conexión existente para cetrusa@dbmariam04.chqxl6ahrk6r.us-east-1.rds.amazonaws.com:3307/powerbi_adm (cache_key=33ff95078a8a92efd9e7f3bdeed02e8334069d35)
+2025-10-21 21:35:17,303 Reutilizando conexión existente para cetrusa@dbmariam04.chqxl6ahrk6r.us-east-1.rds.amazonaws.com:3307/powerbi_adm (cache_key=33ff95078a8a92efd9e7f3bdeed02e8334069d35)
+2025-10-21 21:35:17,986 Reutilizando conexión existente para cetrusa@dbmariam04.chqxl6ahrk6r.us-east-1.rds.amazonaws.com:3307/powerbi_adm (cache_key=33ff95078a8a92efd9e7f3bdeed02e8334069d35)
+2025-10-21 21:35:18,441 Django no inicializado para distrijass/SYSTEM, usando permisos por defecto
+2025-10-21 21:35:18,441 ConfigService caching result for c768946ac343eda3a318220012479544f6a3a62b en 6.472s
+2025-10-21 21:35:18,441 Creando nueva conexión para cetrusa@dbmariam04.chqxl6ahrk6r.us-east-1.rds.amazonaws.com:3307/bi_distrijass (cache_key=b59195f79f3c7b9cf5011728e5f9a1e5cd1d8dce)
+2025-10-21 21:35:18,442 \u2705 Cargador creado exitosamente
+2025-10-21 21:35:18,442 \U0001f527 Fase 1.5: Cargando datos en staging para validación...
+2025-10-21 21:37:40,098 \u2705 Datos cargados correctamente en staging.
+2025-10-21 21:37:40,324 \u26a0\ufe0f Rango de fechas detectado contiene valores inválidos; la validación recalculará el rango automáticamente
+2025-10-21 21:37:40,550 \U0001f4ca Registros procesados: 341,329
+2025-10-21 21:37:40,550 \U0001f4ca Registros insertados: 341,329
+2025-10-21 21:37:40,550 \U0001f4ca Registros actualizados: 0
+2025-10-21 21:37:40,550 \U0001f4ca Registros preservados: 0
+2025-10-21 21:37:40,550 \U0001f4c5 RANGO DE FECHAS DETECTADAS: 0000-00-00 \u2192 0000-00-00
+2025-10-21 21:37:40,551 \U0001f527 Fase 2: Validación anti-duplicados antes de sincronizar...
+2025-10-21 21:37:40,552 \U0001f512 Validación anti-duplicados iniciada
+2025-10-21 21:37:40,964 Validación ejecutándose sin rango de fechas definido (se evaluará todo el staging)
+2025-10-21 21:37:50,324 Validación registrada: REVISION_MANUAL_REQUERIDA
+2025-10-21 21:37:50,437 \u274c Validación fallida: REVISION_MANUAL_REQUERIDA
+2025-10-21 21:37:50,437 \u274c Validación anti-duplicados fallida. Revisar antes de continuar.
+2025-10-21 21:37:50,437 \u274c ERROR CRÍTICO en el proceso principal: STOP: Validación detectó posibles duplicados o diferencias. Revisar manualmente.
 Traceback (most recent call last):
-  File "D:\Python\DataZenithBi\adminbi\scripts\config.py", line 70, in default_permissions_loader
-    from apps.users.models import UserPermission  # type: ignore
-    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "D:\Python\DataZenithBi\adminbi\apps\users\models.py", line 4, in <module>
-    from apps.permisos.models import ConfEmpresas
-  File "D:\Python\DataZenithBi\adminbi\apps\permisos\models.py", line 7, in <module>
-    from django.contrib.auth.models import Permission
-  File "D:\Python\DataZenithBi\adminbi\.venv\Lib\site-packages\django\contrib\auth\models.py", line 3, in <module>
-    from django.contrib.auth.base_user import AbstractBaseUser, BaseUserManager
-  File "D:\Python\DataZenithBi\adminbi\.venv\Lib\site-packages\django\contrib\auth\base_user.py", line 57, in <module>
-    class AbstractBaseUser(models.Model):
-  File "D:\Python\DataZenithBi\adminbi\.venv\Lib\site-packages\django\db\models\base.py", line 129, in __new__
-    app_config = apps.get_containing_app_config(module)
-                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "D:\Python\DataZenithBi\adminbi\.venv\Lib\site-packages\django\apps\registry.py", line 260, in get_containing_app_config
-    self.check_apps_ready()
-  File "D:\Python\DataZenithBi\adminbi\.venv\Lib\site-packages\django\apps\registry.py", line 137, in check_apps_ready
-    settings.INSTALLED_APPS
-  File "D:\Python\DataZenithBi\adminbi\.venv\Lib\site-packages\django\conf\__init__.py", line 102, in __getattr__
-    self._setup(name)
-  File "D:\Python\DataZenithBi\adminbi\.venv\Lib\site-packages\django\conf\__init__.py", line 82, in _setup
-    raise ImproperlyConfigured(
-django.core.exceptions.ImproperlyConfigured: Requested setting INSTALLED_APPS, but settings are not configured. You must either define the environment variable DJANGO_SETTINGS_MODULE or call settings.configure() before accessing settings.
-2025-10-20 04:46:25,972 ConfigService caching result for c768946ac343eda3a318220012479544f6a3a62b en 7.054s
-2025-10-20 04:46:25,972 Creando nueva conexión para cetrusa@dbmariam04.chqxl6ahrk6r.us-east-1.rds.amazonaws.com:3307/bi_distrijass (cache_key=b59195f79f3c7b9cf5011728e5f9a1e5cd1d8dce)
-2025-10-20 04:46:25,973 \u2705 Cargador creado exitosamente
-2025-10-20 04:46:25,973 \U0001f527 Fase 2: Ejecutando proceso de cargue...
-2025-10-20 04:48:59,131 \u2705 Cargue completado correctamente.
-2025-10-20 04:48:59,131 \U0001f4ca Registros procesados: 316,815
-2025-10-20 04:48:59,131 \U0001f4ca Registros insertados: 316,815
-2025-10-20 04:48:59,131 \U0001f4ca Registros actualizados: 0
-2025-10-20 04:48:59,131 \U0001f4ca Registros preservados: 0
-2025-10-20 04:48:59,132 \U0001f4c5 RANGO DE FECHAS PROCESADAS: 2025-10-01 \u2192 2025-10-31
-2025-10-20 04:48:59,132 \U0001f527 Fase 3: Iniciando mantenimiento post-cargue...
-2025-10-20 04:48:59,132 \U0001f9f9 === INICIANDO MANTENIMIENTO POST-CARGUE ===
-2025-10-20 04:49:01,003 \U0001f4ca Registros en infoventas ANTES del mantenimiento: 316815
-2025-10-20 04:49:01,123 \U0001f527 Método 1: Ejecutando con raw_connection y reintentos...
-2025-10-20 04:49:01,123 \u267b\ufe0f Preparando ejecución del procedimiento con hasta 3 intentos...
-2025-10-20 04:49:01,123    \u25b6\ufe0f Intento 1/3 de ejecución del procedimiento...
-2025-10-20 04:49:03,321 \U0001f4cb Resultados parciales del procedimiento: (('Vista vw_infoventas reconstruida correctamente',),)
-2025-10-20 04:49:50,785 \U0001f4cb Resultados parciales del procedimiento: (('bi_distrijass.infoventas_2023_fact', 'optimize', 'note', 'Table does not support optimize, doing recreate + analyze instead'), ('bi_distrijass.infoventas_2023_fact', 'optimize', 'status', 'OK'), ('bi_distrijass.infoventas_2023_dev', 'optimize', 'note', 'Table does not support optimize, doing recreate + analyze instead'), ('bi_distrijass.infoventas_2023_dev', 'optimize', 'status', 'OK'))
-2025-10-20 04:51:50,788 Exception during reset or similar
-Traceback (most recent call last):
-  File "D:\Python\DataZenithBi\adminbi\cargue_infoventas_main.py", line 206, in ejecutar_procedimiento_con_reintentos
-    conn.commit()
-  File "D:\Python\DataZenithBi\adminbi\.venv\Lib\site-packages\pymysql\connections.py", line 477, in commit
-    self._execute_command(COMMAND.COM_QUERY, "COMMIT")
-  File "D:\Python\DataZenithBi\adminbi\.venv\Lib\site-packages\pymysql\connections.py", line 840, in _execute_command
-    raise err.InterfaceError(0, "")
-pymysql.err.InterfaceError: (0, '')
-
-During handling of the above exception, another exception occurred:
-
-Traceback (most recent call last):
-  File "D:\Python\DataZenithBi\adminbi\.venv\Lib\site-packages\sqlalchemy\pool\base.py", line 988, in _finalize_fairy
-    fairy._reset(
-  File "D:\Python\DataZenithBi\adminbi\.venv\Lib\site-packages\sqlalchemy\pool\base.py", line 1445, in _reset
-    pool._dialect.do_commit(self)
-  File "D:\Python\DataZenithBi\adminbi\.venv\Lib\site-packages\sqlalchemy\engine\default.py", line 695, in do_commit
-    dbapi_connection.commit()
-  File "D:\Python\DataZenithBi\adminbi\.venv\Lib\site-packages\pymysql\connections.py", line 477, in commit
-    self._execute_command(COMMAND.COM_QUERY, "COMMIT")
-  File "D:\Python\DataZenithBi\adminbi\.venv\Lib\site-packages\pymysql\connections.py", line 840, in _execute_command
-    raise err.InterfaceError(0, "")
-pymysql.err.InterfaceError: (0, '')
-2025-10-20 04:51:50,794    \u26a0\ufe0f Error de base de datos (código 0): (0, '')
-2025-10-20 04:51:50,794    \u2139\ufe0f Código 0 recibido; se asume ejecución finalizada por cierre de resultados.
-2025-10-20 04:51:51,629 \U0001f4ca Registros en infoventas DESPUÉS del mantenimiento: 0
-2025-10-20 04:51:51,749 \u2705 Mantenimiento completado. Tabla infoventas limpia.
-2025-10-20 04:51:51,749 \U0001f389 === MANTENIMIENTO COMPLETADO EXITOSAMENTE ===
-2025-10-20 04:51:51,749 \U0001f527 Fase 4: Ejecutando diagnóstico de la vista...
-2025-10-20 04:54:14,063 \U0001f527 Fase 5: Capturando estadísticas finales...
-2025-10-20 04:54:14,548 ================================================================================
-2025-10-20 04:54:14,548 \U0001f4ca === ESTADÍSTICAS FINALES DE CARGUE ===
-2025-10-20 04:54:14,548 ================================================================================
-2025-10-20 04:54:14,548 \U0001f4c5 Período procesado: 2025-10-01 \u2192 2025-10-31
-2025-10-20 04:54:15,900 \u274c ERROR CRÍTICO en el proceso principal: cannot access local variable 'elapsed_time' where it is not associated with a value
-Traceback (most recent call last):
-  File "D:\Python\DataZenithBi\adminbi\cargue_infoventas_main.py", line 347, in run_cargue
-    logging.info(f"\u23f1\ufe0f  Duración total: {elapsed_time:.2f} segundos")
-                                        ^^^^^^^^^^^^
-UnboundLocalError: cannot access local variable 'elapsed_time' where it is not associated with a value
-2025-10-20 04:54:15,993 \u274c Tiempo hasta error: 475.63 segundos
-2025-10-20 04:54:15,993 \U0001f512 Engine de base de datos cerrado correctamente.
+  File "D:\Python\DataZenithBi\adminbi\cargue_infoventas_main.py", line 413, in run_cargue
+    raise Exception("STOP: Validación detectó posibles duplicados o diferencias. Revisar manualmente.")
+Exception: STOP: Validación detectó posibles duplicados o diferencias. Revisar manualmente.
+2025-10-21 21:37:50,439 \u274c Tiempo hasta error: 158.47 segundos
+2025-10-21 21:37:50,439 \U0001f512 Engine de base de datos cerrado correctamente.

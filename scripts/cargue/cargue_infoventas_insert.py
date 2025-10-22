@@ -172,7 +172,20 @@ class CargueInfoVentasInsert:
 
     def limpiar_datos(self, df):
         # Limpieza de datos: reemplazo de NaN, caracteres problemáticos, etc.
+        date_columns = {"Fecha"}
+
         for col in df.columns:
+            if col in date_columns:
+                try:
+                    df[col] = pd.to_datetime(df[col], errors="coerce")
+                    df[col] = df[col].dt.date
+                except Exception as e:
+                    logging.warning(
+                        f"[limpiar_datos] No se pudo convertir la columna '{col}' a fecha: {e}"
+                    )
+                    df[col] = pd.to_datetime(df[col], errors="coerce").dt.date
+                continue
+
             if df[col].dtype == object:
                 df[col] = (
                     df[col]
@@ -821,6 +834,26 @@ class CargueInfoVentasInsert:
                     "registros_preservados": 0,
                 }
 
+            if "Fecha" in df.columns:
+                registros_antes_filtrado = len(df)
+                df = df[df["Fecha"].notna()]
+                if len(df) != registros_antes_filtrado:
+                    print(
+                        f"[CargueInfoVentasInsert] Filtrados {registros_antes_filtrado - len(df)} registros sin fecha válida"
+                    )
+
+            # Capturar rango de fechas detectado en el Excel agrupado
+            fecha_min_df = None
+            fecha_max_df = None
+            if "Fecha" in df.columns:
+                try:
+                    fecha_min_df = df["Fecha"].min()
+                    fecha_max_df = df["Fecha"].max()
+                except Exception as e:
+                    print(f"[CargueInfoVentasInsert] Advertencia al calcular rango de fechas: {e}")
+                    fecha_min_df = None
+                    fecha_max_df = None
+
             # 3. NUEVA LÓGICA INTELIGENTE: Preservación de histórico de costos
             print(
                 "[CargueInfoVentasInsert] ===== IMPLEMENTANDO LÓGICA INTELIGENTE DE PRESERVACIÓN DE HISTÓRICO ====="
@@ -926,6 +959,8 @@ class CargueInfoVentasInsert:
                 "registros_actualizados": total_actualizados,
                 "registros_preservados": len(registros_preservar),
                 "tiempo_transcurrido": tiempo_transcurrido,
+                "fecha_min": fecha_min_df,
+                "fecha_max": fecha_max_df,
                 "beneficios": [
                     "✅ Histórico de costos preservado",
                     "✅ Solo se procesaron registros que realmente cambiaron",

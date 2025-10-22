@@ -314,17 +314,9 @@ def run_cargue(database_name: str, archivo_path: str, usuario: str = None):
     logging.info(f"🚀 Iniciando cargue del archivo: {archivo_path}")
     print(f"🚀 Iniciando cargue del archivo: {archivo_path}")
 
-    # Detectar fechas desde nombre del archivo o desde contenido Excel
-    fecha_ini, fecha_fin = detectar_fechas_desde_nombre(os.path.basename(archivo_path), archivo_path)
-    if not fecha_ini or not fecha_fin:
-        logging.warning("⚠️ No se pudieron detectar fechas desde el nombre. Se usará el mes actual.")
-        hoy = datetime.now()
-        from calendar import monthrange
-        fecha_ini = datetime(hoy.year, hoy.month, 1).date()
-        fecha_fin = datetime(hoy.year, hoy.month, monthrange(hoy.year, hoy.month)[1]).date()
-
-    logging.info(f"📅 Rango de fechas detectado: {fecha_ini} → {fecha_fin}")
-    print(f"📅 Rango de fechas detectado: {fecha_ini} → {fecha_fin}")
+    # Las fechas se detectarán automáticamente desde la columna "Fecha" del Excel
+    logging.info("📅 Las fechas se detectarán automáticamente desde la columna 'Fecha' del Excel")
+    print("📅 Las fechas se detectarán automáticamente desde la columna 'Fecha' del Excel")
 
     cargador = None
     
@@ -335,19 +327,73 @@ def run_cargue(database_name: str, archivo_path: str, usuario: str = None):
         cargador = CargueInfoVentasInsert(
             excel_file=archivo_path,
             database_name=database_name,
-            IdtReporteIni=str(fecha_ini),
-            IdtReporteFin=str(fecha_fin),
+            IdtReporteIni=None,  # Se detectará del Excel
+            IdtReporteFin=None,  # Se detectará del Excel  
             user_id=usuario or "SYSTEM"
         )
         print("✅ Cargador creado exitosamente [DEBUG]")
         logging.info("✅ Cargador creado exitosamente")
 
-        # 🔹 FASE 2: EJECUTAR PROCESO DE CARGUE
-        print("🔧 FASE 2: Ejecutando proceso de cargue... [DEBUG]")
-        logging.info("🔧 Fase 2: Ejecutando proceso de cargue...")
+        # 🔹 FASE 1.5: CARGUE PREVIO PARA VALIDACIÓN
+        print("🔧 FASE 1.5: Ejecutando cargue previo para validación... [DEBUG]")
+        logging.info("🔧 Fase 1.5: Cargando datos en staging para validación...")
         resultado = cargador.procesar_cargue()
-        print("✅ Cargue completado correctamente [DEBUG]")
-        logging.info("✅ Cargue completado correctamente.")
+        print("✅ Datos cargados en staging para validación [DEBUG]")
+        logging.info("✅ Datos cargados correctamente en staging.")
+        
+        # Obtener fechas desde la tabla staging (detectadas automáticamente del Excel)        
+        # Consultar fechas min/max desde la tabla infoventas (staging)
+        fecha_ini, fecha_fin = None, None
+
+        def _normalizar_fecha(valor):
+            if not valor:
+                return None
+            if isinstance(valor, datetime):
+                return valor.date()
+            if hasattr(valor, "to_pydatetime"):
+                try:
+                    return valor.to_pydatetime().date()
+                except Exception:
+                    pass
+            if hasattr(valor, "year") and hasattr(valor, "month") and hasattr(valor, "day"):
+                return datetime(valor.year, valor.month, valor.day).date()
+            if isinstance(valor, str):
+                texto = valor.strip()
+                if not texto or texto.startswith("0000"):
+                    return None
+                for formato in ("%Y-%m-%d", "%Y/%m/%d", "%d/%m/%Y", "%Y-%m-%d %H:%M:%S"):
+                    try:
+                        return datetime.strptime(texto, formato).date()
+                    except ValueError:
+                        continue
+                logging.debug(f"Valor de fecha no interpretable: {valor}")
+                return None
+            return None
+
+        fecha_min_resultado = _normalizar_fecha(resultado.get('fecha_min')) if isinstance(resultado, dict) else None
+        fecha_max_resultado = _normalizar_fecha(resultado.get('fecha_max')) if isinstance(resultado, dict) else None
+
+        if fecha_min_resultado and fecha_max_resultado:
+            fecha_ini, fecha_fin = fecha_min_resultado, fecha_max_resultado
+        else:
+            try:
+                with cargador.engine_mysql_bi.connect() as conn:
+                    query = text("SELECT MIN(`Fecha`) as fecha_ini, MAX(`Fecha`) as fecha_fin FROM infoventas")
+                    result = conn.execute(query).fetchone()
+
+                    fecha_ini_raw = result.fecha_ini
+                    fecha_fin_raw = result.fecha_fin
+                    fecha_ini_norm = _normalizar_fecha(fecha_ini_raw)
+                    fecha_fin_norm = _normalizar_fecha(fecha_fin_raw)
+
+                    if not fecha_ini_norm or not fecha_fin_norm:
+                        logging.warning("⚠️ Rango de fechas detectado contiene valores inválidos; la validación recalculará el rango automáticamente")
+
+                    fecha_ini = fecha_ini_norm or fecha_ini_raw
+                    fecha_fin = fecha_fin_norm or fecha_fin_raw
+            except Exception as e:
+                logging.warning(f"No se pudieron obtener fechas de staging: {e}")
+                fecha_ini, fecha_fin = None, None
         
         # Registrar estadísticas detalladas
         registros_procesados = resultado.get('registros_procesados', 0)
@@ -360,8 +406,29 @@ def run_cargue(database_name: str, archivo_path: str, usuario: str = None):
         logging.info(f"📊 Registros actualizados: {registros_actualizados:,}")
         logging.info(f"📊 Registros preservados: {registros_preservados:,}")
         
-        # Mostrar rango de fechas en log
-        logging.info(f"📅 RANGO DE FECHAS PROCESADAS: {fecha_ini} → {fecha_fin}")
+        # Mostrar rango de fechas detectadas
+        if fecha_ini and fecha_fin:
+            logging.info(f"📅 RANGO DE FECHAS DETECTADAS: {fecha_ini} → {fecha_fin}")
+            print(f"📅 RANGO DE FECHAS DETECTADAS: {fecha_ini} → {fecha_fin}")
+        else:
+            logging.warning("⚠️ No se detectaron fechas válidas del Excel")
+        
+        # 🔹 FASE 2: VALIDACIÓN ANTI-DUPLICADOS (REUBICADA - ANTES DEL MANTENIMIENTO)
+        print("🔧 FASE 2: Validación anti-duplicados Excel vs BD... [DEBUG]")
+        logging.info("🔧 Fase 2: Validación anti-duplicados antes de sincronizar...")
+        
+        from scripts.validador_anti_duplicados import validar_cargue_antes_sincronizar
+        validacion_ok = validar_cargue_antes_sincronizar(cargador, fecha_ini, fecha_fin)
+        
+        if not validacion_ok:
+            print("❌ VALIDACIÓN FALLIDA - REVISAR DUPLICADOS/TOTALES [DEBUG]")
+            logging.error("❌ Validación anti-duplicados fallida. Revisar antes de continuar.")
+            print("💡 REVISAR: Posibles duplicados en _fact/_dev o diferencias en Vta Neta")
+            print("💡 ACCIÓN: Consultar tabla validacion_cargue_diario para detalles")
+            raise Exception("STOP: Validación detectó posibles duplicados o diferencias. Revisar manualmente.")
+        
+        print("✅ VALIDACIÓN ANTI-DUPLICADOS EXITOSA - Continuando [DEBUG]")
+        logging.info("✅ Validación anti-duplicados exitosa. Datos consistentes.")
         
         # 🔹 FASE 3: EJECUTAR MANTENIMIENTO POST-CARGUE
         print("🔧 FASE 3: Iniciando mantenimiento post-cargue... [DEBUG]")
