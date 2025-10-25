@@ -368,10 +368,12 @@ class ValidadorAntiDuplicados:
         """
         Analizar la situación y decidir qué hacer.
         
-        Lógica de decisión:
-        1. Si diferencia < tolerancia Y sin duplicados → CONTINUAR
-        2. Si hay duplicados exactos > 100 → LIMPIAR_SELECTIVA 
-        3. Si diferencia > tolerancia → REVISAR_MANUAL
+        NUEVA LÓGICA (Oct 22, 2025):
+        - Los duplicados son NORMALES porque se actualiza el mes completo
+        - El SP sp_infoventas_full_maintenance() es quien sincroniza los no-duplicados
+        - La validación es SOLO una seguridad para verificar Vta neta total
+        - SIEMPRE permitir que continúe SI la diferencia ≤ tolerancia
+        - SOLO bloquear si diferencia > tolerancia (inconsistencia monetaria real)
         """
         
         diferencia = abs(totales['diferencia'])
@@ -381,51 +383,40 @@ class ValidadorAntiDuplicados:
         
         print(f"\n🤔 ANÁLISIS DE DECISIÓN:")
         print(f"   💰 Diferencia monto: ${diferencia:,.2f} (tolerancia: ${self.tolerancia_monto:,.2f})")
-        print(f"   📊 Duplicados: {total_duplicados:,}")
+        print(f"   📊 Duplicados: {total_duplicados:,} (normales en actualización de mes completo)")
+        print(f"   📊 Registros BD: {registros_bd:,} | Staging: {registros_staging:,}")
         
-        # Decidir acción
-        # Si las tablas destino están vacías permitimos el primer cargue completo siempre que no existan duplicados
-        if registros_bd == 0 and registros_staging > 0 and total_duplicados == 0:
-            decision = {
-                'continuar': True,
-                'accion': 'PRIMER_CARGUE_AUTORIZADO',
-                'mensaje': '✅ Tablas destino vacías; se autoriza primer cargue completo sin duplicados',
-                'detalle': totales
-            }
-
-        elif total_duplicados == 0 and diferencia <= self.tolerancia_monto:
-            decision = {
-                'continuar': True,
-                'accion': 'CONTINUAR_NORMAL',
-                'mensaje': f"✅ Sin duplicados, diferencia aceptable (${diferencia:,.2f})",
-                'detalle': totales
-            }
+        # ============================================================
+        # LÓGICA SIMPLIFICADA: Permitir SIEMPRE si Vta neta coincide
+        # ============================================================
+        
+        if diferencia <= self.tolerancia_monto:
+            # ✅ CONTINUAR - La diferencia monetaria es aceptable
+            # El SP se encargará de sincronizar los no-duplicados
             
-        elif diferencia <= self.tolerancia_monto and total_duplicados > 0 and total_duplicados <= 100:
-            decision = {
-                'continuar': True,
-                'accion': 'CONTINUAR_CON_ADVERTENCIA',
-                'mensaje': f"⚠️ {total_duplicados} duplicados detectados (pocos), continuando",
-                'detalle': {**totales, 'duplicados': duplicados}
-            }
-            
-        elif diferencia <= self.tolerancia_monto and total_duplicados > 100:
-            decision = {
-                'continuar': True,
-                'accion': 'CONTINUAR_DUPLICADOS_PREEXISTENTES',
-                'mensaje': ("⚠️ Se detectan muchos registros iguales en BD, pero las sumas coinciden dentro "
-                           "de la tolerancia. Se asume recarga segura y se continúa."),
-                'detalle': {**totales, 'duplicados': duplicados}
-            }
-
-        elif total_duplicados > 100:
-            decision = {
-                'continuar': False,
-                'accion': 'LIMPIAR_SELECTIVA_REQUERIDA',
-                'mensaje': f"🚨 {total_duplicados} duplicados - Requiere limpieza selectiva del mes",
-                'detalle': {**totales, 'duplicados': duplicados}
-            }
-            
+            if total_duplicados == 0:
+                decision = {
+                    'continuar': True,
+                    'accion': 'CONTINUAR_NORMAL',
+                    'mensaje': f"✅ Sin duplicados, diferencia aceptable (${diferencia:,.2f})",
+                    'detalle': totales
+                }
+            elif total_duplicados > 0 and total_duplicados <= 100:
+                decision = {
+                    'continuar': True,
+                    'accion': 'CONTINUAR_CON_ADVERTENCIA',
+                    'mensaje': f"⚠️ {total_duplicados} duplicados (normales en actualización) - Continuando con sincronización",
+                    'detalle': {**totales, 'duplicados': duplicados}
+                }
+            else:  # total_duplicados > 100
+                decision = {
+                    'continuar': True,
+                    'accion': 'CONTINUAR_DUPLICADOS_PREEXISTENTES',
+                    'mensaje': (f"ℹ️ {total_duplicados:,} registros iguales en BD (actualización de mes completo). "
+                               f"Sumas coinciden (${diferencia:,.2f}). Sincronización delegada al SP."),
+                    'detalle': {**totales, 'duplicados': duplicados}
+                }
+        
         elif diferencia > self.tolerancia_monto:
             decision = {
                 'continuar': False,
@@ -443,6 +434,7 @@ class ValidadorAntiDuplicados:
         
         print(f"   🎯 DECISIÓN: {decision['accion']}")
         print(f"   💬 {decision['mensaje']}")
+        logging.info(f"Validación - Duplicados: {total_duplicados}, Diferencia: ${diferencia:,.2f}, Acción: {decision['accion']}, Continuar: {decision['continuar']}")
         
         return decision
     

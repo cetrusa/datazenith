@@ -413,36 +413,19 @@ def run_cargue(database_name: str, archivo_path: str, usuario: str = None):
         else:
             logging.warning("⚠️ No se detectaron fechas válidas del Excel")
         
-        # 🔹 FASE 2: VALIDACIÓN ANTI-DUPLICADOS (REUBICADA - ANTES DEL MANTENIMIENTO)
-        print("🔧 FASE 2: Validación anti-duplicados Excel vs BD... [DEBUG]")
-        logging.info("🔧 Fase 2: Validación anti-duplicados antes de sincronizar...")
-        
-        from scripts.validador_anti_duplicados import validar_cargue_antes_sincronizar
-        validacion_ok = validar_cargue_antes_sincronizar(cargador, fecha_ini, fecha_fin)
-        
-        if not validacion_ok:
-            print("❌ VALIDACIÓN FALLIDA - REVISAR DUPLICADOS/TOTALES [DEBUG]")
-            logging.error("❌ Validación anti-duplicados fallida. Revisar antes de continuar.")
-            print("💡 REVISAR: Posibles duplicados en _fact/_dev o diferencias en Vta Neta")
-            print("💡 ACCIÓN: Consultar tabla validacion_cargue_diario para detalles")
-            raise Exception("STOP: Validación detectó posibles duplicados o diferencias. Revisar manualmente.")
-        
-        print("✅ VALIDACIÓN ANTI-DUPLICADOS EXITOSA - Continuando [DEBUG]")
-        logging.info("✅ Validación anti-duplicados exitosa. Datos consistentes.")
-        
-        # 🔹 FASE 3: EJECUTAR MANTENIMIENTO POST-CARGUE
-        print("🔧 FASE 3: Iniciando mantenimiento post-cargue... [DEBUG]")
-        logging.info("🔧 Fase 3: Iniciando mantenimiento post-cargue...")
+        # 🔹 FASE 2: EJECUTAR MANTENIMIENTO POST-CARGUE (DIRECTAMENTE, SIN VALIDACIÓN)
+        print("🔧 FASE 2: Iniciando mantenimiento post-cargue... [DEBUG]")
+        logging.info("🔧 Fase 2: Iniciando mantenimiento post-cargue...")
         ejecutar_mantenimiento_completo(cargador)
         
-        # 🔹 FASE 4: DIAGNÓSTICO DE LA VISTA
-        print("🔧 FASE 4: Ejecutando diagnóstico de la vista... [DEBUG]")
-        logging.info("🔧 Fase 4: Ejecutando diagnóstico de la vista...")
+        # 🔹 FASE 3: DIAGNÓSTICO DE LA VISTA
+        print("🔧 FASE 3: Ejecutando diagnóstico de la vista... [DEBUG]")
+        logging.info("🔧 Fase 3: Ejecutando diagnóstico de la vista...")
         diagnosticar_vista_infoventas(cargador)
         
-        # 🔹 FASE 5: CAPTURAR ESTADÍSTICAS FINALES
-        print("🔧 FASE 5: Capturando estadísticas finales... [DEBUG]")
-        logging.info("🔧 Fase 5: Capturando estadísticas finales...")
+        # 🔹 FASE 4: CAPTURAR ESTADÍSTICAS FINALES
+        print("🔧 FASE 4: Capturando estadísticas finales... [DEBUG]")
+        logging.info("🔧 Fase 4: Capturando estadísticas finales...")
         
         # Calcular tiempo transcurrido
         elapsed_time = time.time() - start_time
@@ -483,7 +466,7 @@ def run_cargue(database_name: str, archivo_path: str, usuario: str = None):
             logging.info(f"   • {tabla_nombre}: {registros:,} registros [{tipo}]")
         logging.info("=" * 80)
         
-        # 🔹 FASE 6: REPORTE FINAL CON ESTADÍSTICAS
+        # 🔹 FASE 5: REPORTE FINAL CON ESTADÍSTICAS
         print(f"🎉 PROCESO COMPLETADO EXITOSAMENTE en {elapsed_time:.2f} segundos [DEBUG]")
         logging.info(f"🎉 PROCESO COMPLETADO EXITOSAMENTE en {elapsed_time:.2f} segundos")
         

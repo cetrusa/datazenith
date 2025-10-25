@@ -340,13 +340,15 @@
         top: 0;
         left: 0;
         height: 100vh;
-        z-index: 1000;
+        z-index: 998;
         background: inherit;
+        pointer-events: auto;
     }
     
     /* Clase para ocultar sidebar */
     .sidebar-hidden #sidebar-container {
         transform: translateX(-100%);
+        pointer-events: none;
     }
     
     /* Ajuste del contenido principal cuando sidebar está oculto */
@@ -359,14 +361,16 @@
     /* Contenido normal con sidebar visible */
     .main-content {
         transition: margin-left 0.3s ease-in-out, width 0.3s ease-in-out, max-width 0.3s ease-in-out;
+        position: relative;
+        z-index: 1;
     }
     
     /* Barra de control flotante */
     .sidebar-toggle-bar {
         position: fixed;
-        top: 20px;
+        top: 80px;
         left: 20px;
-        z-index: 1001;
+        z-index: 999;
         background: rgba(40, 167, 69, 0.9);
         color: white;
         border: none;
@@ -415,10 +419,23 @@
     /* Contenedor del reporte - se expande con transición suave */
     #reportContainer {
         transition: width 0.3s ease-in-out;
+        position: relative;
+        z-index: 2;
+        pointer-events: auto;
     }
     
     .sidebar-hidden #reportContainer {
         width: 100% !important;
+    }
+    
+    /* Asegurar que el iframe no interfiera con la navegación */
+    #powerbi-iframe {
+        pointer-events: auto;
+        position: relative;
+        z-index: 2;
+        width: 100%;
+        height: 100%;
+        border: none;
     }
 </style>
 {% endblock style %}
