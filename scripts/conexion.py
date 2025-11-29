@@ -103,8 +103,8 @@ class Conexion:
         pool_recycle = int(os.getenv("DB_POOL_RECYCLE", 28000))
 
         connect_timeout = _timeout_from_env("DB_CONNECT_TIMEOUT", 20, 5, 60)
-        read_timeout = _timeout_from_env("DB_READ_TIMEOUT", 120, 30, 120)
-        write_timeout = _timeout_from_env("DB_WRITE_TIMEOUT", 120, 30, 120)
+        read_timeout = _timeout_from_env("DB_READ_TIMEOUT", 600, 30, 3600)  # 10 min default, max 1 hora
+        write_timeout = _timeout_from_env("DB_WRITE_TIMEOUT", 600, 30, 3600)  # 10 min default, max 1 hora
 
         connection_label = f"{user}@{host}:{port}/{database}"
         cache_key = Conexion._build_cache_key(connection_label)

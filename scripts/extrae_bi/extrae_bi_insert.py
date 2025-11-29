@@ -254,7 +254,13 @@ class ExtraeBiExtractor:
                 time.sleep(5)
         return 0
 
-    def consulta_sql_out_extrae(self) -> Optional[pd.DataFrame]:
+    def consulta_sql_out_extrae(self, chunksize: int = 10000) -> Optional[pd.DataFrame]:
+        """
+        Ejecuta consulta SQL en la base de datos de salida con lectura en chunks.
+        
+        Args:
+            chunksize (int): Tamaño de cada chunk. Por defecto 10,000 registros.
+        """
         max_retries = 3
         if self.txSqlExtrae:
             txSqlUpper = self.txSqlExtrae.strip().upper()
@@ -265,19 +271,39 @@ class ExtraeBiExtractor:
         else:
             logging.warning("La variable txSqlExtrae está vacía.")
             return None
+        
         for retry_count in range(max_retries):
             try:
                 with self.engine_mysql_out.connect().execution_options(
                     isolation_level=isolation_level
                 ) as connection:
                     sqlout = text(self.txSqlExtrae)
-                    resultado = pd.read_sql_query(
+                    
+                    # Leer datos en chunks para evitar timeouts
+                    chunks = []
+                    total_rows = 0
+                    
+                    logging.info(f"Iniciando lectura de datos en chunks de {chunksize:,} registros...")
+                    
+                    for chunk_num, chunk in enumerate(pd.read_sql_query(
                         sql=sqlout,
                         con=connection,
                         params={"fi": self.IdtReporteIni, "ff": self.IdtReporteFin},
-                    )
-                    logging.info(f"Consulta ejecutada con éxito en {isolation_level}.")
-                    return resultado
+                        chunksize=chunksize
+                    ), start=1):
+                        chunk_rows = len(chunk)
+                        total_rows += chunk_rows
+                        chunks.append(chunk)
+                        logging.info(f"Chunk {chunk_num}: {chunk_rows:,} registros leídos (Total acumulado: {total_rows:,})")
+                    
+                    if chunks:
+                        resultado = pd.concat(chunks, ignore_index=True)
+                        logging.info(f"Consulta ejecutada con éxito en {isolation_level}. Total: {total_rows:,} registros.")
+                        return resultado
+                    else:
+                        logging.warning("No se obtuvieron datos de la consulta.")
+                        return pd.DataFrame()
+                        
             except Exception as e:
                 logging.error(
                     f"Error en consulta_sql_out_extrae (Intento {retry_count + 1}/3): {e}"
@@ -298,29 +324,64 @@ class ExtraeBiExtractor:
                 "Intento de insertar un DataFrame vacío. Inserción cancelada."
             )
             return
+        
+        # Obtener claves primarias antes de procesar
+        primary_keys = self.obtener_claves_primarias()
+        
+        # Filtrar registros con claves primarias NULL
+        if primary_keys:
+            registros_antes_filtro = len(resultado_out)
+            for pk_col in primary_keys:
+                if pk_col in resultado_out.columns:
+                    # Filtrar registros donde la clave primaria es NULL
+                    registros_null = resultado_out[pk_col].isna().sum()
+                    if registros_null > 0:
+                        logging.warning(
+                            f"Se encontraron {registros_null:,} registros con '{pk_col}' NULL. Estos registros serán excluidos."
+                        )
+                        resultado_out = resultado_out[resultado_out[pk_col].notna()]
+            
+            registros_despues_filtro = len(resultado_out)
+            if registros_antes_filtro > registros_despues_filtro:
+                logging.warning(
+                    f"Se excluyeron {registros_antes_filtro - registros_despues_filtro:,} registros con claves primarias NULL."
+                )
+            
+            if resultado_out.empty:
+                logging.error(
+                    "Después de filtrar claves primarias NULL, no quedan registros para insertar."
+                )
+                return
+        
+        # Procesamiento de columnas numéricas específicas
         numeric_columns = ["latitud_cl", "longitud_cl"]
         for col in numeric_columns:
             if col in resultado_out.columns:
                 resultado_out[col] = pd.to_numeric(resultado_out[col], errors="coerce")
+        
         if "macrozona_id" in resultado_out.columns:
             resultado_out["macrozona_id"] = resultado_out["macrozona_id"].fillna(0)
             resultado_out["macrozona_id"] = resultado_out["macrozona_id"].replace(
                 {"": 0}
             )
+        
         if "macro" in resultado_out.columns:
             resultado_out["macro"] = pd.to_numeric(
                 resultado_out["macro"], errors="coerce"
             )
             resultado_out["macro"] = resultado_out["macro"].fillna(0)
             resultado_out["macro"] = resultado_out["macro"].replace({"": 0})
+        
         resultado_out = resultado_out.replace({np.nan: None, "": None})
+        
+        # Eliminar duplicados
         if len(resultado_out) > 0:
             registros_originales = len(resultado_out)
             resultado_out = resultado_out.drop_duplicates()
             registros_sin_duplicados = len(resultado_out)
             if registros_sin_duplicados < registros_originales:
                 logging.info(
-                    f"Se eliminaron {registros_originales - registros_sin_duplicados} duplicados del dataframe antes de insertar"
+                    f"Se eliminaron {registros_originales - registros_sin_duplicados:,} duplicados del dataframe antes de insertar"
                 )
         CHUNK_THRESHOLD = 5000
         CHUNK_SIZE = 5000

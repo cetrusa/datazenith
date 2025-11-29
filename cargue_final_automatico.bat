@@ -4,6 +4,12 @@ chcp 65001 >nul
 REM Establecer UTF-8 para Python
 set PYTHONIOENCODING=utf-8
 
+echo.
+echo ============================================================
+echo   DEBUG MODE - Verificando configuracion inicial
+echo ============================================================
+echo.
+
 REM ============================================================
 REM CONFIGURACION DE LOGGING
 REM ============================================================
@@ -26,20 +32,21 @@ echo.
 
 echo [%date% %time%] Iniciando proceso automatico completo...
 
-REM Configuracion de rutas
-set "SERVIDOR_UNC=Distrijass-bi"
-set "UNIDAD_COMPARTIDA=d"
-set "RUTA_UNC=\\%SERVIDOR_UNC%\%UNIDAD_COMPARTIDA%"
-set "RUTA_BASE=%RUTA_UNC%\Distrijass\Sistema Info"
+REM Configuracion de rutas (MODO LOCAL - TEMPORAL)
+REM set "SERVIDOR_UNC=Distrijass-bi"
+REM set "UNIDAD_COMPARTIDA=d"
+REM set "RUTA_UNC=\\%SERVIDOR_UNC%\%UNIDAD_COMPARTIDA%"
+REM set "RUTA_BASE=%RUTA_UNC%\Distrijass\Sistema Info"
+set "RUTA_BASE=D:\Distrijass\Sistema Info"
 set "RUTA_DESTINO=D:\Python\DataZenithBi\Info proveedores 2025\Info proveedores.xlsx"
 
 echo Configuracion:
-echo   Servidor: %SERVIDOR_UNC%
+echo   Modo: LOCAL (Unidad D:)
 echo   Archivo destino: %RUTA_DESTINO%
 echo.
 
 echo [%date% %time%] Configuracion: >> "%LOG_FILE%"
-echo [%date% %time%]   Servidor: %SERVIDOR_UNC% >> "%LOG_FILE%"
+echo [%date% %time%]   Modo: LOCAL (Unidad D:) >> "%LOG_FILE%"
 echo [%date% %time%]   Archivo destino: %RUTA_DESTINO% >> "%LOG_FILE%"
 
 REM ============================================================
@@ -51,55 +58,65 @@ echo [%date% %time%] === FASE 1: COPIA DE ARCHIVO === >> "%LOG_FILE%"
 echo.
 
 echo [%date% %time%] Verificando conectividad...
-echo [%date% %time%] Verificando conectividad al servidor %SERVIDOR_UNC%... >> "%LOG_FILE%"
+echo [%date% %time%] Verificando disponibilidad de unidad D:... >> "%LOG_FILE%"
 
-ping -n 1 %SERVIDOR_UNC% >nul 2>&1
-if !ERRORLEVEL! neq 0 (
-    echo ❌ ERROR: No se puede conectar al servidor %SERVIDOR_UNC%
-    echo [%date% %time%] ❌ ERROR: No se puede conectar al servidor %SERVIDOR_UNC% >> "%LOG_FILE%"
-    call :log_summary FALLO Conectividad
+REM Verificar que la unidad D: existe
+if not exist "D:\" (
+    echo ❌ ERROR: La unidad D:\ no esta disponible
+    echo [%date% %time%] ❌ ERROR: La unidad D:\ no esta disponible >> "%LOG_FILE%"
+    call :log_summary FALLO "Unidad D: no disponible"
+    echo.
+    echo Presione cualquier tecla para cerrar...
+    pause >nul
     exit /b 1
 )
+
+echo ✅ Unidad D:\ verificada
+echo [%date% %time%] ✅ Unidad D:\ verificada >> "%LOG_FILE%"
 
 echo [%date% %time%] Buscando archivo...
 
 echo [%date% %time%] Buscando archivo... >> "%LOG_FILE%"
 
+REM MODO LOCAL: Buscar archivo en D:\ (SIEMPRE copiar el más reciente)
 set "ARCHIVO_ENCONTRADO="
+
+REM Buscar en D:\ con acento
 set "RUTA_INFO=%RUTA_BASE%\Información\Impactos\info proveedores.xlsx"
 if exist "!RUTA_INFO!" (
     set "ARCHIVO_ENCONTRADO=!RUTA_INFO!"
-    echo ✅ Archivo encontrado: !ARCHIVO_ENCONTRADO!
-    echo [%date% %time%] ✅ Archivo encontrado: !ARCHIVO_ENCONTRADO! >> "%LOG_FILE%"
-) else (
-    set "RUTA_INFO=%RUTA_BASE%\Informacion\Impactos\info proveedores.xlsx"
-    if exist "!RUTA_INFO!" (
-        set "ARCHIVO_ENCONTRADO=!RUTA_INFO!"
-        echo ✅ Archivo encontrado: !ARCHIVO_ENCONTRADO!
-        echo [%date% %time%] ✅ Archivo encontrado: !ARCHIVO_ENCONTRADO! >> "%LOG_FILE%"
-    )
+    echo ✅ Archivo encontrado en D:\: !ARCHIVO_ENCONTRADO!
+    echo [%date% %time%] ✅ Archivo encontrado en D:\: !ARCHIVO_ENCONTRADO! >> "%LOG_FILE%"
+    goto :archivo_listo
 )
 
+REM Buscar en D:\ sin acento
+set "RUTA_INFO=%RUTA_BASE%\Informacion\Impactos\info proveedores.xlsx"
+if exist "!RUTA_INFO!" (
+    set "ARCHIVO_ENCONTRADO=!RUTA_INFO!"
+    echo ✅ Archivo encontrado en D:\: !ARCHIVO_ENCONTRADO!
+    echo [%date% %time%] ✅ Archivo encontrado en D:\: !ARCHIVO_ENCONTRADO! >> "%LOG_FILE%"
+    goto :archivo_listo
+)
+
+REM Si no existe en D:\, verificar si al menos existe el archivo local (como último recurso)
+if exist "%RUTA_DESTINO%" (
+    echo ⚠️  ADVERTENCIA: No se encontró archivo en D:\, usando archivo local existente
+    echo [%date% %time%] ⚠️  ADVERTENCIA: No se encontró archivo en D:\, usando archivo local existente >> "%LOG_FILE%"
+    set "ARCHIVO_ENCONTRADO=%RUTA_DESTINO%"
+    set "USAR_ARCHIVO_LOCAL=1"
+    goto :archivo_listo
+)
+
+:archivo_listo
 if "!ARCHIVO_ENCONTRADO!"=="" (
-    echo ❌ AVISO: No se encontro el archivo en la unidad de red
-    echo ❌ Verificando si existe archivo local previo...
-    echo [%date% %time%] ❌ AVISO: No se encontro el archivo en la unidad de red >> "%LOG_FILE%"
-    echo [%date% %time%] ❌ Verificando si existe archivo local previo... >> "%LOG_FILE%"
-    
-    if exist "%RUTA_DESTINO%" (
-        echo ✅ Se encontro archivo local en: %RUTA_DESTINO%
-        echo ✅ Continuando con el archivo existente...
-        echo [%date% %time%] ✅ Se encontro archivo local en: %RUTA_DESTINO% >> "%LOG_FILE%"
-        echo [%date% %time%] ✅ Continuando con el archivo existente... >> "%LOG_FILE%"
-        set "USAR_ARCHIVO_LOCAL=1"
-    ) else (
-        echo ❌ ERROR: No hay archivo de red ni archivo local disponible
-        echo [%date% %time%] ❌ ERROR CRITICO: No hay archivo de red ni archivo local disponible >> "%LOG_FILE%"
-        call :log_summary FALLO "Archivo no disponible"
-        exit /b 1
-    )
-) else (
-    set "USAR_ARCHIVO_LOCAL=0"
+    echo ❌ ERROR: No se encontro archivo ni en D:\ ni en local
+    echo [%date% %time%] ❌ ERROR CRITICO: No se encontro archivo disponible >> "%LOG_FILE%"
+    call :log_summary FALLO "Archivo no disponible"
+    echo.
+    echo Presione cualquier tecla para cerrar...
+    pause >nul
+    exit /b 1
 )
 
 echo [%date% %time%] Creando directorio destino...
@@ -109,33 +126,47 @@ if not exist "D:\Python\DataZenithBi\Info proveedores 2025" (
     mkdir "D:\Python\DataZenithBi\Info proveedores 2025"
 )
 
+REM Solo copiar si NO estamos usando el archivo local (es decir, si encontramos uno en D:\)
+if not defined USAR_ARCHIVO_LOCAL set "USAR_ARCHIVO_LOCAL=0"
+
 if "!USAR_ARCHIVO_LOCAL!"=="0" (
-    echo [%date% %time%] Copiando archivo desde red...
-    echo [%date% %time%] Copiando archivo desde red... >> "%LOG_FILE%"
+    echo [%date% %time%] Copiando archivo desde D:\...
+    echo [%date% %time%] Copiando archivo desde D:\ >> "%LOG_FILE%"
+    echo [%date% %time%] Origen: !ARCHIVO_ENCONTRADO! >> "%LOG_FILE%"
+    echo [%date% %time%] Destino: %RUTA_DESTINO% >> "%LOG_FILE%"
     
-    copy /Y "!ARCHIVO_ENCONTRADO!" "%RUTA_DESTINO%" >nul
+    copy /Y "!ARCHIVO_ENCONTRADO!" "%RUTA_DESTINO%"
 
     if !ERRORLEVEL! neq 0 (
-        echo ❌ ERROR: Fallo la copia, verificando archivo local...
-        echo [%date% %time%] ❌ ERROR: Fallo la copia, verificando archivo local... >> "%LOG_FILE%"
-        
-        if exist "%RUTA_DESTINO%" (
-            echo ✅ Usando archivo local existente
-            echo [%date% %time%] ✅ Usando archivo local existente >> "%LOG_FILE%"
-        ) else (
-            echo ❌ ERROR: No se puede copiar ni encontrar archivo local
-            echo [%date% %time%] ❌ ERROR CRITICO: No se puede copiar ni encontrar archivo local >> "%LOG_FILE%"
-            call :log_summary FALLO "Copia de archivo"
-            exit /b 1
-        )
+        echo ❌ ERROR: Fallo la copia desde D:\
+        echo [%date% %time%] ❌ ERROR: Fallo la copia desde D:\ >> "%LOG_FILE%"
+        echo [%date% %time%] ❌ Codigo de error: !ERRORLEVEL! >> "%LOG_FILE%"
+        call :log_summary FALLO "Copia de archivo"
+        echo.
+        echo Presione cualquier tecla para cerrar...
+        pause >nul
+        exit /b 1
     ) else (
-        echo [%date% %time%] ✅ Archivo copiado exitosamente desde red
-        echo [%date% %time%] ✅ Archivo copiado exitosamente desde red >> "%LOG_FILE%"
+        echo ✅ Archivo copiado exitosamente desde D:\
+        echo [%date% %time%] ✅ Archivo copiado exitosamente desde D:\ >> "%LOG_FILE%"
+        
+        REM Verificar fecha de modificación del archivo copiado
+        for %%F in ("%RUTA_DESTINO%") do (
+            echo [%date% %time%] Fecha modificación archivo destino: %%~tF >> "%LOG_FILE%"
+            echo    Fecha modificación: %%~tF
+        )
     )
 ) else (
-    echo [%date% %time%] ✅ Usando archivo local existente
-    echo [%date% %time%] ✅ Usando archivo local existente >> "%LOG_FILE%"
+    echo ⚠️  ADVERTENCIA: Usando archivo local existente (no se encontró en D:\)
+    echo [%date% %time%] ⚠️  ADVERTENCIA: Usando archivo local existente >> "%LOG_FILE%"
+    
+    REM Mostrar fecha del archivo local
+    for %%F in ("%RUTA_DESTINO%") do (
+        echo [%date% %time%] Fecha modificación archivo local: %%~tF >> "%LOG_FILE%"
+        echo    Fecha modificación: %%~tF
+    )
 )
+
 echo.
 
 REM ============================================================
@@ -158,6 +189,9 @@ if !FILE_SIZE! equ 0 (
     echo ❌ ERROR: Archivo Excel esta vacio ^(0 bytes^)
     echo [%date% %time%] ❌ ERROR: Archivo Excel esta vacio ^(0 bytes^) >> "%LOG_FILE%"
     call :log_summary FALLO "Archivo vacio"
+    echo.
+    echo Presione cualquier tecla para cerrar...
+    pause >nul
     exit /b 1
 )
 
@@ -179,6 +213,9 @@ if not exist "cargue_infoventas_main.py" (
     echo ❌ ERROR: Script Python no encontrado
     echo [%date% %time%] ❌ ERROR: Script Python no encontrado en cargue_infoventas_main.py >> "%LOG_FILE%"
     call :log_summary FALLO "Script Python no encontrado"
+    echo.
+    echo Presione cualquier tecla para cerrar...
+    pause >nul
     exit /b 1
 )
 
@@ -281,6 +318,8 @@ call :log_summary EXITOSO "Cargue completado correctamente"
 echo.
 echo Log guardado en: %LOG_FILE%
 echo.
+echo Presione cualquier tecla para cerrar...
+pause >nul
 exit /b 0
 
 :cargue_fallo
@@ -297,6 +336,8 @@ call :log_summary FALLO "Python cargue - Codigo !PYTHON_RESULT!"
 echo.
 echo Log guardado en: %LOG_FILE%
 echo.
+echo Presione cualquier tecla para cerrar...
+pause >nul
 exit /b !PYTHON_RESULT!
 
 REM ============================================================

@@ -184,9 +184,13 @@ class Extrae_Bi:
             time.sleep(5)
         return 0
 
-    def consulta_sql_out_extrae(self):
+    def consulta_sql_out_extrae(self, chunksize=10000):
         """ 
         Ejecuta una consulta SQL en la base de datos de salida con el nivel de aislamiento adecuado.
+        Procesa los datos en chunks para evitar timeouts y reducir uso de memoria.
+        
+        Args:
+            chunksize (int): Tamaño de cada chunk. Por defecto 10,000 registros.
         """
 
         max_retries = 3
@@ -203,11 +207,30 @@ class Extrae_Bi:
         for retry_count in range(max_retries):
             try:
                 with self.engine_mysql_out.connect().execution_options(isolation_level=isolation_level) as connection:
-                    resultado = pd.read_sql_query(
-                        text(self.txSqlExtrae), connection, params={"fi": self.IdtReporteIni, "ff": self.IdtReporteFin}
-                    )
-                    logging.info(f"Consulta ejecutada con éxito en {isolation_level}.")
-                    return resultado
+                    # Leer datos en chunks para evitar timeouts
+                    chunks = []
+                    total_rows = 0
+                    
+                    logging.info(f"Iniciando lectura de datos en chunks de {chunksize} registros...")
+                    
+                    for chunk_num, chunk in enumerate(pd.read_sql_query(
+                        text(self.txSqlExtrae), 
+                        connection, 
+                        params={"fi": self.IdtReporteIni, "ff": self.IdtReporteFin},
+                        chunksize=chunksize
+                    ), start=1):
+                        chunk_rows = len(chunk)
+                        total_rows += chunk_rows
+                        chunks.append(chunk)
+                        logging.info(f"Chunk {chunk_num}: {chunk_rows:,} registros leídos (Total acumulado: {total_rows:,})")
+                    
+                    if chunks:
+                        resultado = pd.concat(chunks, ignore_index=True)
+                        logging.info(f"Consulta ejecutada con éxito en {isolation_level}. Total: {total_rows:,} registros.")
+                        return resultado
+                    else:
+                        logging.warning("No se obtuvieron datos de la consulta.")
+                        return pd.DataFrame()
 
             except (sqlalchemy.exc.IntegrityError, sqlalchemy.exc.ProgrammingError) as e:
                 logging.error(f"Error en consulta_sql_out_extrae (Intento {retry_count+1}/3): {e}")
@@ -219,22 +242,57 @@ class Extrae_Bi:
             time.sleep(1)
 
 
-    def insertar_sql(self, df):
-        """ Inserta los datos en la base de datos de BI """
+    def insertar_sql(self, df, chunksize=5000):
+        """ 
+        Inserta los datos en la base de datos de BI en chunks para evitar timeouts.
+        
+        Args:
+            df (DataFrame): DataFrame con los datos a insertar
+            chunksize (int): Tamaño de cada chunk. Por defecto 5,000 registros.
+        """
         try:
-            with self.engine_mysql_bi.connect() as connection:
-                cursorbi = connection.execution_options(isolation_level="READ COMMITTED")
-                registros_a_insertar = len(df)
-                logging.info(f"Intentando insertar {registros_a_insertar} registros en {self.txTabla}")
-                df.to_sql(name=self.txTabla, con=cursorbi, if_exists="append", index=False)
-                logging.info(f"Se insertaron {registros_a_insertar} registros en {self.txTabla}")
+            total_registros = len(df)
+            logging.info(f"Intentando insertar {total_registros:,} registros en {self.txTabla}")
+            
+            if total_registros == 0:
+                logging.warning(f"No hay registros para insertar en {self.txTabla}")
+                return
+            
+            # Insertar en chunks si hay muchos registros
+            if total_registros > chunksize:
+                logging.info(f"Insertando en chunks de {chunksize:,} registros...")
+                registros_insertados = 0
+                
+                for i in range(0, total_registros, chunksize):
+                    chunk = df.iloc[i:i + chunksize]
+                    chunk_size = len(chunk)
+                    
+                    with self.engine_mysql_bi.connect() as connection:
+                        cursorbi = connection.execution_options(isolation_level="READ COMMITTED")
+                        chunk.to_sql(name=self.txTabla, con=cursorbi, if_exists="append", index=False)
+                    
+                    registros_insertados += chunk_size
+                    logging.info(f"Chunk insertado: {chunk_size:,} registros (Total: {registros_insertados:,}/{total_registros:,})")
+                
+                logging.info(f"Se insertaron {registros_insertados:,} registros en {self.txTabla}")
+            else:
+                # Si son pocos registros, insertar todo de una vez
+                with self.engine_mysql_bi.connect() as connection:
+                    cursorbi = connection.execution_options(isolation_level="READ COMMITTED")
+                    df.to_sql(name=self.txTabla, con=cursorbi, if_exists="append", index=False)
+                logging.info(f"Se insertaron {total_registros:,} registros en {self.txTabla}")
 
         except Exception as e:
             logging.error(f"Error al insertar datos en {self.txTabla}: {e}")
+            raise
 
-    def procedimiento_a_sql(self):
+    def procedimiento_a_sql(self, read_chunksize=10000, insert_chunksize=5000):
         """ 
         Ejecuta el proceso de eliminación y luego la extracción e inserción de datos.
+        
+        Args:
+            read_chunksize (int): Tamaño de chunks para lectura (por defecto 10,000)
+            insert_chunksize (int): Tamaño de chunks para inserción (por defecto 5,000)
         """
 
         for intento in range(3):
@@ -259,7 +317,7 @@ class Extrae_Bi:
                 rows_deleted = self.consulta_sql_bi() if self.txSql else 0
                 delete_success = ("TRUNCATE" in txSql_upper) or (rows_deleted > 0)
 
-                resultado_out = self.consulta_sql_out_extrae()
+                resultado_out = self.consulta_sql_out_extrae(chunksize=read_chunksize)
 
                 if resultado_out is not None and not resultado_out.empty:
                     registros_extraidos = len(resultado_out)
@@ -268,10 +326,10 @@ class Extrae_Bi:
                     resultado_limpio = self.limpiar_datos(resultado_out, tipos_columnas)
 
                     if delete_success:
-                        self.insertar_sql(resultado_limpio)
+                        self.insertar_sql(resultado_limpio, chunksize=insert_chunksize)
                     else:
                         logging.warning("No se eliminaron registros en consulta_sql_bi, pero se insertarán datos.")
-                        self.insertar_sql(resultado_limpio)
+                        self.insertar_sql(resultado_limpio, chunksize=insert_chunksize)
                 else:
                     logging.warning("No se obtuvieron resultados en consulta_sql_out_extrae.")
 

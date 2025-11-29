@@ -126,10 +126,6 @@
    "value": "D:/Python/DataZenithBi/adminbi/scripts;scripts/"
   },
   {
-   "optionDest": "datas",
-   "value": "D:/Python/DataZenithBi/adminbi/scripts/extrae_bi;extrae_bi/"
-  },
-  {
    "optionDest": "collect_submodules",
    "value": "charset_normalizer"
   },
@@ -144,6 +140,10 @@
   {
    "optionDest": "excludes",
    "value": "django"
+  },
+  {
+   "optionDest": "datas",
+   "value": "D:/Python/DataZenithBi/adminbi/scripts/extrae_bi/extrae_bi_insert.py;extrae_bi/"
   }
  ],
  "nonPyinstallerOptions": {

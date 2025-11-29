@@ -9,7 +9,7 @@ from scripts.conexion import Conexion as con
 import json
 import pandas as pd
 
-from scripts.extrae_bi.extrae_bi import Extrae_Bi
+from scripts.extrae_bi.extrae_bi_insert import ExtraeBiConfig, ExtraeBiExtractor
 from scripts.extrae_bi.apipowerbi import Api_PowerBi,Api_PowerBi_Config
 from scripts.extrae_bi.uau import CompiUpdate
 
@@ -95,7 +95,7 @@ class Inicio:
         elif __file__:
             self.dir_actual = os.path.dirname(__file__)
             self.name = str("compi")
-            self.dir_actual = str("puentedia")
+            self.dir_actual = str("puentemesanterior")
             self.nmDt = self.dir_actual
 
         self.configurar(self.name)
@@ -230,13 +230,22 @@ class Inicio:
 
     def extrae_bi(self):
         try:
-            extrae = Extrae_Bi(
-                database_name=self.name,
+            # Usar el nuevo ExtraeBiConfig y ExtraeBiExtractor con procesamiento en chunks
+            config = ExtraeBiConfig(database_name=self.name)
+            extractor = ExtraeBiExtractor(
+                config=config,
                 IdtReporteIni=self.IdtReporteIni,
                 IdtReporteFin=self.IdtReporteFin,
             )
-            extrae.extractor()
-            logging.info("Termina proceso de extracción")
+            resultado = extractor.run()
+            
+            if resultado.get("success"):
+                logging.info("Termina proceso de extracción con éxito")
+                if resultado.get("errores_tablas"):
+                    logging.warning(f"Algunas tablas tuvieron errores: {resultado['errores_tablas']}")
+            else:
+                logging.error(f"Error en extracción: {resultado.get('message')}")
+                
         except Exception as e:
             error_message = "Error en el proceso de extracción: " + str(e)
             logging.error(error_message)
