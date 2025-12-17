@@ -42,6 +42,7 @@ class Command(BaseCommand):
             ('proveedor', 'Generar cubo de ventas para proveedor'),
             ('matrix', 'Generar Matrix de Ventas'),
             ('interface', 'Generar interface contable'),
+            ('interface_siigo', 'Generar interface Siigo'),
             ('plano', 'Generar archivo plano'),
             ('cargue_plano', 'Cargar archivo plano'),
             ('cargue_tsol', 'Cargue archivo plano TSOL'),
@@ -96,7 +97,7 @@ class Command(BaseCommand):
         grupos_config = {
             'Administradores': [
                 'nav_bar', 'admin', 'panel_cubo', 'panel_bi', 'panel_actualizacion', 
-                'panel_interface', 'cubo', 'proveedor', 'matrix', 'interface', 
+                'panel_interface', 'cubo', 'proveedor', 'matrix', 'interface', 'interface_siigo',
                 'plano', 'cargue_plano', 'cargue_tsol', 'informe_bi', 
                 'actualizar_base', 'actualizacion_bi', 'amovildesk', 'reportes',
                 'cargue_infoventas', 'cargue_maestras'
@@ -110,7 +111,7 @@ class Command(BaseCommand):
                 'cargue_infoventas', 'cargue_maestras', 'actualizar_base'
             ],
             'Usuarios Interface': [
-                'nav_bar', 'panel_interface', 'interface', 'plano'
+                'nav_bar', 'panel_interface', 'interface', 'interface_siigo', 'plano'
             ]
         }
 
@@ -161,7 +162,7 @@ class Command(BaseCommand):
             if user.is_superuser:
                 permisos_basicos = [
                     'nav_bar', 'admin', 'panel_cubo', 'panel_bi', 'panel_actualizacion',
-                    'panel_interface', 'cubo', 'proveedor', 'matrix', 'interface',
+                    'panel_interface', 'cubo', 'proveedor', 'matrix', 'interface', 'interface_siigo',
                     'plano', 'cargue_plano', 'cargue_tsol', 'informe_bi',
                     'actualizar_base', 'actualizacion_bi', 'amovildesk', 'reportes',
                     'cargue_infoventas', 'cargue_maestras'

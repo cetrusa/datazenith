@@ -13,12 +13,19 @@
     </a>
     <!-- Enlaces de Navegación -->
     <ul class="nav nav-pills flex-column mb-sm-auto mb-0 align-items-center align-items-sm-start">
-      {% if perms.permisos.interface %}
+      {% if perms.permisos.interface or perms.permisos.interface_siigo %}
       <li class="nav-item">
         <a href="{% url 'home_app:interface'%}" class="nav-link text-white align-middle px-0">
           <i class="fas fa-calculator me-2"></i> <span class="ms-1 d-none d-sm-inline">Int. Contables</span>
         </a>
       </li>
+      {% if perms.permisos.interface_siigo %}
+      <li class="nav-item">
+        <a href="{% url 'home_app:interface_siigo'%}" class="nav-link text-white align-middle px-0">
+          <i class="fas fa-file-excel me-2"></i> <span class="ms-1 d-none d-sm-inline">Int. Siigo</span>
+        </a>
+      </li>
+      {% endif %}
       {% endif %}
       {% if perms.permisos.plano %}
       <li class="nav-item">

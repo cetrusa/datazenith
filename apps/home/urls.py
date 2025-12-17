@@ -53,6 +53,11 @@ urlpatterns = [
         name="interface",
     ),
     path(
+        "interface-siigo/",
+        views.InterfaceSiigoPage.as_view(),
+        name="interface_siigo",
+    ),
+    path(
         "actualizacion/",
         views.ActualizacionBdPage.as_view(),
         name="actualizacion",

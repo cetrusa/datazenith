@@ -28,6 +28,7 @@ from .tasks import (
     cubo_ventas_task,
     matrix_task,
     interface_task,
+    interface_siigo_task,
     plano_task,
     extrae_bi_task,
 )
@@ -792,6 +793,12 @@ class HomePanelInterfacePage(BaseView):
                         "id": "interface_contable",
                     }
                 )
+                interfaces.append(
+                    {
+                        "nombre": f"{config.config.get('nmProcedureInterface', 'Interfaz Contable')} (Siigo)",
+                        "id": "interface_siigo",
+                    }
+                )
 
             # Aquí podríamos añadir otras interfaces según la configuración
 
@@ -1231,7 +1238,8 @@ class CheckTaskStatusView(BaseView):
 
                 # Si la tarea es interface_task y success es False, devolver error y NO mostrar link de descarga
                 if (
-                    task_name in ["interface_task", "plano_task", "matrix_task"]
+                    task_name
+                    in ["interface_task", "interface_siigo_task", "plano_task", "matrix_task"]
                     and isinstance(result, dict)
                     and not result.get("success", True)
                 ):
@@ -1541,13 +1549,21 @@ class CheckTaskStatusView(BaseView):
                 "tiempo_ejecucion": f"{result.get('execution_time', 0):.2f} segundos",
             }
 
-        elif task_name in ["interface_task", "plano_task", "matrix_task"]:
+        elif task_name in [
+            "interface_task",
+            "interface_siigo_task",
+            "plano_task",
+            "matrix_task",
+        ]:
             # Resumen especial para Interface Contable
             db_name = job.args[0] if len(job.args) > 0 else "desconocida"
             fecha_ini = job.args[1] if len(job.args) > 1 else "desconocida"
             fecha_fin = job.args[2] if len(job.args) > 2 else "desconocida"
+            tipo_proceso = (
+                "Interface Siigo" if task_name == "interface_siigo_task" else "Interface Contable"
+            )
             resumen = {
-                "tipo_proceso": "Interface Contable",
+                "tipo_proceso": tipo_proceso,
                 "base_datos": db_name,
                 "periodo": f"{fecha_ini} - {fecha_fin}",
                 "archivo_generado": result.get("file_name", "No se generó archivo"),
@@ -1856,6 +1872,18 @@ class InterfacePage(ReporteGenericoPage):
     id_reporte = 0  # Si aplica, puedes asignar un id específico
     form_url = "home_app:interface"
     task_func = interface_task
+
+    @method_decorator(permission_required("permisos.interface", raise_exception=True))
+    def dispatch(self, request, *args, **kwargs):
+        return super().dispatch(request, *args, **kwargs)
+
+
+class InterfaceSiigoPage(ReporteGenericoPage):
+    template_name = "home/interface_siigo.html"
+    permiso = "permisos.interface_siigo"
+    id_reporte = 0
+    form_url = "home_app:interface_siigo"
+    task_func = interface_siigo_task
 
     @method_decorator(permission_required("permisos.interface", raise_exception=True))
     def dispatch(self, request, *args, **kwargs):

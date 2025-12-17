@@ -15,6 +15,7 @@ from scripts.extrae_bi.cubo import CuboVentas
 from scripts.config import ConfigBasic
 from scripts.extrae_bi.cargue_zip import CargueZip
 from scripts.extrae_bi.interface import InterfaceContable
+from scripts.extrae_bi.interface_siigo import InterfaceContable as InterfaceContableSiigo
 from scripts.extrae_bi.matrix import MatrixVentas
 from scripts.extrae_bi.plano import InterfacePlano
 from scripts.cargue.cargue_infoproducto import ArchivoFuente, CargueInfoProducto
@@ -517,6 +518,84 @@ def interface_task(
     print("[interface_task] FIN")
     # Devolver directamente el resultado de CuboVentas.run()
     # El decorador @task_handler añadirá execution_time y manejará el estado final.
+    return result_data
+
+
+@job("default", timeout=DEFAULT_TIMEOUT, result_ttl=3600)
+@task_handler
+def interface_siigo_task(
+    database_name,
+    IdtReporteIni,
+    IdtReporteFin,
+    user_id,
+    report_id,
+    batch_size=DEFAULT_BATCH_SIZE,
+):
+    """
+    Tarea RQ para generar Interface Contable con formato SIIGO.
+    """
+    try:
+        connection.close()
+    except Exception:
+        pass
+
+    job = get_current_job()
+    job_id = job.id if job else None
+    logger.info(
+        f"Iniciando interface_siigo_task (RQ Job ID: {job_id}) para DB: {database_name}, Periodo: {IdtReporteIni}-{IdtReporteFin}"
+    )
+    print(
+        f"[interface_siigo_task] INICIO: database_name={database_name}, IdtReporteIni={IdtReporteIni}, IdtReporteFin={IdtReporteFin}, user_id={user_id}, report_id={report_id}, batch_size={batch_size}"
+    )
+
+    def rq_update_progress(
+        stage,
+        progress_percent,
+        current_rec=None,
+        total_rec=None,
+        hoja_idx=None,
+        total_hojas=None,
+    ):
+        meta = {"stage": stage}
+        if current_rec is not None:
+            meta["records_processed"] = current_rec
+        if total_rec is not None:
+            meta["total_records_estimate"] = total_rec
+        if hoja_idx is not None and total_hojas is not None:
+            meta["hoja_actual"] = hoja_idx
+            meta["total_hojas"] = total_hojas
+            global_percent = int((hoja_idx / total_hojas) * 100)
+        else:
+            global_percent = progress_percent
+        print(
+            f"[interface_siigo_task][progreso] stage={stage}, hoja_idx={hoja_idx}, total_hojas={total_hojas}, global_percent={global_percent}"
+        )
+        update_job_progress(job_id, int(global_percent), status="processing", meta=meta)
+
+    print("[interface_siigo_task] Instanciando InterfaceContableSiigo...")
+    interface_processor = InterfaceContableSiigo(
+        database_name,
+        IdtReporteIni,
+        IdtReporteFin,
+        user_id,
+        report_id,
+        progress_callback=rq_update_progress,
+    )
+
+    if hasattr(interface_processor, "batch_size"):
+        interface_processor.batch_size = batch_size
+
+    print("[interface_siigo_task] Ejecutando run() de InterfaceContableSiigo...")
+    result_data = interface_processor.run()
+
+    print(f"[interface_siigo_task] RESULTADO: {result_data}")
+
+    try:
+        connection.close()
+    except Exception:
+        pass
+
+    print("[interface_siigo_task] FIN")
     return result_data
 
 

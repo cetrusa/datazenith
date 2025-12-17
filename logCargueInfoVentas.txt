@@ -1,31 +1,31 @@
-2025-12-16 14:31:11,323 \U0001f680\U0001f680\U0001f680 INICIO FUNCIÓN run_cargue - DEBUG LOG \U0001f680\U0001f680\U0001f680
-2025-12-16 14:31:11,324 \U0001f680 Iniciando cargue del archivo: D:\Python\DataZenithBi\Info proveedores 2025\Info proveedores.xlsx
-2025-12-16 14:31:11,324 \U0001f4c5 Las fechas se detectarán automáticamente desde la columna 'Fecha' del Excel
-2025-12-16 14:31:11,324 \U0001f527 Fase 1: Creando instancia del cargador...
-2025-12-16 14:31:11,336 Creando nueva conexión para cetrusa@dbmariam04.chqxl6ahrk6r.us-east-1.rds.amazonaws.com:3307/powerbi_adm (cache_key=33ff95078a8a92efd9e7f3bdeed02e8334069d35)
-2025-12-16 14:31:13,422 Reutilizando conexión existente para cetrusa@dbmariam04.chqxl6ahrk6r.us-east-1.rds.amazonaws.com:3307/powerbi_adm (cache_key=33ff95078a8a92efd9e7f3bdeed02e8334069d35)
-2025-12-16 14:31:14,140 Reutilizando conexión existente para cetrusa@dbmariam04.chqxl6ahrk6r.us-east-1.rds.amazonaws.com:3307/powerbi_adm (cache_key=33ff95078a8a92efd9e7f3bdeed02e8334069d35)
-2025-12-16 14:31:14,863 Reutilizando conexión existente para cetrusa@dbmariam04.chqxl6ahrk6r.us-east-1.rds.amazonaws.com:3307/powerbi_adm (cache_key=33ff95078a8a92efd9e7f3bdeed02e8334069d35)
-2025-12-16 14:31:15,585 Reutilizando conexión existente para cetrusa@dbmariam04.chqxl6ahrk6r.us-east-1.rds.amazonaws.com:3307/powerbi_adm (cache_key=33ff95078a8a92efd9e7f3bdeed02e8334069d35)
-2025-12-16 14:31:16,302 Reutilizando conexión existente para cetrusa@dbmariam04.chqxl6ahrk6r.us-east-1.rds.amazonaws.com:3307/powerbi_adm (cache_key=33ff95078a8a92efd9e7f3bdeed02e8334069d35)
-2025-12-16 14:31:17,019 Reutilizando conexión existente para cetrusa@dbmariam04.chqxl6ahrk6r.us-east-1.rds.amazonaws.com:3307/powerbi_adm (cache_key=33ff95078a8a92efd9e7f3bdeed02e8334069d35)
-2025-12-16 14:31:17,736 Reutilizando conexión existente para cetrusa@dbmariam04.chqxl6ahrk6r.us-east-1.rds.amazonaws.com:3307/powerbi_adm (cache_key=33ff95078a8a92efd9e7f3bdeed02e8334069d35)
-2025-12-16 14:31:18,214 Django no inicializado para distrijass/SYSTEM, usando permisos por defecto
-2025-12-16 14:31:18,214 ConfigService caching result for c768946ac343eda3a318220012479544f6a3a62b en 6.888s
-2025-12-16 14:31:18,215 Creando nueva conexión para cetrusa@dbmariam04.chqxl6ahrk6r.us-east-1.rds.amazonaws.com:3307/bi_distrijass (cache_key=b59195f79f3c7b9cf5011728e5f9a1e5cd1d8dce)
-2025-12-16 14:31:18,215 \u2705 Cargador creado exitosamente
-2025-12-16 14:31:18,215 \U0001f527 Fase 1.5: Cargando datos en staging para validación...
-2025-12-16 14:32:56,559 \u2705 Datos cargados correctamente en staging.
-2025-12-16 14:32:56,559 \U0001f4ca Registros procesados: 195,221
-2025-12-16 14:32:56,560 \U0001f4ca Registros insertados: 195,221
-2025-12-16 14:32:56,560 \U0001f4ca Registros actualizados: 0
-2025-12-16 14:32:56,560 \U0001f4ca Registros preservados: 0
-2025-12-16 14:32:56,560 \U0001f4c5 RANGO DE FECHAS DETECTADAS: 2025-12-01 \u2192 2025-12-15
-2025-12-16 14:32:56,560 \U0001f527 Fase 2: Iniciando mantenimiento post-cargue...
-2025-12-16 14:32:56,560 \U0001f9f9 === INICIANDO MANTENIMIENTO POST-CARGUE ===
-2025-12-16 14:32:57,607 \U0001f4ca Registros en infoventas ANTES del mantenimiento: 195221
-2025-12-16 14:32:57,727 \U0001f527 Método 1: Ejecutando con raw_connection y reintentos...
-2025-12-16 14:32:57,727 \u267b\ufe0f Preparando ejecución del procedimiento con hasta 3 intentos...
-2025-12-16 14:32:57,727    \u25b6\ufe0f Intento 1/3 de ejecución del procedimiento...
-2025-12-16 14:33:30,704 \U0001f4cb Resultados parciales del procedimiento: (('Vista vw_infoventas reconstruida correctamente',),)
-2025-12-16 14:36:04,138 \U0001f4cb Resultados parciales del procedimiento: (('bi_distrijass.infoventas_2023_fact', 'optimize', 'note', 'Table does not support optimize, doing recreate + analyze instead'), ('bi_distrijass.infoventas_2023_fact', 'optimize', 'status', 'OK'), ('bi_distrijass.infoventas_2023_dev', 'optimize', 'note', 'Table does not support optimize, doing recreate + analyze instead'), ('bi_distrijass.infoventas_2023_dev', 'optimize', 'status', 'OK'))
+2025-12-16 23:31:26,568 \U0001f680\U0001f680\U0001f680 INICIO FUNCIÓN run_cargue - DEBUG LOG \U0001f680\U0001f680\U0001f680
+2025-12-16 23:31:26,568 \U0001f680 Iniciando cargue del archivo: D:\Python\DataZenithBi\Info proveedores 2025\Info proveedores.xlsx
+2025-12-16 23:31:26,568 \U0001f4c5 Las fechas se detectarán automáticamente desde la columna 'Fecha' del Excel
+2025-12-16 23:31:26,568 \U0001f527 Fase 1: Creando instancia del cargador...
+2025-12-16 23:31:26,586 Creando nueva conexión para cetrusa@dbmariam04.chqxl6ahrk6r.us-east-1.rds.amazonaws.com:3307/powerbi_adm (cache_key=33ff95078a8a92efd9e7f3bdeed02e8334069d35)
+2025-12-16 23:31:28,769 Reutilizando conexión existente para cetrusa@dbmariam04.chqxl6ahrk6r.us-east-1.rds.amazonaws.com:3307/powerbi_adm (cache_key=33ff95078a8a92efd9e7f3bdeed02e8334069d35)
+2025-12-16 23:31:29,510 Reutilizando conexión existente para cetrusa@dbmariam04.chqxl6ahrk6r.us-east-1.rds.amazonaws.com:3307/powerbi_adm (cache_key=33ff95078a8a92efd9e7f3bdeed02e8334069d35)
+2025-12-16 23:31:30,241 Reutilizando conexión existente para cetrusa@dbmariam04.chqxl6ahrk6r.us-east-1.rds.amazonaws.com:3307/powerbi_adm (cache_key=33ff95078a8a92efd9e7f3bdeed02e8334069d35)
+2025-12-16 23:31:30,966 Reutilizando conexión existente para cetrusa@dbmariam04.chqxl6ahrk6r.us-east-1.rds.amazonaws.com:3307/powerbi_adm (cache_key=33ff95078a8a92efd9e7f3bdeed02e8334069d35)
+2025-12-16 23:31:31,682 Reutilizando conexión existente para cetrusa@dbmariam04.chqxl6ahrk6r.us-east-1.rds.amazonaws.com:3307/powerbi_adm (cache_key=33ff95078a8a92efd9e7f3bdeed02e8334069d35)
+2025-12-16 23:31:32,404 Reutilizando conexión existente para cetrusa@dbmariam04.chqxl6ahrk6r.us-east-1.rds.amazonaws.com:3307/powerbi_adm (cache_key=33ff95078a8a92efd9e7f3bdeed02e8334069d35)
+2025-12-16 23:31:33,118 Reutilizando conexión existente para cetrusa@dbmariam04.chqxl6ahrk6r.us-east-1.rds.amazonaws.com:3307/powerbi_adm (cache_key=33ff95078a8a92efd9e7f3bdeed02e8334069d35)
+2025-12-16 23:31:33,600 Django no inicializado para distrijass/SYSTEM, usando permisos por defecto
+2025-12-16 23:31:33,600 ConfigService caching result for c768946ac343eda3a318220012479544f6a3a62b en 7.031s
+2025-12-16 23:31:33,600 Creando nueva conexión para cetrusa@dbmariam04.chqxl6ahrk6r.us-east-1.rds.amazonaws.com:3307/bi_distrijass (cache_key=b59195f79f3c7b9cf5011728e5f9a1e5cd1d8dce)
+2025-12-16 23:31:33,600 \u2705 Cargador creado exitosamente
+2025-12-16 23:31:33,600 \U0001f527 Fase 1.5: Cargando datos en staging para validación...
+2025-12-16 23:33:28,298 \u2705 Datos cargados correctamente en staging.
+2025-12-16 23:33:28,298 \U0001f4ca Registros procesados: 209,975
+2025-12-16 23:33:28,298 \U0001f4ca Registros insertados: 209,975
+2025-12-16 23:33:28,298 \U0001f4ca Registros actualizados: 0
+2025-12-16 23:33:28,298 \U0001f4ca Registros preservados: 0
+2025-12-16 23:33:28,309 \U0001f4c5 RANGO DE FECHAS DETECTADAS: 2025-12-01 \u2192 2025-12-16
+2025-12-16 23:33:28,309 \U0001f527 Fase 2: Iniciando mantenimiento post-cargue...
+2025-12-16 23:33:28,309 \U0001f9f9 === INICIANDO MANTENIMIENTO POST-CARGUE ===
+2025-12-16 23:33:28,629 \U0001f4ca Registros en infoventas ANTES del mantenimiento: 209975
+2025-12-16 23:33:28,752 \U0001f527 Método 1: Ejecutando con raw_connection y reintentos...
+2025-12-16 23:33:28,752 \u267b\ufe0f Preparando ejecución del procedimiento con hasta 3 intentos...
+2025-12-16 23:33:28,752    \u25b6\ufe0f Intento 1/3 de ejecución del procedimiento...
+2025-12-16 23:34:01,874 \U0001f4cb Resultados parciales del procedimiento: (('Vista vw_infoventas reconstruida correctamente',),)
+2025-12-16 23:35:14,927 \U0001f4cb Resultados parciales del procedimiento: (('bi_distrijass.infoventas_2023_fact', 'optimize', 'note', 'Table does not support optimize, doing recreate + analyze instead'), ('bi_distrijass.infoventas_2023_fact', 'optimize', 'status', 'OK'), ('bi_distrijass.infoventas_2023_dev', 'optimize', 'note', 'Table does not support optimize, doing recreate + analyze instead'), ('bi_distrijass.infoventas_2023_dev', 'optimize', 'status', 'OK'))

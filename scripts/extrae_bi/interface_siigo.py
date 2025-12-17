@@ -174,21 +174,33 @@ class InterfaceContable:
 
     def _aplicar_formato_siigo(self, workbook, sheet_name, start_row=1):
         """Despacha el formato de salida de acuerdo con la hoja solicitada."""
+        empresa = self.config.get("name") or self.database_name
         if sheet_name.strip().upper() == "TERCEROS":
-            self._formato_terceros(workbook, sheet_name, start_row)
+            self._formato_terceros(workbook, sheet_name, empresa)
         else:
-            self._formato_movimiento(workbook, sheet_name, start_row)
+            self._formato_movimiento(workbook, sheet_name, empresa)
 
-    def _formato_terceros(self, workbook, sheet_name, start_row):
+    def _formato_terceros(self, workbook, sheet_name, empresa):
         ws = workbook[sheet_name]
+        header_row = 5  # según plantilla Siigo
+        last_col_letter = "BX"  # columna final del modelo de terceros
+
+        # Insertar filas para desplazar encabezado y datos
+        ws.insert_rows(1, header_row - 1)
+
+        # Títulos y merges exactos
+        ws["A1"] = empresa
+        ws["A2"] = "MODELO TERCEROS"
+        for r in [1, 2, 3, 4]:
+            ws.merge_cells(f"A{r}:{last_col_letter}{r}")
+            ws[f"A{r}"].alignment = Alignment(horizontal="left", vertical="center")
+            ws[f"A{r}"].font = Font(name="Calibri", size=12, bold=True)
 
         header_font = Font(name="Calibri", size=10, bold=True)
         body_font = Font(name="Calibri", size=10)
-
         header_fill = PatternFill(
             start_color="D9E1F2", end_color="D9E1F2", fill_type="solid"
         )
-
         thin_border = Border(
             left=Side(style="thin"),
             right=Side(style="thin"),
@@ -196,32 +208,171 @@ class InterfaceContable:
             bottom=Side(style="thin"),
         )
 
-        for col_idx, cell in enumerate(ws[start_row], start=1):
+        # Anchos de columnas según plantilla (primeras 12 columnas)
+        template_widths = {
+            "A": 36.5703125,
+            "B": 29.85546875,
+            "C": 28.0,
+            "D": 87.28515625,
+            "E": 16.7109375,
+            "F": 21.85546875,
+            "G": 22.5703125,
+            "H": 23.140625,
+            "I": 22.140625,
+            "J": 50.28515625,
+            "K": 36.0,
+            "L": 50.5703125,
+            "M": 84.28515625,
+            "N": 6.140625,
+            "O": 9.28515625,
+            "P": 9.140625,
+            "Q": 15.42578125,
+            "R": 13.85546875,
+            "U": 22.0,
+            "V": 5.42578125,
+            "W": 19.85546875,
+            "X": 6.85546875,
+            "Y": 23.85546875,
+            "Z": 23.7109375,
+            "AA": 23.140625,
+            "AB": 19.7109375,
+            "AC": 81.28515625,
+            "AD": 47.85546875,
+            "AE": 74.0,
+            "AF": 27.7109375,
+            "AG": 40.28515625,
+            "AH": 14.5703125,
+            "AI": 19.5703125,
+            "AJ": 22.140625,
+            "AK": 39.0,
+            "AL": 42.28515625,
+            "AM": 48.140625,
+            "AN": 44.28515625,
+            "AO": 50.140625,
+            "AP": 20.0,
+            "AQ": 18.85546875,
+            "AR": 18.28515625,
+            "AS": 16.5703125,
+            "AT": 24.140625,
+            "AU": 35.42578125,
+            "AV": 12.42578125,
+            "AW": 12.7109375,
+            "AX": 39.85546875,
+            "AY": 20.28515625,
+            "AZ": 22.7109375,
+            "BA": 18.28515625,
+            "BB": 18.140625,
+            "BC": 28.85546875,
+            "BD": 20.85546875,
+            "BE": 19.28515625,
+            "BF": 19.140625,
+            "BG": 18.28515625,
+            "BH": 22.28515625,
+            "BI": 33.85546875,
+            "BJ": 52.85546875,
+            "BK": 59.42578125,
+            "BL": 21.5703125,
+            "BM": 24.7109375,
+            "BN": 41.5703125,
+            "BO": 62.140625,
+            "BP": 64.28515625,
+            "BQ": 54.7109375,
+            "BR": 84.5703125,
+            "BS": 18.140625,
+            "BT": 29.140625,
+            "BU": 17.0,
+            "BV": 16.85546875,
+            "BW": 16.140625,
+            "BX": 11.42578125,
+            "BY": 11.42578125,
+        }
+
+        for col_idx, cell in enumerate(ws[header_row], start=1):
+            col_letter = get_column_letter(col_idx)
             cell.font = header_font
             cell.fill = header_fill
             cell.border = thin_border
             cell.alignment = Alignment(horizontal="center", vertical="center")
-            ws.column_dimensions[get_column_letter(col_idx)].width = 22
+            if col_letter in template_widths:
+                ws.column_dimensions[col_letter].width = template_widths[col_letter]
+            else:
+                ws.column_dimensions[col_letter].width = 22
 
-        for row in ws.iter_rows(min_row=start_row + 1):
+        integer_format = r"##,##0_);[Red]\(##,##0\)"
+        decimal_format = r"##,##0.00_);[Red]\(##,##0.00\)"
+        integer_cols = {
+            "A",
+            "B",
+            "C",
+            "N",
+            "O",
+            "Q",
+            "R",
+            "S",
+            "T",
+            "U",
+            "V",
+            "W",
+            "Y",
+            "Z",
+            "AA",
+            "AB",
+            "AQ",
+            "AR",
+            "AT",
+            "AU",
+            "AV",
+            "AW",
+            "AY",
+            "BA",
+            "BB",
+            "BC",
+            "BD",
+            "BE",
+            "BF",
+            "BI",
+            "BJ",
+            "BL",
+            "BM",
+            "BV",
+            "BW",
+        }
+        decimal_cols = {"AM", "AO", "AP", "AX"}
+
+        for row in ws.iter_rows(min_row=header_row + 1):
             for cell in row:
                 cell.font = body_font
                 cell.border = thin_border
                 cell.alignment = Alignment(horizontal="left", vertical="center")
-                cell.number_format = "@"
+                col = cell.column_letter
+                if col in decimal_cols:
+                    cell.number_format = decimal_format
+                elif col in integer_cols:
+                    cell.number_format = integer_format
+                else:
+                    cell.number_format = "General"
 
-        ws.freeze_panes = f"A{start_row + 1}"
+        ws.freeze_panes = f"A{header_row + 1}"
 
-    def _formato_movimiento(self, workbook, sheet_name, start_row):
+    def _formato_movimiento(self, workbook, sheet_name, empresa):
         ws = workbook[sheet_name]
+        header_row = 5  # según plantilla Siigo
+        last_col_letter = "DS"  # columna final del modelo de movimiento contable
+
+        ws.insert_rows(1, header_row - 1)
+
+        ws["A1"] = empresa
+        ws["A2"] = "MODELO PARA LA IMPORTACION DE MOVIMIENTO CONTABLE - MODELO GENERAL"
+        for r in [1, 2, 3, 4]:
+            ws.merge_cells(f"A{r}:{last_col_letter}{r}")
+            ws[f"A{r}"].alignment = Alignment(horizontal="left", vertical="center")
+            ws[f"A{r}"].font = Font(name="Calibri", size=12, bold=True)
 
         header_font = Font(name="Calibri", size=10, bold=True)
         body_font = Font(name="Calibri", size=10)
-
         header_fill = PatternFill(
             start_color="E2EFDA", end_color="E2EFDA", fill_type="solid"
         )
-
         thin_border = Border(
             left=Side(style="thin"),
             right=Side(style="thin"),
@@ -229,29 +380,148 @@ class InterfaceContable:
             bottom=Side(style="thin"),
         )
 
-        for col_idx, cell in enumerate(ws[start_row], start=1):
+        template_widths = {
+            "A": 43.28515625,
+            "B": 44.0,
+            "C": 27.28515625,
+            "D": 39.5703125,
+            "E": 38.28515625,
+            "F": 45.85546875,
+            "G": 24.0,
+            "H": 23.85546875,
+            "I": 23.28515625,
+            "J": 26.0,
+            "K": 24.85546875,
+            "L": 22.5703125,
+            "M": 13.140625,
+            "N": 20.42578125,
+            "O": 24.7109375,
+            "P": 4.7109375,
+            "Q": 12.0,
+            "R": 34.85546875,
+            "S": 22.7109375,
+            "T": 27.7109375,
+            "U": 41.0,
+            "V": 18.28515625,
+            "W": 41.7109375,
+            "Y": 47.0,
+            "AB": 50.85546875,
+            "AC": 63.85546875,
+            "AD": 33.5703125,
+            "AE": 40.0,
+            "AF": 31.0,
+            "AG": 31.140625,
+            "AH": 38.0,
+            "AI": 37.85546875,
+            "AJ": 37.28515625,
+            "AK": 29.28515625,
+            "AL": 44.5703125,
+            "AM": 46.7109375,
+            "AN": 32.42578125,
+            "AO": 32.5703125,
+            "AP": 39.28515625,
+            "AQ": 39.140625,
+            "AR": 38.5703125,
+            "AS": 32.42578125,
+            "AT": 32.5703125,
+            "AU": 39.28515625,
+            "AV": 39.140625,
+            "AW": 38.5703125,
+            "AX": 32.42578125,
+            "AY": 32.5703125,
+            "AZ": 39.28515625,
+            "BA": 39.140625,
+            "BB": 38.5703125,
+            "BC": 32.42578125,
+            "BD": 32.5703125,
+            "BE": 39.28515625,
+            "BF": 39.140625,
+            "BG": 38.5703125,
+            "BH": 48.7109375,
+            "BI": 42.28515625,
+            "BJ": 32.85546875,
+            "BK": 29.5703125,
+            "BL": 29.42578125,
+            "BM": 28.85546875,
+            "BN": 42.85546875,
+            "BO": 35.140625,
+            "BP": 22.5703125,
+            "BQ": 51.85546875,
+            "BR": 36.28515625,
+            "BS": 18.85546875,
+            "BT": 15.28515625,
+            "BU": 51.42578125,
+            "BV": 19.28515625,
+            "BW": 20.140625,
+            "BX": 21.5703125,
+            "BY": 11.85546875,
+            "BZ": 16.85546875,
+            "CA": 25.42578125,
+            "CB": 28.85546875,
+            "CC": 42.140625,
+            "CD": 42.7109375,
+            "CE": 39.42578125,
+            "CF": 18.140625,
+            "CH": 21.5703125,
+            "CI": 63.5703125,
+            "CJ": 27.5703125,
+            "CK": 46.28515625,
+            "CL": 46.140625,
+            "CM": 37.42578125,
+            "CN": 37.28515625,
+            "CO": 36.5703125,
+            "CP": 32.0,
+            "CQ": 38.140625,
+            "CR": 38.5703125,
+            "CS": 25.140625,
+            "CT": 34.85546875,
+            "CU": 32.28515625,
+            "CV": 34.85546875,
+            "CW": 28.7109375,
+            "CX": 45.85546875,
+            "CY": 45.7109375,
+            "CZ": 45.140625,
+            "DA": 50.85546875,
+            "DB": 34.85546875,
+            "DC": 23.0,
+            "DD": 13.42578125,
+            "DE": 31.140625,
+            "DF": 25.42578125,
+            "DG": 18.0,
+            "DH": 21.140625,
+            "DI": 15.7109375,
+            "DJ": 19.0,
+            "DK": 12.7109375,
+            "DL": 14.140625,
+            "DM": 27.7109375,
+            "DN": 29.140625,
+            "DO": 40.7109375,
+            "DP": 45.28515625,
+            "DQ": 30.28515625,
+            "DR": 24.0,
+            "DS": 52.85546875,
+            "DT": 11.42578125,
+        }
+
+        for col_idx, cell in enumerate(ws[header_row], start=1):
+            col_letter = get_column_letter(col_idx)
             cell.font = header_font
             cell.fill = header_fill
             cell.border = thin_border
             cell.alignment = Alignment(horizontal="center", vertical="center")
-            ws.column_dimensions[get_column_letter(col_idx)].width = 20
+            if col_letter in template_widths:
+                ws.column_dimensions[col_letter].width = template_widths[col_letter]
+            else:
+                ws.column_dimensions[col_letter].width = 20
 
-        for row in ws.iter_rows(min_row=start_row + 1):
+        for row in ws.iter_rows(min_row=header_row + 1):
             for cell in row:
-                col = cell.column_letter
                 cell.font = body_font
                 cell.border = thin_border
-                if col == "A":
-                    cell.number_format = "DD/MM/YYYY"
-                    cell.alignment = Alignment(horizontal="center")
-                elif col in ["E", "F"]:
-                    cell.number_format = "#,##0.00"
-                    cell.alignment = Alignment(horizontal="right")
-                else:
-                    cell.number_format = "@"
-                    cell.alignment = Alignment(horizontal="left")
+                cell.number_format = "General"
+                cell.alignment = Alignment(horizontal="left", vertical="center")
 
-        ws.freeze_panes = f"A{start_row + 1}"
+        ws.freeze_panes = f"A{header_row + 1}"
 
     def run(self):
         logger.info(
