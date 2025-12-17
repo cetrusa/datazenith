@@ -29,3 +29,44 @@
 2025-12-16 23:33:28,752    \u25b6\ufe0f Intento 1/3 de ejecución del procedimiento...
 2025-12-16 23:34:01,874 \U0001f4cb Resultados parciales del procedimiento: (('Vista vw_infoventas reconstruida correctamente',),)
 2025-12-16 23:35:14,927 \U0001f4cb Resultados parciales del procedimiento: (('bi_distrijass.infoventas_2023_fact', 'optimize', 'note', 'Table does not support optimize, doing recreate + analyze instead'), ('bi_distrijass.infoventas_2023_fact', 'optimize', 'status', 'OK'), ('bi_distrijass.infoventas_2023_dev', 'optimize', 'note', 'Table does not support optimize, doing recreate + analyze instead'), ('bi_distrijass.infoventas_2023_dev', 'optimize', 'status', 'OK'))
+2025-12-16 23:42:15,968 \U0001f4cb Resultados parciales del procedimiento: (('bi_distrijass.infoventas_2024_fact', 'optimize', 'note', 'Table does not support optimize, doing recreate + analyze instead'), ('bi_distrijass.infoventas_2024_fact', 'optimize', 'status', 'OK'), ('bi_distrijass.infoventas_2024_dev', 'optimize', 'note', 'Table does not support optimize, doing recreate + analyze instead'), ('bi_distrijass.infoventas_2024_dev', 'optimize', 'status', 'OK'))
+2025-12-16 23:48:54,757 \U0001f4cb Resultados parciales del procedimiento: (('bi_distrijass.infoventas_2025_fact', 'optimize', 'note', 'Table does not support optimize, doing recreate + analyze instead'), ('bi_distrijass.infoventas_2025_fact', 'optimize', 'status', 'OK'), ('bi_distrijass.infoventas_2025_dev', 'optimize', 'note', 'Table does not support optimize, doing recreate + analyze instead'), ('bi_distrijass.infoventas_2025_dev', 'optimize', 'status', 'OK'))
+2025-12-16 23:48:54,830 \U0001f4cb Resultados parciales del procedimiento: (('bi_distrijass.infoventas_2026_fact', 'optimize', 'note', 'Table does not support optimize, doing recreate + analyze instead'), ('bi_distrijass.infoventas_2026_fact', 'optimize', 'status', 'OK'), ('bi_distrijass.infoventas_2026_dev', 'optimize', 'note', 'Table does not support optimize, doing recreate + analyze instead'), ('bi_distrijass.infoventas_2026_dev', 'optimize', 'status', 'OK'))
+2025-12-16 23:48:54,958    \u2705 Procedimiento finalizado en intento 1
+2025-12-16 23:48:55,319 \U0001f4ca Registros en infoventas DESPUÉS del mantenimiento: 0
+2025-12-16 23:48:55,440 \u2705 Mantenimiento completado. Tabla infoventas limpia.
+2025-12-16 23:48:55,440 \U0001f389 === MANTENIMIENTO COMPLETADO EXITOSAMENTE ===
+2025-12-16 23:48:55,440 \U0001f527 Fase 3: Ejecutando diagnóstico de la vista...
+2025-12-16 23:50:43,045 \U0001f527 Fase 4: Capturando estadísticas finales...
+2025-12-16 23:50:43,577 ================================================================================
+2025-12-16 23:50:43,578 \U0001f4ca === ESTADÍSTICAS FINALES DE CARGUE ===
+2025-12-16 23:50:43,578 ================================================================================
+2025-12-16 23:50:43,578 \U0001f4c5 Período procesado: 2025-12-01 \u2192 2025-12-16
+2025-12-16 23:50:43,578 \u23f1\ufe0f  Duración total: 1156.48 segundos
+2025-12-16 23:50:43,578 
+2025-12-16 23:50:43,578 \U0001f4dd RESUMEN DE INSERCIÓN:
+2025-12-16 23:50:43,578    • Registros procesados: 209,975
+2025-12-16 23:50:43,578    • Registros insertados: 209,975
+2025-12-16 23:50:43,578    • Registros actualizados: 0
+2025-12-16 23:50:43,578    • Registros preservados: 0
+2025-12-16 23:50:43,578 
+2025-12-16 23:50:43,578 \U0001f4e6 DISTRIBUCIÓN POR TABLA CLASIFICADA:
+2025-12-16 23:50:43,578    • Registros en _fact: 13,314,632
+2025-12-16 23:50:43,578    • Registros en _dev: 539,211
+2025-12-16 23:50:43,578    • Total clasificado: 13,853,843
+2025-12-16 23:50:43,578    • Registros en staging (post-limpieza): 0
+2025-12-16 23:50:43,578 
+2025-12-16 23:50:43,578 \U0001f4cb DETALLES POR TABLA:
+2025-12-16 23:50:43,578    • infoventas_2023_dev: 45,907 registros [_dev]
+2025-12-16 23:50:43,578    • infoventas_2023_fact: 849,576 registros [_fact]
+2025-12-16 23:50:43,578    • infoventas_2024_dev: 262,024 registros [_dev]
+2025-12-16 23:50:43,578    • infoventas_2024_fact: 6,404,186 registros [_fact]
+2025-12-16 23:50:43,578    • infoventas_2025_dev: 231,280 registros [_dev]
+2025-12-16 23:50:43,578    • infoventas_2025_fact: 6,060,870 registros [_fact]
+2025-12-16 23:50:43,578    • infoventas_2026_dev: 0 registros [_dev]
+2025-12-16 23:50:43,579    • infoventas_2026_fact: 0 registros [_fact]
+2025-12-16 23:50:43,579    • vw_infoventas_dev: 0 registros [_dev]
+2025-12-16 23:50:43,579    • vw_infoventas_fact: 0 registros [_fact]
+2025-12-16 23:50:43,579 ================================================================================
+2025-12-16 23:50:43,579 \U0001f389 PROCESO COMPLETADO EXITOSAMENTE en 1156.48 segundos
+2025-12-16 23:50:43,579 \U0001f512 Engine de base de datos cerrado correctamente.

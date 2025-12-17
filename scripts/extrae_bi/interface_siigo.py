@@ -4,13 +4,16 @@ import time
 import gc
 import logging
 import uuid
+from decimal import Decimal
+import unicodedata
 from sqlalchemy import create_engine, text
 from sqlalchemy.exc import SQLAlchemyError
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
-from openpyxl.utils import get_column_letter
+from openpyxl.utils import get_column_letter, column_index_from_string
 from scripts.conexion import Conexion as con
 from scripts.config import ConfigBasic
+from scripts.text_cleaner import TextCleaner
 import ast
 import psutil
 
@@ -128,6 +131,21 @@ class InterfaceContable:
         self._update_progress(stage_name, 10)
         total_processed = 0
         start_extract_time = time.time()
+
+        def _normalize_col_name(name: object) -> str:
+            raw = "" if name is None else str(name)
+            raw = unicodedata.normalize("NFKD", raw)
+            raw = "".join(ch for ch in raw if not unicodedata.combining(ch))
+            return raw.upper().strip()
+
+        def _clean_string_preserve_spaces(value: str) -> str:
+            # Quitar caracteres de control sin colapsar espacios (necesario para REPEAT(' ', 42) en DIRECCIÓN)
+            if value is None:
+                return ""
+            if not isinstance(value, str):
+                value = str(value)
+            value = "".join(ch for ch in value if ord(ch) >= 32 or ch in "\t\n\r")
+            return unicodedata.normalize("NFKD", value)
         try:
             # Ejecutar el query (puede ser CALL o SELECT)
             with self.engine_mysql.connect() as conn:
@@ -139,7 +157,84 @@ class InterfaceContable:
                 ]
                 df_all = pd.DataFrame(all_rows)
                 if not df_all.empty:
-                    df_all = df_all.astype(str)
+                    # Limpieza: sanitizar strings para evitar caracteres ilegales en Excel.
+                    object_columns = df_all.select_dtypes(include=["object"]).columns
+                    for col_name in object_columns:
+                        is_terceros = str(hoja).strip().upper() == "TERCEROS"
+                        is_direccion = _normalize_col_name(col_name) == "DIRECCION"
+
+                        if is_terceros and is_direccion:
+                            # IMPORTANTE: NO colapsar espacios; Siigo pide barrio + 42 espacios + dirección DIAN
+                            df_all[col_name] = df_all[col_name].apply(
+                                lambda v: _clean_string_preserve_spaces(v)
+                                if isinstance(v, str)
+                                else v
+                            )
+                        else:
+                            df_all[col_name] = df_all[col_name].apply(
+                                lambda v: TextCleaner.clean_for_excel(v)
+                                if isinstance(v, str)
+                                else v
+                            )
+
+                    # Asegurar que los Decimals se conviertan a float para que Excel los trate como números.
+                    for col_name in df_all.columns:
+                        df_all[col_name] = df_all[col_name].apply(
+                            lambda value: float(value)
+                            if isinstance(value, Decimal)
+                            else value
+                        )
+
+                    # Siigo: en la hoja TERCEROS algunas columnas deben ser numéricas para que el
+                    # number_format (miles/decimales) se refleje.
+                    if str(hoja).strip().upper() == "TERCEROS":
+                        integer_cols = {
+                            "A",
+                            "B",
+                            "C",
+                            "N",
+                            "O",
+                            "Q",
+                            "R",
+                            "S",
+                            "T",
+                            "U",
+                            "V",
+                            "W",
+                            "Y",
+                            "Z",
+                            "AA",
+                            "AB",
+                            "AQ",
+                            "AR",
+                            "AT",
+                            "AU",
+                            "AV",
+                            "AW",
+                            "AY",
+                            "BA",
+                            "BB",
+                            "BC",
+                            "BD",
+                            "BE",
+                            "BF",
+                            "BI",
+                            "BJ",
+                            "BL",
+                            "BM",
+                            "BV",
+                            "BW",
+                        }
+                        decimal_cols = {"AM", "AO", "AP", "AX"}
+
+                        for col_letter in integer_cols.union(decimal_cols):
+                            idx = column_index_from_string(col_letter) - 1
+                            if idx < len(df_all.columns):
+                                series = df_all.iloc[:, idx]
+                                # Mantener vacíos como NaN para que Excel quede en blanco
+                                series = series.replace("", pd.NA)
+                                df_all.iloc[:, idx] = pd.to_numeric(series, errors="coerce")
+
                     df_all.to_excel(
                         writer,
                         sheet_name=hoja,
