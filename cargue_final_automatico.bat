@@ -318,8 +318,6 @@ call :log_summary EXITOSO "Cargue completado correctamente"
 echo.
 echo Log guardado en: %LOG_FILE%
 echo.
-echo Presione cualquier tecla para cerrar...
-pause >nul
 exit /b 0
 
 :cargue_fallo
