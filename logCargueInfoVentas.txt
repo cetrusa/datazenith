@@ -1,72 +1,75 @@
-2025-12-26 23:51:30,860 \U0001f680\U0001f680\U0001f680 INICIO FUNCIÓN run_cargue - DEBUG LOG \U0001f680\U0001f680\U0001f680
-2025-12-26 23:51:30,860 \U0001f680 Iniciando cargue del archivo: D:\Python\DataZenithBi\Info proveedores 2025\Info proveedores.xlsx
-2025-12-26 23:51:30,860 \U0001f4c5 Las fechas se detectarán automáticamente desde la columna 'Fecha' del Excel
-2025-12-26 23:51:30,860 \U0001f527 Fase 1: Creando instancia del cargador...
-2025-12-26 23:51:30,860 Creando nueva conexión para cetrusa@dbmariam04.chqxl6ahrk6r.us-east-1.rds.amazonaws.com:3307/powerbi_adm (cache_key=33ff95078a8a92efd9e7f3bdeed02e8334069d35)
-2025-12-26 23:51:32,790 Reutilizando conexión existente para cetrusa@dbmariam04.chqxl6ahrk6r.us-east-1.rds.amazonaws.com:3307/powerbi_adm (cache_key=33ff95078a8a92efd9e7f3bdeed02e8334069d35)
-2025-12-26 23:51:33,457 Reutilizando conexión existente para cetrusa@dbmariam04.chqxl6ahrk6r.us-east-1.rds.amazonaws.com:3307/powerbi_adm (cache_key=33ff95078a8a92efd9e7f3bdeed02e8334069d35)
-2025-12-26 23:51:34,120 Reutilizando conexión existente para cetrusa@dbmariam04.chqxl6ahrk6r.us-east-1.rds.amazonaws.com:3307/powerbi_adm (cache_key=33ff95078a8a92efd9e7f3bdeed02e8334069d35)
-2025-12-26 23:51:34,791 Reutilizando conexión existente para cetrusa@dbmariam04.chqxl6ahrk6r.us-east-1.rds.amazonaws.com:3307/powerbi_adm (cache_key=33ff95078a8a92efd9e7f3bdeed02e8334069d35)
-2025-12-26 23:51:35,468 Reutilizando conexión existente para cetrusa@dbmariam04.chqxl6ahrk6r.us-east-1.rds.amazonaws.com:3307/powerbi_adm (cache_key=33ff95078a8a92efd9e7f3bdeed02e8334069d35)
-2025-12-26 23:51:36,131 Reutilizando conexión existente para cetrusa@dbmariam04.chqxl6ahrk6r.us-east-1.rds.amazonaws.com:3307/powerbi_adm (cache_key=33ff95078a8a92efd9e7f3bdeed02e8334069d35)
-2025-12-26 23:51:36,796 Reutilizando conexión existente para cetrusa@dbmariam04.chqxl6ahrk6r.us-east-1.rds.amazonaws.com:3307/powerbi_adm (cache_key=33ff95078a8a92efd9e7f3bdeed02e8334069d35)
-2025-12-26 23:51:37,239 Django no inicializado para distrijass/SYSTEM, usando permisos por defecto
-2025-12-26 23:51:37,239 ConfigService caching result for c768946ac343eda3a318220012479544f6a3a62b en 6.379s
-2025-12-26 23:51:37,239 Creando nueva conexión para cetrusa@dbmariam04.chqxl6ahrk6r.us-east-1.rds.amazonaws.com:3307/bi_distrijass (cache_key=b59195f79f3c7b9cf5011728e5f9a1e5cd1d8dce)
-2025-12-26 23:51:37,239 \u2705 Cargador creado exitosamente
-2025-12-26 23:51:37,239 \U0001f527 Fase 1.5: Cargando datos en staging para validación...
-2025-12-26 23:54:08,407 \u2705 Datos cargados correctamente en staging.
-2025-12-26 23:54:08,407 \U0001f4ca Registros procesados: 315,529
-2025-12-26 23:54:08,407 \U0001f4ca Registros insertados: 315,529
-2025-12-26 23:54:08,407 \U0001f4ca Registros actualizados: 0
-2025-12-26 23:54:08,407 \U0001f4ca Registros preservados: 0
-2025-12-26 23:54:08,407 \U0001f4c5 RANGO DE FECHAS DETECTADAS: 2025-12-01 \u2192 2025-12-26
-2025-12-26 23:54:08,407 \U0001f527 Fase 2: Iniciando mantenimiento post-cargue...
-2025-12-26 23:54:08,407 \U0001f9f9 === INICIANDO MANTENIMIENTO POST-CARGUE ===
-2025-12-26 23:54:08,749 \U0001f4ca Registros en infoventas ANTES del mantenimiento: 315529
-2025-12-26 23:54:08,859 \U0001f527 Método 1: Ejecutando con raw_connection y reintentos...
-2025-12-26 23:54:08,859 \u267b\ufe0f Preparando ejecución del procedimiento con hasta 3 intentos...
-2025-12-26 23:54:08,859    \u25b6\ufe0f Intento 1/3 de ejecución del procedimiento...
-2025-12-26 23:54:58,567 \U0001f4cb Resultados parciales del procedimiento: (('Vista vw_infoventas reconstruida correctamente',),)
-2025-12-26 23:57:34,150 \U0001f4cb Resultados parciales del procedimiento: (('bi_distrijass.infoventas_2023_fact', 'optimize', 'note', 'Table does not support optimize, doing recreate + analyze instead'), ('bi_distrijass.infoventas_2023_fact', 'optimize', 'status', 'OK'), ('bi_distrijass.infoventas_2023_dev', 'optimize', 'note', 'Table does not support optimize, doing recreate + analyze instead'), ('bi_distrijass.infoventas_2023_dev', 'optimize', 'status', 'OK'))
-2025-12-27 00:06:18,393 \U0001f4cb Resultados parciales del procedimiento: (('bi_distrijass.infoventas_2024_fact', 'optimize', 'note', 'Table does not support optimize, doing recreate + analyze instead'), ('bi_distrijass.infoventas_2024_fact', 'optimize', 'status', 'OK'), ('bi_distrijass.infoventas_2024_dev', 'optimize', 'note', 'Table does not support optimize, doing recreate + analyze instead'), ('bi_distrijass.infoventas_2024_dev', 'optimize', 'status', 'OK'))
-2025-12-27 00:13:53,395 \U0001f4cb Resultados parciales del procedimiento: (('bi_distrijass.infoventas_2025_fact', 'optimize', 'note', 'Table does not support optimize, doing recreate + analyze instead'), ('bi_distrijass.infoventas_2025_fact', 'optimize', 'status', 'OK'), ('bi_distrijass.infoventas_2025_dev', 'optimize', 'note', 'Table does not support optimize, doing recreate + analyze instead'), ('bi_distrijass.infoventas_2025_dev', 'optimize', 'status', 'OK'))
-2025-12-27 00:13:53,462 \U0001f4cb Resultados parciales del procedimiento: (('bi_distrijass.infoventas_2026_fact', 'optimize', 'note', 'Table does not support optimize, doing recreate + analyze instead'), ('bi_distrijass.infoventas_2026_fact', 'optimize', 'status', 'OK'), ('bi_distrijass.infoventas_2026_dev', 'optimize', 'note', 'Table does not support optimize, doing recreate + analyze instead'), ('bi_distrijass.infoventas_2026_dev', 'optimize', 'status', 'OK'))
-2025-12-27 00:13:53,574    \u2705 Procedimiento finalizado en intento 1
-2025-12-27 00:13:53,904 \U0001f4ca Registros en infoventas DESPUÉS del mantenimiento: 0
-2025-12-27 00:13:54,020 \u2705 Mantenimiento completado. Tabla infoventas limpia.
-2025-12-27 00:13:54,020 \U0001f389 === MANTENIMIENTO COMPLETADO EXITOSAMENTE ===
-2025-12-27 00:13:54,020 \U0001f527 Fase 3: Ejecutando diagnóstico de la vista...
-2025-12-27 00:15:41,645 \U0001f527 Fase 4: Capturando estadísticas finales...
-2025-12-27 00:15:42,207 ================================================================================
-2025-12-27 00:15:42,207 \U0001f4ca === ESTADÍSTICAS FINALES DE CARGUE ===
-2025-12-27 00:15:42,207 ================================================================================
-2025-12-27 00:15:42,217 \U0001f4c5 Período procesado: 2025-12-01 \u2192 2025-12-26
-2025-12-27 00:15:42,217 \u23f1\ufe0f  Duración total: 1450.78 segundos
-2025-12-27 00:15:42,217 
-2025-12-27 00:15:42,217 \U0001f4dd RESUMEN DE INSERCIÓN:
-2025-12-27 00:15:42,217    • Registros procesados: 315,529
-2025-12-27 00:15:42,217    • Registros insertados: 315,529
-2025-12-27 00:15:42,217    • Registros actualizados: 0
-2025-12-27 00:15:42,217    • Registros preservados: 0
-2025-12-27 00:15:42,217 
-2025-12-27 00:15:42,217 \U0001f4e6 DISTRIBUCIÓN POR TABLA CLASIFICADA:
-2025-12-27 00:15:42,217    • Registros en _fact: 13,057,055
-2025-12-27 00:15:42,217    • Registros en _dev: 549,045
-2025-12-27 00:15:42,217    • Total clasificado: 13,606,100
-2025-12-27 00:15:42,217    • Registros en staging (post-limpieza): 0
-2025-12-27 00:15:42,217 
-2025-12-27 00:15:42,217 \U0001f4cb DETALLES POR TABLA:
-2025-12-27 00:15:42,217    • infoventas_2023_dev: 45,947 registros [_dev]
-2025-12-27 00:15:42,217    • infoventas_2023_fact: 840,840 registros [_fact]
-2025-12-27 00:15:42,217    • infoventas_2024_dev: 263,175 registros [_dev]
-2025-12-27 00:15:42,217    • infoventas_2024_fact: 6,221,997 registros [_fact]
-2025-12-27 00:15:42,217    • infoventas_2025_dev: 239,923 registros [_dev]
-2025-12-27 00:15:42,217    • infoventas_2025_fact: 5,994,218 registros [_fact]
-2025-12-27 00:15:42,217    • infoventas_2026_dev: 0 registros [_dev]
-2025-12-27 00:15:42,217    • infoventas_2026_fact: 0 registros [_fact]
-2025-12-27 00:15:42,217    • vw_infoventas_dev: 0 registros [_dev]
-2025-12-27 00:15:42,217    • vw_infoventas_fact: 0 registros [_fact]
-2025-12-27 00:15:42,217 ================================================================================
-2025-12-27 00:15:42,217 \U0001f389 PROCESO COMPLETADO EXITOSAMENTE en 1450.78 segundos
-2025-12-27 00:15:42,217 \U0001f512 Engine de base de datos cerrado correctamente.
+2026-01-07 09:17:24,207 \U0001f680\U0001f680\U0001f680 INICIO FUNCIÓN run_cargue - DEBUG LOG \U0001f680\U0001f680\U0001f680
+2026-01-07 09:17:24,208 \U0001f680 Iniciando cargue del archivo: D:\Python\DataZenithBi\Info proveedores 2025\Info proveedores.xlsx
+2026-01-07 09:17:24,208 \U0001f4c5 Las fechas se detectarán automáticamente desde la columna 'Fecha' del Excel
+2026-01-07 09:17:24,208 \U0001f527 Fase 1: Creando instancia del cargador...
+2026-01-07 09:17:24,230 Creando nueva conexión para cetrusa@dbmariam04.chqxl6ahrk6r.us-east-1.rds.amazonaws.com:3307/powerbi_adm (cache_key=33ff95078a8a92efd9e7f3bdeed02e8334069d35)
+2026-01-07 09:17:26,369 Reutilizando conexión existente para cetrusa@dbmariam04.chqxl6ahrk6r.us-east-1.rds.amazonaws.com:3307/powerbi_adm (cache_key=33ff95078a8a92efd9e7f3bdeed02e8334069d35)
+2026-01-07 09:17:27,099 Reutilizando conexión existente para cetrusa@dbmariam04.chqxl6ahrk6r.us-east-1.rds.amazonaws.com:3307/powerbi_adm (cache_key=33ff95078a8a92efd9e7f3bdeed02e8334069d35)
+2026-01-07 09:17:27,830 Reutilizando conexión existente para cetrusa@dbmariam04.chqxl6ahrk6r.us-east-1.rds.amazonaws.com:3307/powerbi_adm (cache_key=33ff95078a8a92efd9e7f3bdeed02e8334069d35)
+2026-01-07 09:17:28,560 Reutilizando conexión existente para cetrusa@dbmariam04.chqxl6ahrk6r.us-east-1.rds.amazonaws.com:3307/powerbi_adm (cache_key=33ff95078a8a92efd9e7f3bdeed02e8334069d35)
+2026-01-07 09:17:29,291 Reutilizando conexión existente para cetrusa@dbmariam04.chqxl6ahrk6r.us-east-1.rds.amazonaws.com:3307/powerbi_adm (cache_key=33ff95078a8a92efd9e7f3bdeed02e8334069d35)
+2026-01-07 09:17:30,021 Reutilizando conexión existente para cetrusa@dbmariam04.chqxl6ahrk6r.us-east-1.rds.amazonaws.com:3307/powerbi_adm (cache_key=33ff95078a8a92efd9e7f3bdeed02e8334069d35)
+2026-01-07 09:17:30,751 Reutilizando conexión existente para cetrusa@dbmariam04.chqxl6ahrk6r.us-east-1.rds.amazonaws.com:3307/powerbi_adm (cache_key=33ff95078a8a92efd9e7f3bdeed02e8334069d35)
+2026-01-07 09:17:31,239 Django no inicializado para distrijass/SYSTEM, usando permisos por defecto
+2026-01-07 09:17:31,239 ConfigService caching result for c768946ac343eda3a318220012479544f6a3a62b en 7.030s
+2026-01-07 09:17:31,239 Creando nueva conexión para cetrusa@dbmariam04.chqxl6ahrk6r.us-east-1.rds.amazonaws.com:3307/bi_distrijass (cache_key=b59195f79f3c7b9cf5011728e5f9a1e5cd1d8dce)
+2026-01-07 09:17:31,240 \u2705 Cargador creado exitosamente
+2026-01-07 09:17:31,240 \U0001f527 Fase 1.5: Cargando datos en staging para validación...
+2026-01-07 09:20:15,990 \u2705 Datos cargados correctamente en staging.
+2026-01-07 09:20:15,990 \U0001f4ca Registros procesados: 333,625
+2026-01-07 09:20:15,990 \U0001f4ca Registros insertados: 333,625
+2026-01-07 09:20:15,990 \U0001f4ca Registros actualizados: 0
+2026-01-07 09:20:15,990 \U0001f4ca Registros preservados: 0
+2026-01-07 09:20:15,990 \U0001f4c5 RANGO DE FECHAS DETECTADAS: 2025-12-01 \u2192 2025-12-30
+2026-01-07 09:20:15,990 \U0001f527 Fase 2: Iniciando mantenimiento post-cargue...
+2026-01-07 09:20:15,990 \U0001f9f9 === INICIANDO MANTENIMIENTO POST-CARGUE ===
+2026-01-07 09:20:16,360 \U0001f4ca Registros en infoventas ANTES del mantenimiento: 333625
+2026-01-07 09:20:16,484 \U0001f527 Método 1: Ejecutando con raw_connection y reintentos...
+2026-01-07 09:20:16,484 \u267b\ufe0f Preparando ejecución del procedimiento con hasta 3 intentos...
+2026-01-07 09:20:16,484    \u25b6\ufe0f Intento 1/3 de ejecución del procedimiento...
+2026-01-07 09:21:09,659 \U0001f4cb Resultados parciales del procedimiento: (('Vista vw_infoventas reconstruida correctamente',),)
+2026-01-07 09:22:10,892 \U0001f4cb Resultados parciales del procedimiento: (('bi_distrijass.infoventas_2023_fact', 'optimize', 'note', 'Table does not support optimize, doing recreate + analyze instead'), ('bi_distrijass.infoventas_2023_fact', 'optimize', 'status', 'OK'), ('bi_distrijass.infoventas_2023_dev', 'optimize', 'note', 'Table does not support optimize, doing recreate + analyze instead'), ('bi_distrijass.infoventas_2023_dev', 'optimize', 'status', 'OK'))
+2026-01-07 09:31:05,127 \U0001f4cb Resultados parciales del procedimiento: (('bi_distrijass.infoventas_2024_fact', 'optimize', 'note', 'Table does not support optimize, doing recreate + analyze instead'), ('bi_distrijass.infoventas_2024_fact', 'optimize', 'status', 'OK'), ('bi_distrijass.infoventas_2024_dev', 'optimize', 'note', 'Table does not support optimize, doing recreate + analyze instead'), ('bi_distrijass.infoventas_2024_dev', 'optimize', 'status', 'OK'))
+2026-01-07 09:39:53,320 \U0001f4cb Resultados parciales del procedimiento: (('bi_distrijass.infoventas_2025_fact', 'optimize', 'note', 'Table does not support optimize, doing recreate + analyze instead'), ('bi_distrijass.infoventas_2025_fact', 'optimize', 'status', 'OK'), ('bi_distrijass.infoventas_2025_dev', 'optimize', 'note', 'Table does not support optimize, doing recreate + analyze instead'), ('bi_distrijass.infoventas_2025_dev', 'optimize', 'status', 'OK'))
+2026-01-07 09:39:53,382 \U0001f4cb Resultados parciales del procedimiento: (('bi_distrijass.infoventas_2026_fact', 'optimize', 'note', 'Table does not support optimize, doing recreate + analyze instead'), ('bi_distrijass.infoventas_2026_fact', 'optimize', 'status', 'OK'), ('bi_distrijass.infoventas_2026_dev', 'optimize', 'note', 'Table does not support optimize, doing recreate + analyze instead'), ('bi_distrijass.infoventas_2026_dev', 'optimize', 'status', 'OK'))
+2026-01-07 09:39:53,446 \U0001f4cb Resultados parciales del procedimiento: (('bi_distrijass.infoventas_2027_fact', 'optimize', 'note', 'Table does not support optimize, doing recreate + analyze instead'), ('bi_distrijass.infoventas_2027_fact', 'optimize', 'status', 'OK'), ('bi_distrijass.infoventas_2027_dev', 'optimize', 'note', 'Table does not support optimize, doing recreate + analyze instead'), ('bi_distrijass.infoventas_2027_dev', 'optimize', 'status', 'OK'))
+2026-01-07 09:39:53,572    \u2705 Procedimiento finalizado en intento 1
+2026-01-07 09:39:53,945 \U0001f4ca Registros en infoventas DESPUÉS del mantenimiento: 0
+2026-01-07 09:39:54,066 \u2705 Mantenimiento completado. Tabla infoventas limpia.
+2026-01-07 09:39:54,066 \U0001f389 === MANTENIMIENTO COMPLETADO EXITOSAMENTE ===
+2026-01-07 09:39:54,066 \U0001f527 Fase 3: Ejecutando diagnóstico de la vista...
+2026-01-07 09:41:43,510 \U0001f527 Fase 4: Capturando estadísticas finales...
+2026-01-07 09:41:44,062 ================================================================================
+2026-01-07 09:41:44,062 \U0001f4ca === ESTADÍSTICAS FINALES DE CARGUE ===
+2026-01-07 09:41:44,062 ================================================================================
+2026-01-07 09:41:44,063 \U0001f4c5 Período procesado: 2025-12-01 \u2192 2025-12-30
+2026-01-07 09:41:44,063 \u23f1\ufe0f  Duración total: 1459.30 segundos
+2026-01-07 09:41:44,063 
+2026-01-07 09:41:44,063 \U0001f4dd RESUMEN DE INSERCIÓN:
+2026-01-07 09:41:44,063    • Registros procesados: 333,625
+2026-01-07 09:41:44,063    • Registros insertados: 333,625
+2026-01-07 09:41:44,063    • Registros actualizados: 0
+2026-01-07 09:41:44,063    • Registros preservados: 0
+2026-01-07 09:41:44,063 
+2026-01-07 09:41:44,063 \U0001f4e6 DISTRIBUCIÓN POR TABLA CLASIFICADA:
+2026-01-07 09:41:44,063    • Registros en _fact: 13,349,837
+2026-01-07 09:41:44,063    • Registros en _dev: 551,679
+2026-01-07 09:41:44,063    • Total clasificado: 13,901,516
+2026-01-07 09:41:44,063    • Registros en staging (post-limpieza): 0
+2026-01-07 09:41:44,063 
+2026-01-07 09:41:44,063 \U0001f4cb DETALLES POR TABLA:
+2026-01-07 09:41:44,063    • infoventas_2023_dev: 45,827 registros [_dev]
+2026-01-07 09:41:44,063    • infoventas_2023_fact: 843,752 registros [_fact]
+2026-01-07 09:41:44,063    • infoventas_2024_dev: 264,327 registros [_dev]
+2026-01-07 09:41:44,063    • infoventas_2024_fact: 6,315,852 registros [_fact]
+2026-01-07 09:41:44,063    • infoventas_2025_dev: 241,525 registros [_dev]
+2026-01-07 09:41:44,063    • infoventas_2025_fact: 6,190,233 registros [_fact]
+2026-01-07 09:41:44,063    • infoventas_2026_dev: 0 registros [_dev]
+2026-01-07 09:41:44,063    • infoventas_2026_fact: 0 registros [_fact]
+2026-01-07 09:41:44,064    • infoventas_2027_dev: 0 registros [_dev]
+2026-01-07 09:41:44,064    • infoventas_2027_fact: 0 registros [_fact]
+2026-01-07 09:41:44,064    • vw_infoventas_dev: 0 registros [_dev]
+2026-01-07 09:41:44,064    • vw_infoventas_fact: 0 registros [_fact]
+2026-01-07 09:41:44,064 ================================================================================
+2026-01-07 09:41:44,064 \U0001f389 PROCESO COMPLETADO EXITOSAMENTE en 1459.30 segundos
+2026-01-07 09:41:44,064 \U0001f512 Engine de base de datos cerrado correctamente.
