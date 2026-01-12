@@ -40,6 +40,11 @@
           <i class="fas fa-file-alt me-2"></i> <span class="ms-1 d-none d-sm-inline">Reporteador</span>
         </a>
       </li>
+      <li class="nav-item">
+        <a class="nav-link text-white align-middle px-0" href="{% url 'home_app:venta_cero' %}">
+          <i class="fas fa-user-slash me-2"></i> <span class="ms-1 d-none d-sm-inline">Venta Cero</span>
+        </a>
+      </li>
       {% endif %}
       {% if perms.permisos.matrix %}
       <li class="nav-item">

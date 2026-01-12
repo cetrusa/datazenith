@@ -7,7 +7,9 @@ import os, time
 import time  # Para medición de tiempos
 import logging
 import traceback
+from typing import Dict, List
 from django.http import HttpResponse, FileResponse, JsonResponse
+from django.db import connections
 import io
 from django.views.generic import View, TemplateView
 from django.conf import settings
@@ -24,6 +26,8 @@ from scripts.extrae_bi.extrae_bi_insert import ExtraeBiConfig, ExtraeBiExtractor
 from scripts.extrae_bi.interface import InterfaceContable
 from scripts.extrae_bi.matrix import MatrixVentas
 from scripts.extrae_bi.cubo import CuboVentas  # Importación para LoadDataPageView
+from scripts.extrae_bi.venta_cero import VentaCeroReport
+from sqlalchemy import text
 from .tasks import (
     cubo_ventas_task,
     matrix_task,
@@ -31,6 +35,8 @@ from .tasks import (
     interface_siigo_task,
     plano_task,
     extrae_bi_task,
+    venta_cero_task,
+    rutero_task,
 )
 from apps.users.models import UserPermission
 from django.views.decorators.cache import cache_page
@@ -41,7 +47,7 @@ from apps.home.models import Reporte
 # importaciones para rq
 from django_rq import get_queue
 from rq.job import Job
-from rq.job import NoSuchJobError
+from rq.exceptions import NoSuchJobError
 from django_rq import get_connection
 from django.utils.translation import gettext_lazy as _
 from .utils import clean_old_media_files
@@ -1239,7 +1245,13 @@ class CheckTaskStatusView(BaseView):
                 # Si la tarea es interface_task y success es False, devolver error y NO mostrar link de descarga
                 if (
                     task_name
-                    in ["interface_task", "interface_siigo_task", "plano_task", "matrix_task"]
+                    in [
+                        "interface_task",
+                        "interface_siigo_task",
+                        "plano_task",
+                        "matrix_task",
+                        "venta_cero_task",
+                    ]
                     and isinstance(result, dict)
                     and not result.get("success", True)
                 ):
@@ -1582,6 +1594,36 @@ class CheckTaskStatusView(BaseView):
             }
             return resumen
 
+        elif task_name == "venta_cero_task":
+            db_name = job.args[0] if len(job.args) > 0 else "desconocida"
+            ceves_code = job.args[1] if len(job.args) > 1 else "desconocido"
+            fecha_ini = job.args[2] if len(job.args) > 2 else "desconocida"
+            fecha_fin = job.args[3] if len(job.args) > 3 else "desconocida"
+            procedure_name = job.args[5] if len(job.args) > 5 else "desconocido"
+            filter_type = job.args[6] if len(job.args) > 6 else "desconocido"
+            filter_value = job.args[7] if len(job.args) > 7 else "desconocido"
+            return {
+                "tipo_proceso": "Informe Venta Cero",
+                "base_datos": db_name,
+                "agente": ceves_code,
+                "periodo": f"{fecha_ini} - {fecha_fin}",
+                "procedimiento": procedure_name,
+                "filtro": f"{filter_type}: {filter_value}",
+                "archivo_generado": result.get("file_name", "No se generó archivo"),
+                "registros_procesados": result.get("metadata", {}).get(
+                    "total_records", "Desconocido"
+                ),
+                "resultado": (
+                    "Archivo generado correctamente"
+                    if result.get("success", False)
+                    else (
+                        result.get("error_message")
+                        if result.get("error_message")
+                        else "Proceso completado con errores"
+                    )
+                ),
+            }
+
         elif task_name in ["cubo_ventas_task"]:
             # Para reportes de Cubo o Proveedores
             db_name = job.args[0] if len(job.args) > 0 else "desconocida"
@@ -1816,7 +1858,7 @@ class ReporteGenericoPage(BaseView):
         """
         Utilidad para obtener headers, rows y resultado (lista de dicts) de un reporte tipo Cubo/Proveedor.
         """
-        from scripts.extrae_bi.cubo_sin_sqlite import CuboVentas
+        from scripts.extrae_bi.cubo import CuboVentas
 
         cubo = CuboVentas(
             database_name, IdtReporteIni, IdtReporteFin, user_id, id_reporte
@@ -1938,6 +1980,458 @@ class ReporteadorPage(ReporteGenericoPage):
     @method_decorator(permission_required("permisos.reportes", raise_exception=True))
     def dispatch(self, request, *args, **kwargs):
         return super().dispatch(request, *args, **kwargs)
+
+
+class VentaCeroPage(BaseView):
+    """Página SSR para el Informe de Venta Cero (frontend orquestador)."""
+
+    template_name = "home/venta_cero.html"
+    login_url = reverse_lazy("users_app:user-login")
+    form_url = "home_app:venta_cero"
+    required_permission = "permisos.reportes"
+
+    # Catálogo de procedimientos permitidos (se puede sobreescribir vía settings)
+    default_procedures = [
+        {
+            "id": proc.get("id"),
+            "procedure": proc.get("procedure"),
+            "nombre": proc.get("label") or proc.get("nombre", proc.get("id")),
+            "params": proc.get("params", []),
+        }
+        for proc in VentaCeroReport.DEFAULT_PROCEDURES
+    ]
+    filter_types = [
+        {"id": "producto", "nombre": "Producto"},
+        {"id": "proveedor", "nombre": "Proveedor"},
+        {"id": "categoria", "nombre": "Categoría"},
+        {"id": "subcategoria", "nombre": "Marca"},
+    ]
+    LOOKUP_LIMIT = 300
+    # Tablas maestras viven en el esquema powerbi_bimbo; se consultan con nombre totalmente calificado
+    # usando la conexión (alias) seleccionada por el usuario.
+    PRODUCTOS_TABLE = "powerbi_bimbo.productos_bimbo"
+    AGENCIAS_TABLE = "powerbi_bimbo.agencias_bimbo"
+    PROVEEDOR_BIMBO = "BIMBO"
+    DEFAULT_PROCEDURE_ID = "venta_cero"
+    BIMBO_DB = "powerbi_bimbo"
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        from typing import Optional
+
+        self._ceves_catalog_error: Optional[str] = None
+
+    def _get_engine(self, database_name: str, user_id: int):
+        """Obtiene un engine SQLAlchemy usando el patrón estándar del proyecto.
+
+        Importante: aquí database_name es el nombre de empresa/base seleccionada en sesión
+        (usada para resolver credenciales vía ConfigBasic). No es un alias de django.db.
+        """
+        config_basic = ConfigBasic(database_name, user_id)
+        config = config_basic.config
+        required_keys = ["nmUsrIn", "txPassIn", "hostServerIn", "portServerIn", "dbBi"]
+        if not all(config.get(key) for key in required_keys):
+            raise ValueError("Configuración de conexión incompleta para catálogos Venta Cero")
+        return Conexion.ConexionMariadb3(
+            str(config["nmUsrIn"]),
+            str(config["txPassIn"]),
+            str(config["hostServerIn"]),
+            int(config["portServerIn"]),
+            str(config["dbBi"]),
+        )
+
+    def _build_agent_catalog(self, database_name: str, user_id: int) -> List[Dict[str, str]]:
+        """Catálogo de agentes (CEVES) desde tabla maestras, sin texto libre."""
+
+        self._ceves_catalog_error = None
+        if not database_name:
+            return []
+        sql = (
+            f"SELECT CEVE AS id, CONCAT_WS(' - ', CEVE, Nombre, nmOficinaV) AS label "
+            f"FROM {self.AGENCIAS_TABLE} "
+            "WHERE CEVE IS NOT NULL AND CEVE <> '' ORDER BY CEVE"
+        )
+        try:
+            return self._fetch_distinct(database_name, user_id, sql)
+        except Exception as exc:
+            self._ceves_catalog_error = str(exc)
+            logger.exception("No se pudo cargar el catálogo de CEVES")
+            return []
+
+    # ------------------------------------------------------------------
+    # Lookups livianos por catálogo (evitar texto libre)
+    # ------------------------------------------------------------------
+    def _fetch_distinct(self, database_name: str, user_id: int, sql: str, params=None):
+        params = params or []
+        engine = self._get_engine(database_name, user_id)
+        query = text(f"{sql} LIMIT :limit")
+        bind_params = {"limit": int(self.LOOKUP_LIMIT)}
+        # Soportar parámetros posicionales (%s) en SQL legado: los convertimos a :p0, :p1...
+        if params:
+            for idx, value in enumerate(params):
+                bind_params[f"p{idx}"] = value
+            sql_named = sql
+            for idx in range(len(params)):
+                sql_named = sql_named.replace("%s", f":p{idx}", 1)
+            query = text(f"{sql_named} LIMIT :limit")
+
+        with engine.connect() as conn:
+            result = conn.execute(query, bind_params)
+            rows = result.fetchall()
+        results = []
+        for row in rows:
+            ident = row[0]
+            label = row[1] if len(row) > 1 else row[0]
+            label_str = str(label) if label and str(ident) in str(label) else (f"{ident} - {label}" if label not in (None, "", ident) else str(ident))
+            results.append({"id": str(ident), "label": label_str})
+        return results
+
+    def _lookup_proveedores(self, database_name, user_id: int):
+        return [{"id": self.PROVEEDOR_BIMBO, "label": self.PROVEEDOR_BIMBO}]
+
+    def _lookup_categorias(self, database_name, user_id: int):
+        sql = (
+            f"SELECT DISTINCT `Categoría` AS id, `Categoría` AS label "
+            f"FROM {self.PRODUCTOS_TABLE} "
+            "WHERE `Categoría` IS NOT NULL AND `Categoría` <> '' "
+            "ORDER BY `Categoría`"
+        )
+        return self._fetch_distinct(database_name, user_id, sql)
+
+    def _lookup_subcategorias(self, database_name, user_id: int, categoria=None):
+        sql = (
+            f"SELECT DISTINCT `Marca` AS id, `Marca` AS label "
+            f"FROM {self.PRODUCTOS_TABLE} "
+            "WHERE `Marca` IS NOT NULL AND `Marca` <> '' "
+            "ORDER BY `Marca`"
+        )
+        return self._fetch_distinct(database_name, user_id, sql)
+
+    def _lookup_productos(self, database_name, user_id: int):
+        sql = (
+            f"SELECT DISTINCT Codigo AS id, "
+            "COALESCE(NULLIF(TRIM(`Nombre Corto`), ''), Codigo) AS label "
+            f"FROM {self.PRODUCTOS_TABLE} "
+            "WHERE Codigo IS NOT NULL AND Codigo <> '' "
+            "AND UPPER(COALESCE(Estado, '')) IN ('DISPONIBLE', 'ACTIVO') "
+            "ORDER BY Codigo"
+        )
+        return self._fetch_distinct(database_name, user_id, sql)
+
+    def _validate_ceve(self, database_name: str, user_id: int, ceve: str) -> bool:
+        if not ceve:
+            return False
+        sql = f"SELECT 1 FROM {self.AGENCIAS_TABLE} WHERE CEVE = %s LIMIT 1"
+        return self._value_exists(database_name, user_id, sql, [ceve])
+
+    def _value_exists(self, database_name: str, user_id: int, sql: str, params):
+        engine = self._get_engine(database_name, user_id)
+        sql_named = sql
+        bind_params = {}
+        for idx, value in enumerate(params or []):
+            bind_params[f"p{idx}"] = value
+            sql_named = sql_named.replace("%s", f":p{idx}", 1)
+        with engine.connect() as conn:
+            row = conn.execute(text(sql_named), bind_params).fetchone()
+            return bool(row)
+
+    def _validate_filter_value(self, database_name, user_id: int, filter_type, filter_value, category_value=None):
+        if not filter_value:
+            return False
+        if filter_type == "proveedor":
+            # Proveedor es un catálogo cerrado con único valor. No validamos contra productos_bimbo
+            # para evitar falsos negativos por espacios/case/acento en datos.
+            return str(filter_value).strip().upper() == self.PROVEEDOR_BIMBO.upper()
+        if filter_type == "categoria":
+            return self._value_exists(
+                database_name,
+                user_id,
+                f"SELECT 1 FROM {self.PRODUCTOS_TABLE} WHERE `Categoría` = %s LIMIT 1",
+                [filter_value],
+            )
+        if filter_type == "subcategoria":
+            return self._value_exists(
+                database_name,
+                user_id,
+                f"SELECT 1 FROM {self.PRODUCTOS_TABLE} WHERE `Marca` = %s LIMIT 1",
+                [filter_value],
+            )
+        if filter_type == "producto":
+            return self._value_exists(
+                database_name,
+                user_id,
+                f"SELECT 1 FROM {self.PRODUCTOS_TABLE} WHERE Codigo = %s AND UPPER(COALESCE(Estado, '')) IN ('DISPONIBLE', 'ACTIVO') LIMIT 1",
+                [filter_value],
+            )
+        return False
+
+    @method_decorator(permission_required("permisos.reportes", raise_exception=True))
+    def dispatch(self, request, *args, **kwargs):
+        return super().dispatch(request, *args, **kwargs)
+
+    def _get_procedures(self):
+        raw = getattr(settings, "VENTA_CERO_PROCEDURES", self.default_procedures)
+        normalized = []
+        for proc in raw:
+            pid = proc.get("id") or proc.get("procedure") or proc.get("name")
+            if not pid:
+                continue
+            normalized.append(
+                {
+                    "id": pid,
+                    "procedure": proc.get("procedure") or pid,
+                    "nombre": proc.get("nombre") or proc.get("label") or pid,
+                    "params": proc.get("params", []),
+                }
+            )
+        return normalized
+
+    def get(self, request, *args, **kwargs):
+        database_name = request.session.get("database_name")
+        if not database_name:
+            messages.warning(request, "Debe seleccionar una empresa antes de continuar.")
+            return redirect("home_app:panel_cubo")
+        return super().get(request, *args, **kwargs)
+
+    def post(self, request, *args, **kwargs):
+        # 1) POST del selector de base (sidebar): solo actualiza sesión.
+        # El JS global hace XHR POST a form_url con únicamente database_select.
+        if request.POST.get("database_select") and not request.POST.get("ceves_code"):
+            database_name = request.POST.get("database_select")
+
+            # Validación básica del nombre (evitar caracteres raros)
+            try:
+                is_valid = self._validate_database_name(database_name)
+            except Exception:
+                is_valid = True
+
+            if not database_name or not is_valid:
+                return JsonResponse({"success": False, "error_message": "Nombre de base inválido"}, status=400)
+
+            request.session["database_name"] = database_name
+            request.session.modified = True
+            try:
+                request.session.save()
+            except Exception:
+                pass
+            StaticPage.name = database_name
+            try:
+                from scripts.config import ConfigBasic
+
+                ConfigBasic.clear_cache(database_name=database_name, user_id=request.user.id)
+            except Exception:
+                pass
+            return JsonResponse({"success": True})
+
+        # 2) POST de generación de reporte
+        database_name = request.session.get("database_name") or request.POST.get("database_select")
+        ceves_code = request.POST.get("ceves_code")
+        fecha_ini = request.POST.get("IdtReporteIni")
+        fecha_fin = request.POST.get("IdtReporteFin")
+        procedure_name = self.DEFAULT_PROCEDURE_ID
+        filter_type = (request.POST.get("filter_type") or "proveedor").strip().lower()
+        filter_value = request.POST.get("filter_value")
+        category_value = request.POST.get("category_value")
+        batch_size = int(request.POST.get("batch_size", BATCH_SIZE_DEFAULT))
+        user_id = request.user.id
+        request.session["template_name"] = self.template_name
+        procedures_catalog = self._get_procedures()
+
+        # Trazabilidad (docker logs): confirmar qué llega desde el frontend
+        try:
+            print(
+                "[venta_cero][POST] database_name=%s ceves_code=%s fechas=%s..%s procedure=%s filter_type=%s filter_value=%s category_value=%s batch_size=%s"
+                % (
+                    database_name,
+                    ceves_code,
+                    fecha_ini,
+                    fecha_fin,
+                    procedure_name,
+                    filter_type,
+                    filter_value,
+                    category_value,
+                    batch_size,
+                ),
+                flush=True,
+            )
+        except Exception:
+            pass
+
+        # Validar procedimiento y contrato
+        proc_def = next((p for p in procedures_catalog if p.get("id") == procedure_name), None)
+        if not proc_def:
+            return JsonResponse(
+                {
+                    "success": False,
+                    "error_message": "Procedimiento no permitido",
+                },
+                status=400,
+            )
+        required_params = proc_def.get("params") or []
+
+        if filter_type == "proveedor":
+            filter_value = self.PROVEEDOR_BIMBO
+
+        if not all([database_name, fecha_ini, fecha_fin, procedure_name, filter_type, ceves_code]):
+            return JsonResponse(
+                {
+                    "success": False,
+                    "error_message": "Seleccione CEVES, fechas, procedimiento, tipo y valor de filtro.",
+                },
+                status=400,
+            )
+        if filter_type != "proveedor" and not filter_value:
+            return JsonResponse(
+                {"success": False, "error_message": "Seleccione un valor del catálogo."},
+                status=400,
+            )
+        if fecha_ini > fecha_fin:
+            return JsonResponse(
+                {
+                    "success": False,
+                    "error_message": "La fecha inicial no puede ser mayor que la final.",
+                },
+                status=400,
+            )
+        if filter_type not in [ft["id"] for ft in self.filter_types]:
+            return JsonResponse(
+                {"success": False, "error_message": "Tipo de filtro no permitido."},
+                status=400,
+            )
+        if not required_params:
+            return JsonResponse(
+                {"success": False, "error_message": "El procedimiento no define parámetros."},
+                status=400,
+            )
+
+        # Validar valor contra catálogo
+        if not self._validate_ceve(database_name, user_id, ceves_code):
+            return JsonResponse(
+                {"success": False, "error_message": "El CEVES seleccionado no es válido."},
+                status=400,
+            )
+        if not self._validate_filter_value(
+            database_name, user_id, filter_type, filter_value, category_value=category_value
+        ):
+            return JsonResponse(
+                {
+                    "success": False,
+                    "error_message": "El valor seleccionado no es válido para el catálogo.",
+                },
+                status=400,
+            )
+
+        try:
+            request.session["database_name"] = database_name
+            from scripts.config import ConfigBasic
+
+            ConfigBasic.clear_cache(database_name=database_name)
+
+            resolved_params = {
+                # El SP para SUBCATEGORIA usa p_familia; p_categoria no es necesaria.
+                "category_value": category_value if filter_type == "categoria" else "",
+            }
+            task = venta_cero_task.delay(
+                database_name,
+                ceves_code,
+                fecha_ini,
+                fecha_fin,
+                user_id,
+                procedure_name,
+                filter_type,
+                filter_value,
+                extra_params={"procedure_params": required_params, **resolved_params},
+                batch_size=batch_size,
+            )
+            return JsonResponse({"success": True, "task_id": task.id})
+        except Exception as exc:
+            logger.error("Error al iniciar tarea Venta Cero: %s", exc)
+            return JsonResponse(
+                {"success": False, "error_message": f"Error: {exc}"}, status=500
+            )
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["form_url"] = self.form_url
+        context["procedures"] = self._get_procedures()
+        context["filter_types"] = self.filter_types
+        context["batch_size_default"] = BATCH_SIZE_DEFAULT
+        context["database_name"] = self.request.session.get("database_name", "")
+        context["procedures_catalog"] = self._get_procedures()
+        user_id = self.request.user.id
+        if context["database_name"]:
+            context["ceves_catalog"] = self._build_agent_catalog(context["database_name"], user_id)
+            if not context["ceves_catalog"] and self._ceves_catalog_error:
+                # Mensaje amigable (sin filtrar detalles sensibles)
+                messages.error(
+                    self.request,
+                    "No se pudo cargar el catálogo de CEVES desde powerbi_bimbo.agencias_bimbo. "
+                    "Verifique permisos SELECT del usuario de conexión sobre ese esquema.",
+                )
+        else:
+            context["ceves_catalog"] = []
+
+        file_name = self.request.session.get("file_name")
+        file_path = self.request.session.get("file_path")
+        if file_name:
+            context["file_name"] = file_name
+        if file_path:
+            context["file_path"] = file_path
+            import os
+
+            context["file_size"] = os.path.getsize(file_path) if os.path.exists(file_path) else None
+        return context
+
+
+class VentaCeroLookupBase(LoginRequiredMixin, View):
+    """Lookups livianos para catálogos de Venta Cero."""
+
+    lookup_type = None
+
+    @method_decorator(permission_required("permisos.reportes", raise_exception=True))
+    def dispatch(self, request, *args, **kwargs):
+        return super().dispatch(request, *args, **kwargs)
+
+    def get(self, request, *args, **kwargs):
+        database_name = request.GET.get("database_select") or request.session.get("database_name")
+        if not database_name:
+            return JsonResponse({"results": [], "error": "Seleccione un agente/CEVES."}, status=400)
+        categoria = request.GET.get("categoria")
+        page = VentaCeroPage()
+        try:
+            user_id = request.user.id
+            if self.lookup_type == "proveedor":
+                data = page._lookup_proveedores(database_name, user_id)
+            elif self.lookup_type == "categoria":
+                data = page._lookup_categorias(database_name, user_id)
+            elif self.lookup_type == "subcategoria":
+                data = page._lookup_subcategorias(database_name, user_id, categoria)
+            elif self.lookup_type == "producto":
+                data = page._lookup_productos(database_name, user_id)
+            else:
+                return JsonResponse({"results": [], "error": "Lookup no soportado."}, status=400)
+            if not data:
+                return JsonResponse({"results": [], "message": "No hay opciones disponibles."})
+            return JsonResponse({"results": data})
+        except Exception as exc:  # pragma: no cover - acceso a BD
+            logger.exception("Error en lookup %s", self.lookup_type)
+            return JsonResponse({"results": [], "error": str(exc)}, status=500)
+
+
+class VentaCeroProveedorLookup(VentaCeroLookupBase):
+    lookup_type = "proveedor"
+
+
+class VentaCeroCategoriaLookup(VentaCeroLookupBase):
+    lookup_type = "categoria"
+
+
+class VentaCeroSubcategoriaLookup(VentaCeroLookupBase):
+    lookup_type = "subcategoria"
+
+
+class VentaCeroProductoLookup(VentaCeroLookupBase):
+    lookup_type = "producto"
 
 
 class ReporteListView(View):

@@ -87,6 +87,31 @@ urlpatterns = [
         name="reporteador",
     ),
     path(
+        "venta-cero/",
+        views.VentaCeroPage.as_view(),
+        name="venta_cero",
+    ),
+    path(
+        "venta-cero/lookups/proveedores/",
+        views.VentaCeroProveedorLookup.as_view(),
+        name="venta_cero_lookup_proveedores",
+    ),
+    path(
+        "venta-cero/lookups/categorias/",
+        views.VentaCeroCategoriaLookup.as_view(),
+        name="venta_cero_lookup_categorias",
+    ),
+    path(
+        "venta-cero/lookups/subcategorias/",
+        views.VentaCeroSubcategoriaLookup.as_view(),
+        name="venta_cero_lookup_subcategorias",
+    ),
+    path(
+        "venta-cero/lookups/productos/",
+        views.VentaCeroProductoLookup.as_view(),
+        name="venta_cero_lookup_productos",
+    ),
+    path(
         "clean_media/",
         CleanMediaView.as_view(),
         name="clean_media",
