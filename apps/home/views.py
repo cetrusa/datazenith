@@ -4,7 +4,7 @@ from django.shortcuts import render, redirect
 from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
 from django.urls import reverse_lazy, reverse
 import os, time
-import time  # Para medición de tiempos
+import time  # Para mediciÃ³n de tiempos
 import logging
 import traceback
 from typing import Dict, List
@@ -25,7 +25,7 @@ from scripts.StaticPage import StaticPage, DinamicPage
 from scripts.extrae_bi.extrae_bi_insert import ExtraeBiConfig, ExtraeBiExtractor
 from scripts.extrae_bi.interface import InterfaceContable
 from scripts.extrae_bi.matrix import MatrixVentas
-from scripts.extrae_bi.cubo import CuboVentas  # Importación para LoadDataPageView
+from scripts.extrae_bi.cubo import CuboVentas  # ImportaciÃ³n para LoadDataPageView
 from scripts.extrae_bi.venta_cero import VentaCeroReport
 from sqlalchemy import text
 from .tasks import (
@@ -54,29 +54,29 @@ from .utils import clean_old_media_files
 
 logger = logging.getLogger(__name__)
 
-# Constantes globales para optimización
+# Constantes globales para optimizaciÃ³n
 CACHE_TIMEOUT_SHORT = 60 * 5  # 5 minutos
 CACHE_TIMEOUT_MEDIUM = 60 * 15  # 15 minutos
 CACHE_TIMEOUT_LONG = 60 * 60  # 1 hora
-BATCH_SIZE_DEFAULT = 50000  # Tamaño por defecto para procesamiento por lotes
+BATCH_SIZE_DEFAULT = 50000  # TamaÃ±o por defecto para procesamiento por lotes
 
 
 class HomePanelCuboPage(BaseView):
     """
-    Vista para la página principal del panel de cubos.
-    Optimizada para mejorar rendimiento con caché y carga diferida.
+    Vista para la pÃ¡gina principal del panel de cubos.
+    Optimizada para mejorar rendimiento con cachÃ© y carga diferida.
     """
 
     template_name = "home/panel_cubo.html"
     login_url = reverse_lazy("users_app:user-login")
 
-    # Añadimos caché para esta vista
-    # @method_decorator(cache_page(60 * 5))  # Caché de 5 minutos
+    # AÃ±adimos cachÃ© para esta vista
+    # @method_decorator(cache_page(60 * 5))  # CachÃ© de 5 minutos
     def dispatch(self, request, *args, **kwargs):
         """
-        Método para despachar la solicitud con caché para mejorar rendimiento.
+        MÃ©todo para despachar la solicitud con cachÃ© para mejorar rendimiento.
         """
-        # Solo aplicamos caché si no hay parámetros POST
+        # Solo aplicamos cachÃ© si no hay parÃ¡metros POST
         if request.method == "GET":
             return super().dispatch(request, *args, **kwargs)
         return super(LoginRequiredMixin, self).dispatch(request, *args, **kwargs)
@@ -86,7 +86,7 @@ class HomePanelCuboPage(BaseView):
         Maneja la solicitud POST para seleccionar base de datos.
         Optimizado para respuesta inmediata.
         """
-        start_time = time.time()  # Medición de tiempo para análisis de rendimiento
+        start_time = time.time()  # MediciÃ³n de tiempo para anÃ¡lisis de rendimiento
 
         try:
             request.session["template_name"] = self.template_name
@@ -94,30 +94,30 @@ class HomePanelCuboPage(BaseView):
 
             if not database_name:
                 logger.warning(
-                    f"Intento de selección de base de datos vacía por usuario {request.user.id}"
+                    f"Intento de selecciÃ³n de base de datos vacÃ­a por usuario {request.user.id}"
                 )
                 return redirect("home_app:panel_cubo")
 
-            # Validar el nombre de la base de datos (prevenir inyección)
+            # Validar el nombre de la base de datos (prevenir inyecciÃ³n)
             if not self._validate_database_name(database_name):
                 logger.warning(
-                    f"Intento de uso de nombre de base de datos inválido: {database_name} por usuario {request.user.id}"
+                    f"Intento de uso de nombre de base de datos invÃ¡lido: {database_name} por usuario {request.user.id}"
                 )
-                messages.error(request, "Nombre de base de datos no válido")
+                messages.error(request, "Nombre de base de datos no vÃ¡lido")
                 return redirect("home_app:panel_cubo")
 
-            # Usar modificación eficiente de sesión
+            # Usar modificaciÃ³n eficiente de sesiÃ³n
             request.session["database_name"] = database_name
-            request.session.modified = True  # Marcar la sesión como modificada
-            request.session.save()  # Forzar guardado de la sesión
+            request.session.modified = True  # Marcar la sesiÃ³n como modificada
+            request.session.save()  # Forzar guardado de la sesiÃ³n
             StaticPage.name = database_name
 
-            # Invalidar caché específica para este usuario y sesión
+            # Invalidar cachÃ© especÃ­fica para este usuario y sesiÃ³n
             session_key = request.session.session_key or "anonymous"
             cache_key = f"panel_cubo_{request.user.id}_{session_key}"
             cache.delete(cache_key)
 
-            # Limpiar caché de configuración para este usuario y base de datos
+            # Limpiar cachÃ© de configuraciÃ³n para este usuario y base de datos
             ConfigBasic.clear_cache(
                 database_name=database_name, user_id=request.user.id
             )
@@ -130,18 +130,18 @@ class HomePanelCuboPage(BaseView):
 
         except Exception as e:
             logger.error(f"Error en HomePanelCuboPage.post: {str(e)}")
-            messages.error(request, "Error al procesar la selección de base de datos")
+            messages.error(request, "Error al procesar la selecciÃ³n de base de datos")
             return redirect("home_app:panel_cubo")
 
     def get(self, request, *args, **kwargs):
         """
         Maneja la solicitud GET, devolviendo la plantilla con datos optimizados.
-        Compatible con modo incógnito al verificar la validez de la sesión.
+        Compatible con modo incÃ³gnito al verificar la validez de la sesiÃ³n.
         """
-        start_time = time.time()  # Medición de tiempo para análisis de rendimiento
+        start_time = time.time()  # MediciÃ³n de tiempo para anÃ¡lisis de rendimiento
 
         try:
-            # Asegurar que la sesión tenga session_key única antes de cachear
+            # Asegurar que la sesiÃ³n tenga session_key Ãºnica antes de cachear
             if not request.session.session_key:
                 request.session.save()
             user_id = request.user.id
@@ -151,14 +151,14 @@ class HomePanelCuboPage(BaseView):
 
             if cached_response:
                 logger.debug(
-                    f"HomePanelCuboPage.get (desde caché) completado en {time.time() - start_time:.2f}s"
+                    f"HomePanelCuboPage.get (desde cachÃ©) completado en {time.time() - start_time:.2f}s"
                 )
                 return cached_response
 
-            # Si no hay datos en caché, procesamos normalmente
+            # Si no hay datos en cachÃ©, procesamos normalmente
             response = super().get(request, *args, **kwargs)
 
-            # Almacenamos en caché solo si la respuesta es exitosa
+            # Almacenamos en cachÃ© solo si la respuesta es exitosa
             if response.status_code == 200:
                 response.render()
                 cache_timeout = 60 * 5  # 5 minutos por defecto
@@ -173,7 +173,7 @@ class HomePanelCuboPage(BaseView):
 
         except Exception as e:
             logger.error(f"Error en HomePanelCuboPage.get: {str(e)}")
-            messages.error(request, "Error al cargar la página")
+            messages.error(request, "Error al cargar la pÃ¡gina")
             return redirect("home_app:panel_cubo")
 
     def get_context_data(self, **kwargs):
@@ -181,16 +181,16 @@ class HomePanelCuboPage(BaseView):
         Obtiene el contexto necesario para la plantilla.
         Optimizado para cargar solo datos esenciales y usar carga diferida.
         """
-        start_time = time.time()  # Medición de tiempo
+        start_time = time.time()  # MediciÃ³n de tiempo
 
         try:
             context = super().get_context_data(**kwargs)
             context["form_url"] = "home_app:panel_cubo"
 
-            # Añadimos bandera para carga diferida
+            # AÃ±adimos bandera para carga diferida
             context["use_lazy_loading"] = True
 
-            # Añadimos información de optimización para JavaScript
+            # AÃ±adimos informaciÃ³n de optimizaciÃ³n para JavaScript
             context["optimization"] = {
                 "cache_timeout": 300,  # 5 minutos en segundos
                 "use_compression": True,
@@ -211,12 +211,12 @@ class HomePanelCuboPage(BaseView):
 
         except Exception as e:
             logger.error(f"Error en HomePanelCuboPage.get_context_data: {str(e)}")
-            # Devolver contexto mínimo en caso de error
+            # Devolver contexto mÃ­nimo en caso de error
             return {"form_url": "home_app:panel_cubo", "error": True}
 
     def _get_cached_user_context(self, user_id, database_name):
         """
-        Obtiene el contexto del usuario desde caché si está disponible,
+        Obtiene el contexto del usuario desde cachÃ© si estÃ¡ disponible,
         o lo crea si no existe.
         """
         # session_key = self.request.session.session_key or "anonymous"  # Comentado
@@ -225,11 +225,11 @@ class HomePanelCuboPage(BaseView):
 
         if user_context:
             logger.debug(
-                f"Contexto obtenido desde caché para {database_name} (sin user/session)"
+                f"Contexto obtenido desde cachÃ© para {database_name} (sin user/session)"
             )
             return user_context
 
-        # Si no está en caché, crear el contexto
+        # Si no estÃ¡ en cachÃ©, crear el contexto
         try:
             # user_id = self.request.user.id  # Comentado: ya no se usa user_id
             config = ConfigBasic(database_name)  # Solo database_name
@@ -239,14 +239,14 @@ class HomePanelCuboPage(BaseView):
                 "ultimo_reporte": config.config.get("ultima_actualizacion", ""),
             }
 
-            # Guardar en caché
+            # Guardar en cachÃ©
             cache.set(cache_key, user_context, 60 * 15)  # 15 minutos
 
             return user_context
 
         except Exception as e:
             logger.error(f"Error al obtener contexto: {str(e)}")
-            # Devolver diccionario vacío o con valores por defecto
+            # Devolver diccionario vacÃ­o o con valores por defecto
             return {
                 "proveedores": [],
                 "macrozonas": [],
@@ -261,30 +261,59 @@ class HomePanelCuboPage(BaseView):
         if not database_name:
             return False
 
-        # Patrón para nombres de bases de datos válidos (alfanuméricos, guiones y guiones bajos)
+        # PatrÃ³n para nombres de bases de datos vÃ¡lidos (alfanumÃ©ricos, guiones y guiones bajos)
         import re
 
         pattern = re.compile(r"^[a-zA-Z0-9_\-]+$")
         return bool(pattern.match(database_name))
 
 
+class HomePanelBimboPage(HomePanelCuboPage):
+    """
+    Nuevo panel exclusivo para el entorno Bimbo.
+    Hereda la lógica de selección de empresa de PanelCuboPage pero usa plantilla y permiso propios.
+    """
+
+    template_name = "home/panel_bimbo.html"
+    # Se recomienda usar LoginRequiredMixin y permission_required en dispatch o similar, 
+    # pero aquí confiamos en que BaseView o los decoradores manejen permisos si se configuran.
+    
+    def post(self, request, *args, **kwargs):
+        """
+        Maneja la selección de base de datos redirigiendo al mismo panel bimbo.
+        """
+        response = super().post(request, *args, **kwargs)
+        # Si la redirección original va a panel_cubo, forzamos a panel_bimbo
+        try:
+             if response.status_code == 302 and "panel_cubo" in response.url:
+                 return redirect("home_app:panel_bimbo")
+        except:
+             pass
+        return response
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["form_url"] = "home_app:panel_bimbo"
+        return context
+
+
 class HomePanelBiPage(BaseView):
     """
-    Vista para la página principal del panel BI.
-    Optimizada para mejorar rendimiento con caché y carga diferida.
-    Compatible con modo incógnito.
+    Vista para la pÃ¡gina principal del panel BI.
+    Optimizada para mejorar rendimiento con cachÃ© y carga diferida.
+    Compatible con modo incÃ³gnito.
     """
 
     template_name = "home/panel_bi.html"
     login_url = reverse_lazy("users_app:user-login")
 
-    # Añadimos caché para esta vista
-    # @method_decorator(cache_page(60 * 5))  # Caché de 5 minutos
+    # AÃ±adimos cachÃ© para esta vista
+    # @method_decorator(cache_page(60 * 5))  # CachÃ© de 5 minutos
     def dispatch(self, request, *args, **kwargs):
         """
-        Método para despachar la solicitud con caché para mejorar rendimiento.
+        MÃ©todo para despachar la solicitud con cachÃ© para mejorar rendimiento.
         """
-        # Solo aplicamos caché si no hay parámetros POST
+        # Solo aplicamos cachÃ© si no hay parÃ¡metros POST
         if request.method == "GET":
             return super().dispatch(request, *args, **kwargs)
         return super(LoginRequiredMixin, self).dispatch(request, *args, **kwargs)
@@ -294,7 +323,7 @@ class HomePanelBiPage(BaseView):
         Maneja la solicitud POST para seleccionar base de datos.
         Optimizado para respuesta inmediata.
         """
-        start_time = time.time()  # Medición de tiempo para análisis de rendimiento
+        start_time = time.time()  # MediciÃ³n de tiempo para anÃ¡lisis de rendimiento
 
         try:
             request.session["template_name"] = self.template_name
@@ -302,31 +331,31 @@ class HomePanelBiPage(BaseView):
 
             if not database_name:
                 logger.warning(
-                    f"Intento de selección de base de datos vacía por usuario {request.user.id}"
+                    f"Intento de selecciÃ³n de base de datos vacÃ­a por usuario {request.user.id}"
                 )
                 return redirect("home_app:panel_bi")
 
-            # Validar el nombre de la base de datos (prevenir inyección)
+            # Validar el nombre de la base de datos (prevenir inyecciÃ³n)
             if not self._validate_database_name(database_name):
                 logger.warning(
-                    f"Intento de uso de nombre de base de datos inválido: {database_name} por usuario {request.user.id}"
+                    f"Intento de uso de nombre de base de datos invÃ¡lido: {database_name} por usuario {request.user.id}"
                 )
-                messages.error(request, "Nombre de base de datos no válido")
+                messages.error(request, "Nombre de base de datos no vÃ¡lido")
                 return redirect("home_app:panel_bi")
 
-            # Usar modificación eficiente de sesión
+            # Usar modificaciÃ³n eficiente de sesiÃ³n
             request.session["database_name"] = database_name
             request.session.modified = True
             request.session.save()
             StaticPage.name = database_name
 
-            # Invalidar caché específica para este usuario y sesión
-            # Incluir ID de sesión para manejar modo incógnito
+            # Invalidar cachÃ© especÃ­fica para este usuario y sesiÃ³n
+            # Incluir ID de sesiÃ³n para manejar modo incÃ³gnito
             session_key = request.session.session_key or "anonymous"
             cache_key = f"panel_bi_{request.user.id}_{session_key}"
             cache.delete(cache_key)
 
-            # Limpiar caché de configuración para este usuario y base de datos
+            # Limpiar cachÃ© de configuraciÃ³n para este usuario y base de datos
             ConfigBasic.clear_cache(
                 database_name=database_name, user_id=request.user.id
             )
@@ -339,18 +368,18 @@ class HomePanelBiPage(BaseView):
 
         except Exception as e:
             logger.error(f"Error en HomePanelBiPage.post: {str(e)}")
-            messages.error(request, "Error al procesar la selección de base de datos")
+            messages.error(request, "Error al procesar la selecciÃ³n de base de datos")
             return redirect("home_app:panel_bi")
 
     def get(self, request, *args, **kwargs):
         """
         Maneja la solicitud GET, devolviendo la plantilla con datos optimizados.
-        Compatible con modo incógnito al incluir ID de sesión en la clave de caché.
+        Compatible con modo incÃ³gnito al incluir ID de sesiÃ³n en la clave de cachÃ©.
         """
-        start_time = time.time()  # Medición de tiempo para análisis de rendimiento
+        start_time = time.time()  # MediciÃ³n de tiempo para anÃ¡lisis de rendimiento
 
         try:
-            # Asegurar que la sesión tenga session_key única antes de cachear
+            # Asegurar que la sesiÃ³n tenga session_key Ãºnica antes de cachear
             if not request.session.session_key:
                 request.session.save()
             user_id = request.user.id
@@ -360,21 +389,21 @@ class HomePanelBiPage(BaseView):
 
             if cached_response:
                 logger.debug(
-                    f"HomePanelBiPage.get (desde caché) completado en {time.time() - start_time:.2f}s"
+                    f"HomePanelBiPage.get (desde cachÃ©) completado en {time.time() - start_time:.2f}s"
                 )
                 return cached_response
 
-            # Si no hay datos en caché, procesamos normalmente
+            # Si no hay datos en cachÃ©, procesamos normalmente
             response = super().get(request, *args, **kwargs)
 
-            # Almacenamos en caché solo si la respuesta es exitosa
+            # Almacenamos en cachÃ© solo si la respuesta es exitosa
             if response.status_code == 200:
-                # Calcular tiempo de caché basado en si el usuario está autenticado
+                # Calcular tiempo de cachÃ© basado en si el usuario estÃ¡ autenticado
                 cache_timeout = 60 * 5  # 5 minutos por defecto
                 if not request.user.is_authenticated:
                     cache_timeout = 60 * 2  # 2 minutos para usuarios no autenticados
 
-                # Renderizar la respuesta antes de guardarla en caché
+                # Renderizar la respuesta antes de guardarla en cachÃ©
                 response.render()
                 cache.set(cache_key, response, cache_timeout)
 
@@ -385,7 +414,7 @@ class HomePanelBiPage(BaseView):
 
         except Exception as e:
             logger.error(f"Error en HomePanelBiPage.get: {str(e)}")
-            messages.error(request, "Error al cargar la página")
+            messages.error(request, "Error al cargar la pÃ¡gina")
             return redirect("home_app:panel_bi")
 
     def get_context_data(self, **kwargs):
@@ -393,19 +422,19 @@ class HomePanelBiPage(BaseView):
         Obtiene el contexto necesario para la plantilla.
         Optimizado para cargar solo datos esenciales y usar carga diferida.
         """
-        start_time = time.time()  # Medición de tiempo
+        start_time = time.time()  # MediciÃ³n de tiempo
 
         try:
             context = super().get_context_data(**kwargs)
             context["form_url"] = "home_app:panel_bi"
 
-            # Añadimos bandera para carga diferida
+            # AÃ±adimos bandera para carga diferida
             context["use_lazy_loading"] = True
 
-            # Información sobre el modo de navegación
+            # InformaciÃ³n sobre el modo de navegaciÃ³n
             context["is_incognito_probable"] = self._is_likely_incognito(self.request)
 
-            # Añadimos información de optimización
+            # AÃ±adimos informaciÃ³n de optimizaciÃ³n
             context["optimization"] = {
                 "cache_timeout": 300,  # 5 minutos en segundos
                 "use_compression": True,
@@ -426,12 +455,12 @@ class HomePanelBiPage(BaseView):
 
         except Exception as e:
             logger.error(f"Error en HomePanelBiPage.get_context_data: {str(e)}")
-            # Devolver contexto mínimo en caso de error
+            # Devolver contexto mÃ­nimo en caso de error
             return {"form_url": "home_app:panel_bi", "error": True}
 
     def _get_cached_user_context(self, user_id, database_name):
         """
-        Obtiene el contexto del usuario desde caché si está disponible,
+        Obtiene el contexto del usuario desde cachÃ© si estÃ¡ disponible,
         o lo crea si no existe.
         """
         session_key = self.request.session.session_key or "anonymous"
@@ -459,7 +488,7 @@ class HomePanelBiPage(BaseView):
         if not database_name:
             return False
 
-        # Patrón para nombres de bases de datos válidos (alfanuméricos, guiones y guiones bajos)
+        # PatrÃ³n para nombres de bases de datos vÃ¡lidos (alfanumÃ©ricos, guiones y guiones bajos)
         import re
 
         pattern = re.compile(r"^[a-zA-Z0-9_\-]+$")
@@ -467,17 +496,17 @@ class HomePanelBiPage(BaseView):
 
     def _is_likely_incognito(self, request):
         """
-        Intenta detectar si el usuario probablemente está usando modo incógnito
-        basado en heurísticas simples.
+        Intenta detectar si el usuario probablemente estÃ¡ usando modo incÃ³gnito
+        basado en heurÃ­sticas simples.
         """
-        # Si no hay una sesión persistente pero el usuario está autenticado
-        # O si hay cookies de sesión pero no cookies persistentes
-        # Es probable que esté en modo incógnito
+        # Si no hay una sesiÃ³n persistente pero el usuario estÃ¡ autenticado
+        # O si hay cookies de sesiÃ³n pero no cookies persistentes
+        # Es probable que estÃ© en modo incÃ³gnito
 
         session_key = request.session.session_key
         has_persistent_cookies = (
             len(request.COOKIES) > 1
-        )  # Más allá de la cookie de sesión
+        )  # MÃ¡s allÃ¡ de la cookie de sesiÃ³n
 
         if (request.user.is_authenticated and not session_key) or (
             session_key and not has_persistent_cookies
@@ -489,18 +518,18 @@ class HomePanelBiPage(BaseView):
 
 class HomePanelActualizacionPage(BaseView):
     """
-    Vista para la página principal del panel de actualización.
-    Optimizada para mejorar rendimiento con caché y carga diferida.
+    Vista para la pÃ¡gina principal del panel de actualizaciÃ³n.
+    Optimizada para mejorar rendimiento con cachÃ© y carga diferida.
     """
 
     template_name = "home/panel_actualizacion.html"
     login_url = reverse_lazy("users_app:user-login")
 
-    # Añadimos caché para esta vista
-    # @method_decorator(cache_page(60 * 5))  # Caché de 5 minutos
+    # AÃ±adimos cachÃ© para esta vista
+    # @method_decorator(cache_page(60 * 5))  # CachÃ© de 5 minutos
     def dispatch(self, request, *args, **kwargs):
         """
-        Método para despachar la solicitud con caché para mejorar rendimiento.
+        MÃ©todo para despachar la solicitud con cachÃ© para mejorar rendimiento.
         """
         return super().dispatch(request, *args, **kwargs)
 
@@ -509,7 +538,7 @@ class HomePanelActualizacionPage(BaseView):
         Maneja la solicitud POST para seleccionar base de datos.
         Optimizado para respuesta inmediata.
         """
-        start_time = time.time()  # Medición de tiempo para análisis de rendimiento
+        start_time = time.time()  # MediciÃ³n de tiempo para anÃ¡lisis de rendimiento
 
         request.session["template_name"] = self.template_name
         database_name = request.POST.get("database_select")
@@ -517,11 +546,11 @@ class HomePanelActualizacionPage(BaseView):
         if not database_name:
             return redirect("home_app:panel_actualizacion")
 
-        # Usar modificación eficiente de sesión
+        # Usar modificaciÃ³n eficiente de sesiÃ³n
         request.session["database_name"] = database_name
         StaticPage.name = database_name
 
-        # Invalidar caché específica para este usuario y sesión
+        # Invalidar cachÃ© especÃ­fica para este usuario y sesiÃ³n
         session_key = request.session.session_key or "anonymous"
         cache_key = f"panel_actualizacion_{request.user.id}_{session_key}"
         cache.delete(cache_key)
@@ -536,9 +565,9 @@ class HomePanelActualizacionPage(BaseView):
         """
         Maneja la solicitud GET, devolviendo la plantilla con datos optimizados.
         """
-        start_time = time.time()  # Medición de tiempo para análisis de rendimiento
+        start_time = time.time()  # MediciÃ³n de tiempo para anÃ¡lisis de rendimiento
 
-        # Asegurar que la sesión tenga session_key única antes de cachear
+        # Asegurar que la sesiÃ³n tenga session_key Ãºnica antes de cachear
         if not request.session.session_key:
             request.session.save()
         session_key = request.session.session_key
@@ -547,16 +576,16 @@ class HomePanelActualizacionPage(BaseView):
 
         if cached_response:
             logger.debug(
-                f"HomePanelActualizacionPage.get (desde caché) completado en {time.time() - start_time:.2f}s"
+                f"HomePanelActualizacionPage.get (desde cachÃ©) completado en {time.time() - start_time:.2f}s"
             )
             return cached_response
 
-        # Si no hay datos en caché, procesamos normalmente
+        # Si no hay datos en cachÃ©, procesamos normalmente
         response = super().get(request, *args, **kwargs)
 
-        # Almacenamos en caché solo si la respuesta es exitosa
+        # Almacenamos en cachÃ© solo si la respuesta es exitosa
         if response.status_code == 200:
-            # Forzar renderizado de la respuesta antes de guardarla en caché
+            # Forzar renderizado de la respuesta antes de guardarla en cachÃ©
             response.render()
             cache.set(cache_key, response, 60 * 5)  # 5 minutos
 
@@ -570,15 +599,15 @@ class HomePanelActualizacionPage(BaseView):
         Obtiene el contexto necesario para la plantilla.
         Optimizado para cargar solo datos esenciales y usar carga diferida.
         """
-        start_time = time.time()  # Medición de tiempo
+        start_time = time.time()  # MediciÃ³n de tiempo
 
         context = super().get_context_data(**kwargs)
         context["form_url"] = "home_app:panel_actualizacion"
 
-        # Añadimos bandera para carga diferida
+        # AÃ±adimos bandera para carga diferida
         context["use_lazy_loading"] = True
 
-        # Añadimos información de optimización para JavaScript
+        # AÃ±adimos informaciÃ³n de optimizaciÃ³n para JavaScript
         context["optimization"] = {
             "cache_timeout": 300,  # 5 minutos en segundos
             "use_compression": True,
@@ -588,9 +617,9 @@ class HomePanelActualizacionPage(BaseView):
         user_id = self.request.user.id
         database_name = self.request.session.get("database_name")
 
-        # Solo cargar configuración si es necesario
+        # Solo cargar configuraciÃ³n si es necesario
         if database_name:
-            # Usar una versión ligera de la configuración si solo necesitamos proveedores y macrozonas
+            # Usar una versiÃ³n ligera de la configuraciÃ³n si solo necesitamos proveedores y macrozonas
             context_data = self._get_cached_user_context(user_id, database_name)
             context.update(context_data)
 
@@ -601,7 +630,7 @@ class HomePanelActualizacionPage(BaseView):
 
     def _get_cached_user_context(self, user_id, database_name):
         """
-        Obtiene el contexto del usuario desde caché si está disponible,
+        Obtiene el contexto del usuario desde cachÃ© si estÃ¡ disponible,
         o lo crea si no existe.
         """
         session_key = self.request.session.session_key or "anonymous"
@@ -629,7 +658,7 @@ class HomePanelActualizacionPage(BaseView):
         if not database_name:
             return False
 
-        # Patrón para nombres de bases de datos válidos (alfanuméricos, guiones y guiones bajos)
+        # PatrÃ³n para nombres de bases de datos vÃ¡lidos (alfanumÃ©ricos, guiones y guiones bajos)
         import re
 
         pattern = re.compile(r"^[a-zA-Z0-9_\-]+$")
@@ -638,20 +667,20 @@ class HomePanelActualizacionPage(BaseView):
 
 class HomePanelInterfacePage(BaseView):
     """
-    Vista para la página principal del panel de interface.
-    Optimizada para mejorar rendimiento con caché y carga diferida.
+    Vista para la pÃ¡gina principal del panel de interface.
+    Optimizada para mejorar rendimiento con cachÃ© y carga diferida.
     """
 
     template_name = "home/panel_interface.html"
     login_url = reverse_lazy("users_app:user-login")
 
-    # Añadimos caché para esta vista
-    # @method_decorator(cache_page(60 * 5))  # Caché de 5 minutos
+    # AÃ±adimos cachÃ© para esta vista
+    # @method_decorator(cache_page(60 * 5))  # CachÃ© de 5 minutos
     def dispatch(self, request, *args, **kwargs):
         """
-        Método para despachar la solicitud con caché para mejorar rendimiento.
+        MÃ©todo para despachar la solicitud con cachÃ© para mejorar rendimiento.
         """
-        # Solo aplicamos caché si no hay parámetros POST
+        # Solo aplicamos cachÃ© si no hay parÃ¡metros POST
         if request.method == "GET":
             return super().dispatch(request, *args, **kwargs)
         return super(LoginRequiredMixin, self).dispatch(request, *args, **kwargs)
@@ -661,7 +690,7 @@ class HomePanelInterfacePage(BaseView):
         Maneja la solicitud POST para seleccionar base de datos.
         Optimizado para respuesta inmediata.
         """
-        start_time = time.time()  # Medición de tiempo para análisis de rendimiento
+        start_time = time.time()  # MediciÃ³n de tiempo para anÃ¡lisis de rendimiento
 
         request.session["template_name"] = self.template_name
         database_name = request.POST.get("database_select")
@@ -669,16 +698,16 @@ class HomePanelInterfacePage(BaseView):
         if not database_name:
             return redirect("home_app:panel_interface")
 
-        # Usar modificación eficiente de sesión
+        # Usar modificaciÃ³n eficiente de sesiÃ³n
         request.session["database_name"] = database_name
         StaticPage.name = database_name
 
-        # Invalidar caché específica para este usuario y sesión
+        # Invalidar cachÃ© especÃ­fica para este usuario y sesiÃ³n
         session_key = request.session.session_key or "anonymous"
         cache_key = f"panel_interface_{request.user.id}_{session_key}"
         cache.delete(cache_key)
 
-        # Limpiar caché de configuración para este usuario y base de datos
+        # Limpiar cachÃ© de configuraciÃ³n para este usuario y base de datos
         ConfigBasic.clear_cache(database_name=database_name, user_id=request.user.id)
 
         logger.debug(
@@ -691,9 +720,9 @@ class HomePanelInterfacePage(BaseView):
         """
         Maneja la solicitud GET, devolviendo la plantilla con datos optimizados.
         """
-        start_time = time.time()  # Medición de tiempo para análisis de rendimiento
+        start_time = time.time()  # MediciÃ³n de tiempo para anÃ¡lisis de rendimiento
 
-        # Asegurar que la sesión tenga session_key única antes de cachear
+        # Asegurar que la sesiÃ³n tenga session_key Ãºnica antes de cachear
         if not request.session.session_key:
             request.session.save()
         session_key = request.session.session_key
@@ -702,16 +731,16 @@ class HomePanelInterfacePage(BaseView):
 
         if cached_response:
             logger.debug(
-                f"HomePanelInterfacePage.get (desde caché) completado en {time.time() - start_time:.2f}s"
+                f"HomePanelInterfacePage.get (desde cachÃ©) completado en {time.time() - start_time:.2f}s"
             )
             return cached_response
 
-        # Si no hay datos en caché, procesamos normalmente
+        # Si no hay datos en cachÃ©, procesamos normalmente
         response = super().get(request, *args, **kwargs)
 
-        # Almacenamos en caché solo si la respuesta es exitosa
+        # Almacenamos en cachÃ© solo si la respuesta es exitosa
         if response.status_code == 200:
-            # Forzar renderizado de la respuesta antes de guardarla en caché
+            # Forzar renderizado de la respuesta antes de guardarla en cachÃ©
             response.render()
             cache.set(cache_key, response, 60 * 5)  # 5 minutos
 
@@ -725,15 +754,15 @@ class HomePanelInterfacePage(BaseView):
         Obtiene el contexto necesario para la plantilla.
         Optimizado para cargar solo datos esenciales y usar carga diferida.
         """
-        start_time = time.time()  # Medición de tiempo
+        start_time = time.time()  # MediciÃ³n de tiempo
 
         context = super().get_context_data(**kwargs)
         context["form_url"] = "home_app:panel_interface"
 
-        # Añadimos bandera para carga diferida
+        # AÃ±adimos bandera para carga diferida
         context["use_lazy_loading"] = True
 
-        # Añadimos información de optimización para JavaScript
+        # AÃ±adimos informaciÃ³n de optimizaciÃ³n para JavaScript
         context["optimization"] = {
             "cache_timeout": 300,  # 5 minutos en segundos
             "use_compression": True,
@@ -743,9 +772,9 @@ class HomePanelInterfacePage(BaseView):
         user_id = self.request.user.id
         database_name = self.request.session.get("database_name")
 
-        # Solo cargar configuración si es necesario
+        # Solo cargar configuraciÃ³n si es necesario
         if database_name:
-            # Usar una versión ligera de la configuración si solo necesitamos proveedores y macrozonas
+            # Usar una versiÃ³n ligera de la configuraciÃ³n si solo necesitamos proveedores y macrozonas
             context_data = self._get_cached_user_context(user_id, database_name)
             context.update(context_data)
 
@@ -756,7 +785,7 @@ class HomePanelInterfacePage(BaseView):
 
     def _get_cached_user_context(self, user_id, database_name):
         """
-        Obtiene el contexto del usuario desde caché si está disponible,
+        Obtiene el contexto del usuario desde cachÃ© si estÃ¡ disponible,
         o lo crea si no existe.
         """
         session_key = self.request.session.session_key or "anonymous"
@@ -765,7 +794,7 @@ class HomePanelInterfacePage(BaseView):
 
         if user_context:
             logger.debug(
-                f"Contexto de usuario obtenido desde caché para {user_id} en {database_name} (session {session_key})"
+                f"Contexto de usuario obtenido desde cachÃ© para {user_id} en {database_name} (session {session_key})"
             )
             return user_context
 
@@ -782,14 +811,14 @@ class HomePanelInterfacePage(BaseView):
 
     def _obtener_interfaces_disponibles(self, config):
         """
-        Método optimizado para obtener las interfaces disponibles.
+        MÃ©todo optimizado para obtener las interfaces disponibles.
         """
-        # Este método puede ampliarse para obtener información específica
+        # Este mÃ©todo puede ampliarse para obtener informaciÃ³n especÃ­fica
         # sobre las interfaces disponibles para el usuario
         interfaces = []
         try:
-            # Si hay configuración específica de interfaces en la configuración,
-            # podemos obtenerla aquí
+            # Si hay configuraciÃ³n especÃ­fica de interfaces en la configuraciÃ³n,
+            # podemos obtenerla aquÃ­
             if config.config.get("nmProcedureInterface"):
                 interfaces.append(
                     {
@@ -806,7 +835,7 @@ class HomePanelInterfacePage(BaseView):
                     }
                 )
 
-            # Aquí podríamos añadir otras interfaces según la configuración
+            # AquÃ­ podrÃ­amos aÃ±adir otras interfaces segÃºn la configuraciÃ³n
 
         except Exception as e:
             logger.error(f"Error al obtener interfaces disponibles: {e}")
@@ -817,7 +846,7 @@ class HomePanelInterfacePage(BaseView):
 class DownloadFileView(LoginRequiredMixin, View):
     """
     Vista optimizada para la descarga segura y eficiente de archivos.
-    Implementa streaming de archivos, caché, compresión y registro de actividad.
+    Implementa streaming de archivos, cachÃ©, compresiÃ³n y registro de actividad.
     """
 
     login_url = reverse_lazy("users_app:user-login")
@@ -834,15 +863,15 @@ class DownloadFileView(LoginRequiredMixin, View):
     def get(self, request):
         """
         Maneja la solicitud GET para descargar un archivo.
-        Implementa transmisión por chunks para archivos grandes y validación de seguridad.
+        Implementa transmisiÃ³n por chunks para archivos grandes y validaciÃ³n de seguridad.
         """
-        start_time = time.time()  # Medición de tiempo para diagnóstico
+        start_time = time.time()  # MediciÃ³n de tiempo para diagnÃ³stico
         template_name = request.session.get("template_name", "home/panel_cubo.html")
         file_path = request.session.get("file_path")
         file_name = request.session.get("file_name")
         user_id = request.user.id
 
-        # Validación inicial de parámetros
+        # ValidaciÃ³n inicial de parÃ¡metros
         if not file_path or not file_name:
             messages.error(
                 request, "Archivo no encontrado o no especificado correctamente"
@@ -858,7 +887,7 @@ class DownloadFileView(LoginRequiredMixin, View):
             # Normalizar la ruta para evitar ataques de path traversal
             file_path = os.path.normpath(file_path)
 
-            # Validar que el archivo existe y está en una ubicación permitida
+            # Validar que el archivo existe y estÃ¡ en una ubicaciÃ³n permitida
             if not os.path.exists(file_path) or not os.path.isfile(file_path):
                 messages.error(request, "El archivo no existe")
                 logger.warning(
@@ -866,7 +895,7 @@ class DownloadFileView(LoginRequiredMixin, View):
                 )
                 return redirect("home_app:panel_cubo")
 
-            # Validar extensión del archivo
+            # Validar extensiÃ³n del archivo
             _, extension = os.path.splitext(file_path)
             if extension.lower() not in self.allowed_extensions:
                 messages.error(request, "Tipo de archivo no permitido")
@@ -875,14 +904,14 @@ class DownloadFileView(LoginRequiredMixin, View):
                 )
                 return redirect("home_app:panel_cubo")
 
-            # Comprobar tamaño del archivo
+            # Comprobar tamaÃ±o del archivo
             file_size = os.path.getsize(file_path)
             if file_size > 100 * 1024 * 1024:  # 100MB
                 logger.info(
                     f"Archivo grande ({file_size/1024/1024:.2f}MB) descargado: {file_path} por usuario {user_id}"
                 )
 
-            # Si está habilitado X-Accel-Redirect (Nginx), delegar a Nginx para servir el archivo
+            # Si estÃ¡ habilitado X-Accel-Redirect (Nginx), delegar a Nginx para servir el archivo
             use_x_accel = bool(
                 int(os.getenv("USE_X_ACCEL_REDIRECT", "1" if getattr(settings, "USE_X_ACCEL_REDIRECT", False) else "0"))
             )
@@ -910,15 +939,15 @@ class DownloadFileView(LoginRequiredMixin, View):
                 response["Content-Length"] = file_size
                 response["Content-Type"] = self._get_content_type(file_name)
 
-            # Añadir cabeceras de caché para clientes
+            # AÃ±adir cabeceras de cachÃ© para clientes
             response["Cache-Control"] = (
-                "private, max-age=300"  # 5 minutos de caché para el cliente
+                "private, max-age=300"  # 5 minutos de cachÃ© para el cliente
             )
 
-            # Añadir cabeceras para mejorar la seguridad
+            # AÃ±adir cabeceras para mejorar la seguridad
             response["X-Content-Type-Options"] = "nosniff"
 
-            # Registro de actividad y tiempo para diagnóstico
+            # Registro de actividad y tiempo para diagnÃ³stico
             logger.info(
                 f"Archivo descargado: {file_path} ({file_size/1024:.2f}KB) por usuario {user_id} en {time.time() - start_time:.2f}s"
             )
@@ -937,7 +966,7 @@ class DownloadFileView(LoginRequiredMixin, View):
             return redirect("home_app:panel_cubo")
 
     def _get_content_type(self, filename):
-        """Determina el tipo MIME basado en la extensión del archivo."""
+        """Determina el tipo MIME basado en la extensiÃ³n del archivo."""
         extension = os.path.splitext(filename)[1].lower()
 
         content_types = {
@@ -954,10 +983,10 @@ class DownloadFileView(LoginRequiredMixin, View):
     def _validate_date_format(self, date_str):
         """
         Valida que el formato de fecha sea correcto.
-        Acepta formato YYYY-MM-DD únicamente.
+        Acepta formato YYYY-MM-DD Ãºnicamente.
         """
         if not date_str:
-            raise ValueError("La fecha no puede estar vacía")
+            raise ValueError("La fecha no puede estar vacÃ­a")
 
         import re
 
@@ -975,13 +1004,13 @@ class DownloadFileView(LoginRequiredMixin, View):
         Maneja la solicitud POST para eliminar un archivo.
         Implementa validaciones de seguridad y registro detallado.
         """
-        start_time = time.time()  # Medición de tiempo para diagnóstico
+        start_time = time.time()  # MediciÃ³n de tiempo para diagnÃ³stico
         template_name = request.session.get("template_name")
         file_path = request.session.get("file_path")
         file_name = request.session.get("file_name")
         user_id = request.user.id
 
-        # Validación inicial
+        # ValidaciÃ³n inicial
         if file_path is None:
             logger.warning(
                 f"Intento de eliminar archivo sin ruta especificada por usuario {user_id}"
@@ -994,7 +1023,7 @@ class DownloadFileView(LoginRequiredMixin, View):
             # Normalizar la ruta para evitar ataques de path traversal
             file_path = os.path.normpath(file_path)
 
-            # Validar extensión del archivo
+            # Validar extensiÃ³n del archivo
             _, extension = os.path.splitext(file_path)
             if extension.lower() not in self.allowed_extensions:
                 logger.warning(
@@ -1013,7 +1042,7 @@ class DownloadFileView(LoginRequiredMixin, View):
                     {"success": False, "error_message": "El archivo no existe."}
                 )
 
-            # Validar que es un archivo regular (no directorio, enlace simbólico, etc.)
+            # Validar que es un archivo regular (no directorio, enlace simbÃ³lico, etc.)
             if not os.path.isfile(file_path):
                 logger.warning(
                     f"Intento de eliminar algo que no es un archivo: {file_path} por usuario {user_id}"
@@ -1037,23 +1066,23 @@ class DownloadFileView(LoginRequiredMixin, View):
                     }
                 )
 
-            # Registrar información del archivo antes de eliminarlo
+            # Registrar informaciÃ³n del archivo antes de eliminarlo
             file_size = os.path.getsize(file_path)
             file_mod_time = os.path.getmtime(file_path)
 
             # Eliminar el archivo
             os.remove(file_path)
 
-            # Limpiar la sesión
+            # Limpiar la sesiÃ³n
             del request.session["file_path"]
             del request.session["file_name"]
 
-            # Registrar la eliminación exitosa
+            # Registrar la eliminaciÃ³n exitosa
             logger.info(
                 f"Archivo eliminado: {file_path} ({file_size/1024:.2f}KB, modificado: {time.ctime(file_mod_time)}) por usuario {user_id} en {time.time() - start_time:.2f}s"
             )
 
-            # Limpieza automática de archivos viejos tras cada borrado manual
+            # Limpieza automÃ¡tica de archivos viejos tras cada borrado manual
             removed_auto = clean_old_media_files(hours=4)
             return JsonResponse({"success": True, "auto_cleaned_files": removed_auto})
 
@@ -1088,7 +1117,7 @@ class DownloadFileView(LoginRequiredMixin, View):
             return JsonResponse(
                 {
                     "success": False,
-                    "error_message": f"Error: no se pudo eliminar el archivo. Razón: {str(e)}",
+                    "error_message": f"Error: no se pudo eliminar el archivo. RazÃ³n: {str(e)}",
                 }
             )
         finally:
@@ -1117,13 +1146,13 @@ class DeleteFileView(BaseView):
         start_time = time.time()
         user_id = request.user.id
 
-        # Obtener el nombre del archivo desde POST o sesión
+        # Obtener el nombre del archivo desde POST o sesiÃ³n
         file_name = request.POST.get("file_name") or request.session.get("file_name")
         logger.info(f"[DeleteFileView] file_name recibido: {file_name}")
         # Construir la ruta segura (solo permite archivos en media/)
         file_path = os.path.join("media", file_name) if file_name else None
         logger.info(f"[DeleteFileView] file_path construido: {file_path}")
-        # Validar que el archivo esté dentro de media/
+        # Validar que el archivo estÃ© dentro de media/
         media_root = os.path.abspath("media")
         abs_file_path = os.path.abspath(file_path) if file_path else None
         logger.info(
@@ -1137,7 +1166,7 @@ class DeleteFileView(BaseView):
                 {"success": False, "error_message": "Ruta de archivo no permitida."}
             )
 
-        # Validar extensión
+        # Validar extensiÃ³n
         _, extension = os.path.splitext(file_path)
         if extension.lower() not in self.allowed_extensions:
             logger.warning(
@@ -1173,14 +1202,14 @@ class DeleteFileView(BaseView):
             file_mod_time = os.path.getmtime(file_path)
             os.remove(file_path)
             logger.info(f"[DeleteFileView] Archivo eliminado exitosamente: {file_path}")
-            # Limpiar la sesión solo si coincide
+            # Limpiar la sesiÃ³n solo si coincide
             if request.session.get("file_name") == file_name:
                 request.session.pop("file_path", None)
                 request.session.pop("file_name", None)
             logger.info(
                 f"Archivo eliminado: {file_path} ({file_size/1024:.2f}KB, modificado: {time.ctime(file_mod_time)}) por usuario {user_id} en {time.time() - start_time:.2f}s"
             )
-            # Limpieza automática de archivos viejos tras cada borrado manual
+            # Limpieza automÃ¡tica de archivos viejos tras cada borrado manual
             removed_auto = clean_old_media_files(hours=4)
             return JsonResponse({"success": True, "auto_cleaned_files": removed_auto})
         except Exception as e:
@@ -1192,8 +1221,8 @@ class DeleteFileView(BaseView):
 
 class CheckTaskStatusView(BaseView):
     """
-    Vista optimizada para comprobar el estado de tareas asincrónicas y recuperar resultados.
-    Proporciona información detallada sobre el proceso y resúmenes de operaciones.
+    Vista optimizada para comprobar el estado de tareas asincrÃ³nicas y recuperar resultados.
+    Proporciona informaciÃ³n detallada sobre el proceso y resÃºmenes de operaciones.
     """
 
     def post(self, request, *args, **kwargs):
@@ -1222,7 +1251,7 @@ class CheckTaskStatusView(BaseView):
                     else job.func_name
                 )
 
-                # --- ALINEACIÓN PARA cubo_ventas_task ---
+                # --- ALINEACIÃN PARA cubo_ventas_task ---
                 if task_name == "cubo_ventas_task" and isinstance(result, dict):
                     # Asegura que todas las claves esperadas existan
                     if "success" not in result:
@@ -1272,7 +1301,7 @@ class CheckTaskStatusView(BaseView):
                         status=200,
                     )
 
-                # Lógica especial SOLO para la tarea de actualización de BI (actualiza_bi_task)
+                # LÃ³gica especial SOLO para la tarea de actualizaciÃ³n de BI (actualiza_bi_task)
                 if task_name == "actualiza_bi_task":
                     powerbi_status = None
                     if isinstance(result, dict):
@@ -1284,7 +1313,7 @@ class CheckTaskStatusView(BaseView):
                                 {
                                     "status": "unknown",
                                     "result": result,
-                                    "error_message": "El estado de actualización de Power BI es desconocido tras varios intentos. El proceso puede seguir en curso. Por favor, reintente en unos minutos o verifique manualmente en el portal de Power BI.",
+                                    "error_message": "El estado de actualizaciÃ³n de Power BI es desconocido tras varios intentos. El proceso puede seguir en curso. Por favor, reintente en unos minutos o verifique manualmente en el portal de Power BI.",
                                     "summary": self._generate_summary(job, result),
                                 },
                                 status=200,
@@ -1297,7 +1326,7 @@ class CheckTaskStatusView(BaseView):
                     and "file_name" in result
                 ):
                     print(
-                        f"[CheckTaskStatusView] Guardando file_path y file_name en sesión: {result['file_path']}, {result['file_name']}"
+                        f"[CheckTaskStatusView] Guardando file_path y file_name en sesiÃ³n: {result['file_path']}, {result['file_name']}"
                     )
                     request.session["file_path"] = result["file_path"]
                     request.session["file_name"] = result["file_name"]
@@ -1342,7 +1371,7 @@ class CheckTaskStatusView(BaseView):
                     )
 
                 print(
-                    f"[CheckTaskStatusView] Devolviendo respuesta de éxito para {task_id}"
+                    f"[CheckTaskStatusView] Devolviendo respuesta de Ã©xito para {task_id}"
                 )
                 logger.info(f"Tarea {task_id} completada exitosamente: {result}")
                 return JsonResponse(
@@ -1431,7 +1460,7 @@ class CheckTaskStatusView(BaseView):
 
                 if file_ready and progress >= 95 and meta.get("file_ready"):
                     print(
-                        f"[CheckTaskStatusView] Éxito parcial, archivo listo para descarga"
+                        f"[CheckTaskStatusView] Ãxito parcial, archivo listo para descarga"
                     )
                     status_data = {
                         "status": "partial_success",
@@ -1441,7 +1470,7 @@ class CheckTaskStatusView(BaseView):
                         "meta": meta,
                         "elapsed_time": elapsed_time,
                         "eta": eta,
-                        "estado": "Éxito parcial - Archivo listo para descarga",
+                        "estado": "Ãxito parcial - Archivo listo para descarga",
                     }
                 else:
                     status_data = {
@@ -1474,14 +1503,14 @@ class CheckTaskStatusView(BaseView):
             )
 
         except Exception as e:
-            print(f"[CheckTaskStatusView] Excepción: {str(e)}")
+            print(f"[CheckTaskStatusView] ExcepciÃ³n: {str(e)}")
             logger.error(
                 f"Error al comprobar estado de tarea {task_id}: {str(e)}\n{traceback.format_exc()}"
             )
             return JsonResponse({"status": "error", "state": "ERROR", "error": str(e)}, status=500)
 
     def _get_readable_status(self, status):
-        """Convierte el estado de la tarea en un texto más amigable"""
+        """Convierte el estado de la tarea en un texto mÃ¡s amigable"""
         status_map = {
             "queued": "En cola",
             "started": "En proceso",
@@ -1505,22 +1534,22 @@ class CheckTaskStatusView(BaseView):
         print(f"Resumen: func_name={job.func_name}, task_name={task_name}")
 
         if task_name == "actualiza_bi_task":
-            # Para actualización de BI
+            # Para actualizaciÃ³n de BI
             db_name = job.args[0] if len(job.args) > 0 else "desconocida"
             fecha_ini = job.args[1] if len(job.args) > 1 else "desconocida"
             fecha_fin = job.args[2] if len(job.args) > 2 else "desconocida"
 
-            # Calcular duración
+            # Calcular duraciÃ³n
             started = job.started_at.timestamp() if job.started_at else 0
             ended = time.time()
             duration = ended - started if started > 0 else 0
 
-            # Lógica especial: incluir estado Power BI si existe
+            # LÃ³gica especial: incluir estado Power BI si existe
             powerbi_status = result.get("powerbi_status") or result.get(
                 "metadata", {}
             ).get("powerbi_status")
             resumen = {
-                "tipo_proceso": "Actualización de datos BI",
+                "tipo_proceso": "ActualizaciÃ³n de datos BI",
                 "base_datos": db_name,
                 "periodo": f"{fecha_ini} - {fecha_fin}",
                 "duracion": f"{duration:.2f} segundos",
@@ -1537,18 +1566,18 @@ class CheckTaskStatusView(BaseView):
             return resumen
 
         elif task_name == "extrae_bi_task":
-            # Para actualización de BI
+            # Para actualizaciÃ³n de BI
             db_name = job.args[0] if len(job.args) > 0 else "desconocida"
             fecha_ini = job.args[1] if len(job.args) > 1 else "desconocida"
             fecha_fin = job.args[2] if len(job.args) > 2 else "desconocida"
 
-            # Calcular duración
+            # Calcular duraciÃ³n
             started = job.started_at.timestamp() if job.started_at else 0
             ended = time.time()
             duration = ended - started if started > 0 else 0
 
             return {
-                "tipo_proceso": "Actualización de datos BI",
+                "tipo_proceso": "ActualizaciÃ³n de datos BI",
                 "base_datos": db_name,
                 "periodo": f"{fecha_ini} - {fecha_fin}",
                 "duracion": f"{duration:.2f} segundos",
@@ -1578,7 +1607,7 @@ class CheckTaskStatusView(BaseView):
                 "tipo_proceso": tipo_proceso,
                 "base_datos": db_name,
                 "periodo": f"{fecha_ini} - {fecha_fin}",
-                "archivo_generado": result.get("file_name", "No se generó archivo"),
+                "archivo_generado": result.get("file_name", "No se generÃ³ archivo"),
                 "registros_procesados": result.get("metadata", {}).get(
                     "total_records", "Desconocido"
                 ),
@@ -1609,7 +1638,7 @@ class CheckTaskStatusView(BaseView):
                 "periodo": f"{fecha_ini} - {fecha_fin}",
                 "procedimiento": procedure_name,
                 "filtro": f"{filter_type}: {filter_value}",
-                "archivo_generado": result.get("file_name", "No se generó archivo"),
+                "archivo_generado": result.get("file_name", "No se generÃ³ archivo"),
                 "registros_procesados": result.get("metadata", {}).get(
                     "total_records", "Desconocido"
                 ),
@@ -1641,7 +1670,7 @@ class CheckTaskStatusView(BaseView):
                 "tipo_proceso": tipo_reporte,
                 "base_datos": db_name,
                 "periodo": f"{fecha_ini} - {fecha_fin}",
-                "archivo_generado": result.get("file_name", "No se generó archivo"),
+                "archivo_generado": result.get("file_name", "No se generÃ³ archivo"),
                 "registros_procesados": result.get("metadata", {}).get(
                     "total_records", "Desconocido"
                 ),
@@ -1698,8 +1727,8 @@ class CheckTaskStatusView(BaseView):
 
 class ReporteGenericoPage(BaseView):
     """
-    Vista genérica para reportes tipo Cubo y Proveedor.
-    Permite unificar la lógica cambiando solo el id_reporte, plantilla, permiso y task.
+    Vista genÃ©rica para reportes tipo Cubo y Proveedor.
+    Permite unificar la lÃ³gica cambiando solo el id_reporte, plantilla, permiso y task.
     """
 
     template_name = None
@@ -1743,14 +1772,14 @@ class ReporteGenericoPage(BaseView):
         id_reporte = self.id_reporte
         if id_reporte is None:
             id_reporte = request.POST.get("reporte_id")
-        # Permitir actualización solo de base de datos (AJAX o selector)
+        # Permitir actualizaciÃ³n solo de base de datos (AJAX o selector)
         if database_name and not (IdtReporteIni and IdtReporteFin):
             request.session["database_name"] = database_name
-            # Limpiar caché de configuración para reflejar el cambio inmediatamente
+            # Limpiar cachÃ© de configuraciÃ³n para reflejar el cambio inmediatamente
             from scripts.config import ConfigBasic
             ConfigBasic.clear_cache(database_name=database_name)
             print(
-                "[ReporteGenericoPage] post: Solo cambio de base de datos, actualizado en sesión y caché limpiado."
+                "[ReporteGenericoPage] post: Solo cambio de base de datos, actualizado en sesiÃ³n y cachÃ© limpiado."
             )
             return JsonResponse(
                 {
@@ -1768,12 +1797,12 @@ class ReporteGenericoPage(BaseView):
                 status=400,
             )
         try:
-            # Limpiar caché de configuración para esta base de datos antes de encolar
-            # Esto asegura que la tarea use la configuración más reciente
+            # Limpiar cachÃ© de configuraciÃ³n para esta base de datos antes de encolar
+            # Esto asegura que la tarea use la configuraciÃ³n mÃ¡s reciente
             from scripts.config import ConfigBasic
             ConfigBasic.clear_cache(database_name=database_name)
             print(
-                f"[ReporteGenericoPage] post: Caché limpiado para database_name={database_name}"
+                f"[ReporteGenericoPage] post: CachÃ© limpiado para database_name={database_name}"
             )
             
             print(
@@ -1805,7 +1834,7 @@ class ReporteGenericoPage(BaseView):
         database_name = request.session.get("database_name")
         if not database_name:
             print(
-                "[ReporteGenericoPage] get: No hay database_name en sesión, redirigiendo."
+                "[ReporteGenericoPage] get: No hay database_name en sesiÃ³n, redirigiendo."
             )
             messages.warning(
                 request, "Debe seleccionar una empresa antes de continuar."
@@ -1834,7 +1863,7 @@ class ReporteGenericoPage(BaseView):
             context["file_name"] = file_name
         if file_path:
             context["file_path"] = file_path
-            # Agregar file_size para el botón de descarga
+            # Agregar file_size para el botÃ³n de descarga
             import os
 
             if os.path.exists(file_path):
@@ -1911,7 +1940,7 @@ class AmovildeskPage(ReporteGenericoPage):
 class InterfacePage(ReporteGenericoPage):
     template_name = "home/interface.html"
     permiso = "permisos.interface"
-    id_reporte = 0  # Si aplica, puedes asignar un id específico
+    id_reporte = 0  # Si aplica, puedes asignar un id especÃ­fico
     form_url = "home_app:interface"
     task_func = interface_task
 
@@ -1934,7 +1963,7 @@ class InterfaceSiigoPage(ReporteGenericoPage):
 class MatrixPage(ReporteGenericoPage):
     template_name = "home/matrix.html"
     permiso = "permisos.matrix"
-    id_reporte = 0  # Si aplica, puedes asignar un id específico
+    id_reporte = 0  # Si aplica, puedes asignar un id especÃ­fico
     form_url = "home_app:matrix"
     task_func = matrix_task
 
@@ -1945,7 +1974,7 @@ class MatrixPage(ReporteGenericoPage):
 class PlanoPage(ReporteGenericoPage):
     template_name = "home/plano.html"
     permiso = "permisos.plano"
-    id_reporte = 0  # Si aplica, puedes asignar un id específico
+    id_reporte = 0  # Si aplica, puedes asignar un id especÃ­fico
     form_url = "home_app:plano"
     task_func = plano_task
 
@@ -1958,7 +1987,7 @@ class ActualizacionBdPage(ReporteGenericoPage):
 
     template_name = "home/actualizacion.html"
     permiso = "permisos.actualizar_base"
-    id_reporte = 0  # Puedes ajustar este ID si tienes uno específico para actualización
+    id_reporte = 0  # Puedes ajustar este ID si tienes uno especÃ­fico para actualizaciÃ³n
     form_url = "home_app:actualizacion"
     task_func = extrae_bi_task
 
@@ -1973,7 +2002,7 @@ class ActualizacionBdPage(ReporteGenericoPage):
 class ReporteadorPage(ReporteGenericoPage):
     template_name = "home/reporteador.html"
     permiso = "permisos.reportes"
-    id_reporte = None  # Se selecciona dinámicamente
+    id_reporte = None  # Se selecciona dinÃ¡micamente
     form_url = "home_app:reporteador"
     task_func = cubo_ventas_task
 
@@ -1983,14 +2012,14 @@ class ReporteadorPage(ReporteGenericoPage):
 
 
 class VentaCeroPage(BaseView):
-    """Página SSR para el Informe de Venta Cero (frontend orquestador)."""
+    """PÃ¡gina SSR para el Informe de Venta Cero (frontend orquestador)."""
 
     template_name = "home/venta_cero.html"
     login_url = reverse_lazy("users_app:user-login")
     form_url = "home_app:venta_cero"
     required_permission = "permisos.reportes"
 
-    # Catálogo de procedimientos permitidos (se puede sobreescribir vía settings)
+    # CatÃ¡logo de procedimientos permitidos (se puede sobreescribir vÃ­a settings)
     default_procedures = [
         {
             "id": proc.get("id"),
@@ -2003,12 +2032,12 @@ class VentaCeroPage(BaseView):
     filter_types = [
         {"id": "producto", "nombre": "Producto"},
         {"id": "proveedor", "nombre": "Proveedor"},
-        {"id": "categoria", "nombre": "Categoría"},
+        {"id": "categoria", "nombre": "CategorÃ­a"},
         {"id": "subcategoria", "nombre": "Marca"},
     ]
     LOOKUP_LIMIT = 300
     # Tablas maestras viven en el esquema powerbi_bimbo; se consultan con nombre totalmente calificado
-    # usando la conexión (alias) seleccionada por el usuario.
+    # usando la conexiÃ³n (alias) seleccionada por el usuario.
     PRODUCTOS_TABLE = "powerbi_bimbo.productos_bimbo"
     AGENCIAS_TABLE = "powerbi_bimbo.agencias_bimbo"
     PROVEEDOR_BIMBO = "BIMBO"
@@ -2022,16 +2051,16 @@ class VentaCeroPage(BaseView):
         self._ceves_catalog_error: Optional[str] = None
 
     def _get_engine(self, database_name: str, user_id: int):
-        """Obtiene un engine SQLAlchemy usando el patrón estándar del proyecto.
+        """Obtiene un engine SQLAlchemy usando el patrÃ³n estÃ¡ndar del proyecto.
 
-        Importante: aquí database_name es el nombre de empresa/base seleccionada en sesión
-        (usada para resolver credenciales vía ConfigBasic). No es un alias de django.db.
+        Importante: aquÃ­ database_name es el nombre de empresa/base seleccionada en sesiÃ³n
+        (usada para resolver credenciales vÃ­a ConfigBasic). No es un alias de django.db.
         """
         config_basic = ConfigBasic(database_name, user_id)
         config = config_basic.config
         required_keys = ["nmUsrIn", "txPassIn", "hostServerIn", "portServerIn", "dbBi"]
         if not all(config.get(key) for key in required_keys):
-            raise ValueError("Configuración de conexión incompleta para catálogos Venta Cero")
+            raise ValueError("ConfiguraciÃ³n de conexiÃ³n incompleta para catÃ¡logos Venta Cero")
         return Conexion.ConexionMariadb3(
             str(config["nmUsrIn"]),
             str(config["txPassIn"]),
@@ -2041,7 +2070,7 @@ class VentaCeroPage(BaseView):
         )
 
     def _build_agent_catalog(self, database_name: str, user_id: int) -> List[Dict[str, str]]:
-        """Catálogo de agentes (CEVES) desde tabla maestras, sin texto libre."""
+        """CatÃ¡logo de agentes (CEVES) desde tabla maestras, sin texto libre."""
 
         self._ceves_catalog_error = None
         if not database_name:
@@ -2055,18 +2084,18 @@ class VentaCeroPage(BaseView):
             return self._fetch_distinct(database_name, user_id, sql)
         except Exception as exc:
             self._ceves_catalog_error = str(exc)
-            logger.exception("No se pudo cargar el catálogo de CEVES")
+            logger.exception("No se pudo cargar el catÃ¡logo de CEVES")
             return []
 
     # ------------------------------------------------------------------
-    # Lookups livianos por catálogo (evitar texto libre)
+    # Lookups livianos por catÃ¡logo (evitar texto libre)
     # ------------------------------------------------------------------
     def _fetch_distinct(self, database_name: str, user_id: int, sql: str, params=None):
         params = params or []
         engine = self._get_engine(database_name, user_id)
         query = text(f"{sql} LIMIT :limit")
         bind_params = {"limit": int(self.LOOKUP_LIMIT)}
-        # Soportar parámetros posicionales (%s) en SQL legado: los convertimos a :p0, :p1...
+        # Soportar parÃ¡metros posicionales (%s) en SQL legado: los convertimos a :p0, :p1...
         if params:
             for idx, value in enumerate(params):
                 bind_params[f"p{idx}"] = value
@@ -2091,10 +2120,10 @@ class VentaCeroPage(BaseView):
 
     def _lookup_categorias(self, database_name, user_id: int):
         sql = (
-            f"SELECT DISTINCT `Categoría` AS id, `Categoría` AS label "
+            f"SELECT DISTINCT `CategorÃ­a` AS id, `CategorÃ­a` AS label "
             f"FROM {self.PRODUCTOS_TABLE} "
-            "WHERE `Categoría` IS NOT NULL AND `Categoría` <> '' "
-            "ORDER BY `Categoría`"
+            "WHERE `CategorÃ­a` IS NOT NULL AND `CategorÃ­a` <> '' "
+            "ORDER BY `CategorÃ­a`"
         )
         return self._fetch_distinct(database_name, user_id, sql)
 
@@ -2139,14 +2168,14 @@ class VentaCeroPage(BaseView):
         if not filter_value:
             return False
         if filter_type == "proveedor":
-            # Proveedor es un catálogo cerrado con único valor. No validamos contra productos_bimbo
+            # Proveedor es un catÃ¡logo cerrado con Ãºnico valor. No validamos contra productos_bimbo
             # para evitar falsos negativos por espacios/case/acento en datos.
             return str(filter_value).strip().upper() == self.PROVEEDOR_BIMBO.upper()
         if filter_type == "categoria":
             return self._value_exists(
                 database_name,
                 user_id,
-                f"SELECT 1 FROM {self.PRODUCTOS_TABLE} WHERE `Categoría` = %s LIMIT 1",
+                f"SELECT 1 FROM {self.PRODUCTOS_TABLE} WHERE `CategorÃ­a` = %s LIMIT 1",
                 [filter_value],
             )
         if filter_type == "subcategoria":
@@ -2194,19 +2223,19 @@ class VentaCeroPage(BaseView):
         return super().get(request, *args, **kwargs)
 
     def post(self, request, *args, **kwargs):
-        # 1) POST del selector de base (sidebar): solo actualiza sesión.
-        # El JS global hace XHR POST a form_url con únicamente database_select.
+        # 1) POST del selector de base (sidebar): solo actualiza sesiÃ³n.
+        # El JS global hace XHR POST a form_url con Ãºnicamente database_select.
         if request.POST.get("database_select") and not request.POST.get("ceves_code"):
             database_name = request.POST.get("database_select")
 
-            # Validación básica del nombre (evitar caracteres raros)
+            # ValidaciÃ³n bÃ¡sica del nombre (evitar caracteres raros)
             try:
                 is_valid = self._validate_database_name(database_name)
             except Exception:
                 is_valid = True
 
             if not database_name or not is_valid:
-                return JsonResponse({"success": False, "error_message": "Nombre de base inválido"}, status=400)
+                return JsonResponse({"success": False, "error_message": "Nombre de base invÃ¡lido"}, status=400)
 
             request.session["database_name"] = database_name
             request.session.modified = True
@@ -2223,7 +2252,7 @@ class VentaCeroPage(BaseView):
                 pass
             return JsonResponse({"success": True})
 
-        # 2) POST de generación de reporte
+        # 2) POST de generaciÃ³n de reporte
         database_name = request.session.get("database_name") or request.POST.get("database_select")
         ceves_code = request.POST.get("ceves_code")
         fecha_ini = request.POST.get("IdtReporteIni")
@@ -2237,7 +2266,7 @@ class VentaCeroPage(BaseView):
         request.session["template_name"] = self.template_name
         procedures_catalog = self._get_procedures()
 
-        # Trazabilidad (docker logs): confirmar qué llega desde el frontend
+        # Trazabilidad (docker logs): confirmar quÃ© llega desde el frontend
         try:
             print(
                 "[venta_cero][POST] database_name=%s ceves_code=%s fechas=%s..%s procedure=%s filter_type=%s filter_value=%s category_value=%s batch_size=%s"
@@ -2282,7 +2311,7 @@ class VentaCeroPage(BaseView):
             )
         if filter_type != "proveedor" and not filter_value:
             return JsonResponse(
-                {"success": False, "error_message": "Seleccione un valor del catálogo."},
+                {"success": False, "error_message": "Seleccione un valor del catÃ¡logo."},
                 status=400,
             )
         if fecha_ini > fecha_fin:
@@ -2300,14 +2329,14 @@ class VentaCeroPage(BaseView):
             )
         if not required_params:
             return JsonResponse(
-                {"success": False, "error_message": "El procedimiento no define parámetros."},
+                {"success": False, "error_message": "El procedimiento no define parÃ¡metros."},
                 status=400,
             )
 
-        # Validar valor contra catálogo
+        # Validar valor contra catÃ¡logo
         if not self._validate_ceve(database_name, user_id, ceves_code):
             return JsonResponse(
-                {"success": False, "error_message": "El CEVES seleccionado no es válido."},
+                {"success": False, "error_message": "El CEVES seleccionado no es vÃ¡lido."},
                 status=400,
             )
         if not self._validate_filter_value(
@@ -2316,7 +2345,7 @@ class VentaCeroPage(BaseView):
             return JsonResponse(
                 {
                     "success": False,
-                    "error_message": "El valor seleccionado no es válido para el catálogo.",
+                    "error_message": "El valor seleccionado no es vÃ¡lido para el catÃ¡logo.",
                 },
                 status=400,
             )
@@ -2365,8 +2394,8 @@ class VentaCeroPage(BaseView):
                 # Mensaje amigable (sin filtrar detalles sensibles)
                 messages.error(
                     self.request,
-                    "No se pudo cargar el catálogo de CEVES desde powerbi_bimbo.agencias_bimbo. "
-                    "Verifique permisos SELECT del usuario de conexión sobre ese esquema.",
+                    "No se pudo cargar el catÃ¡logo de CEVES desde powerbi_bimbo.agencias_bimbo. "
+                    "Verifique permisos SELECT del usuario de conexiÃ³n sobre ese esquema.",
                 )
         else:
             context["ceves_catalog"] = []
@@ -2384,7 +2413,7 @@ class VentaCeroPage(BaseView):
 
 
 class VentaCeroLookupBase(LoginRequiredMixin, View):
-    """Lookups livianos para catálogos de Venta Cero."""
+    """Lookups livianos para catÃ¡logos de Venta Cero."""
 
     lookup_type = None
 
@@ -2526,7 +2555,7 @@ class ReporteadorDataAjaxView(ReporteGenericoPage):
 def clean_old_media_files(hours=4):
     """
     Elimina archivos en la carpeta media/ con extensiones permitidas
-    (.xlsx, .db, .zip, .csv, .txt) que tengan más de 'hours' horas de modificados.
+    (.xlsx, .db, .zip, .csv, .txt) que tengan mÃ¡s de 'hours' horas de modificados.
     """
     import os
     import time
@@ -2546,7 +2575,7 @@ def clean_old_media_files(hours=4):
                     file.unlink()
                     removed.append(str(file))
                     logger.info(
-                        f"[clean_old_media_files] Archivo eliminado: {file} (antigüedad: {age_hours:.2f}h)"
+                        f"[clean_old_media_files] Archivo eliminado: {file} (antigÃ¼edad: {age_hours:.2f}h)"
                     )
                 except Exception as e:
                     logger.error(
@@ -2584,3 +2613,133 @@ class CleanMediaView(View):
         except Exception as e:
             logger.error(f"[CleanMediaView] Error: {e}")
             return JsonResponse({"success": False, "error_message": str(e)}, status=500)
+
+
+
+
+class RuteroPage(BaseView):
+    """Página SSR para el Informe de Rutero (Maestro Rutas + Clientes)."""
+
+    template_name = "home/rutero.html"
+    login_url = reverse_lazy("users_app:user-login")
+    form_url = "home_app:rutero"
+    required_permission = "permisos.reportes"
+
+    AGENCIAS_TABLE = "powerbi_bimbo.agencias_bimbo"
+    LOOKUP_LIMIT = 300
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._ceves_catalog_error = None
+
+    def _get_engine(self, database_name: str, user_id: int):
+        config_basic = ConfigBasic(database_name, user_id)
+        config = config_basic.config
+        required_keys = ["nmUsrIn", "txPassIn", "hostServerIn", "portServerIn", "dbBi"]
+        if not all(config.get(key) for key in required_keys):
+            raise ValueError("Configuración de conexión incompleta para Rutero")
+        return Conexion.ConexionMariadb3(
+            str(config["nmUsrIn"]),
+            str(config["txPassIn"]),
+            str(config["hostServerIn"]),
+            int(config["portServerIn"]),
+            str(config["dbBi"]),
+        )
+
+    def _fetch_distinct(self, database_name: str, user_id: int, sql: str, params=None):
+        params = params or []
+        engine = self._get_engine(database_name, user_id)
+        query = text(f"{sql} LIMIT :limit")
+        bind_params = {"limit": int(self.LOOKUP_LIMIT)}
+        if params:
+            for idx, value in enumerate(params):
+                bind_params[f"p{idx}"] = value
+                sql = sql.replace("%s", f":p{idx}", 1)
+            query = text(f"{sql} LIMIT :limit")
+
+        with engine.connect() as conn:
+            result = conn.execute(query, bind_params)
+            rows = result.fetchall()
+        results = []
+        for row in rows:
+            ident = row[0]
+            label = row[1] if len(row) > 1 else row[0]
+            label_str = str(label) if label and str(ident) in str(label) else (f"{ident} - {label}" if label not in (None, "", ident) else str(ident))
+            results.append({"id": str(ident), "label": label_str})
+        return results
+
+    def _build_agent_catalog(self, database_name: str, user_id: int):
+        self._ceves_catalog_error = None
+        if not database_name:
+            return []
+        sql = (
+            f"SELECT CEVE AS id, CONCAT_WS(' - ', CEVE, Nombre, nmOficinaV) AS label "
+            f"FROM {self.AGENCIAS_TABLE} "
+            "WHERE CEVE IS NOT NULL AND CEVE <> '' ORDER BY CEVE"
+        )
+        try:
+            return self._fetch_distinct(database_name, user_id, sql)
+        except Exception as exc:
+            self._ceves_catalog_error = str(exc)
+            logger.exception("No se pudo cargar el catálogo de CEVES")
+            return []
+
+    def get(self, request, *args, **kwargs):
+        database_name = request.session.get("database_name")
+        if not database_name:
+            messages.warning(request, "Debe seleccionar una empresa antes de continuar.")
+            return redirect("home_app:panel_cubo")
+        return super().get(request, *args, **kwargs)
+
+    def post(self, request, *args, **kwargs):
+        # Manejo de cambio de base de datos via POST (sidebar)
+        if request.POST.get("database_select") and not request.POST.get("ceves_code"):
+            database_name = request.POST.get("database_select")
+            try:
+                is_valid = self._validate_database_name(database_name)
+            except Exception:
+                is_valid = True
+            if not database_name or not is_valid:
+                return JsonResponse({"success": False, "error_message": "Nombre de base inválido"}, status=400)
+            request.session["database_name"] = database_name
+            request.session.modified = True
+            request.session.save()
+            StaticPage.name = database_name
+            try:
+                from scripts.config import ConfigBasic
+                ConfigBasic.clear_cache(database_name=database_name, user_id=request.user.id)
+            except Exception:
+                pass
+            return JsonResponse({"success": True})
+
+        database_name = request.session.get("database_name")
+        ceves_code = request.POST.get("ceves_code")
+        batch_size = int(request.POST.get("batch_size", BATCH_SIZE_DEFAULT))
+        user_id = request.user.id
+
+        if not all([database_name, ceves_code]):
+            return JsonResponse(
+                {"success": False, "error_message": "Seleccione una Agencia (CEVE)."},
+                status=400,
+            )
+
+        print(f"[rutero][POST] Launching task for CEVE={ceves_code}", flush=True)
+
+        job = rutero_task.delay(
+            database_name=database_name,
+            ceves_code=ceves_code,
+            user_id=user_id,
+            batch_size=batch_size,
+        )
+
+        return JsonResponse({"success": True, "job_id": job.id})
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        database_name = self.request.session.get("database_name")
+        user_id = self.request.user.id
+        context["ceves_catalog"] = self._build_agent_catalog(database_name, user_id)
+        context["ceves_catalog_error"] = self._ceves_catalog_error
+        context["form_url"] = self.form_url
+        context["database_name"] = database_name
+        return context

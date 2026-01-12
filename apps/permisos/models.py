@@ -37,6 +37,7 @@ class PermisosBarra(models.Model):
             ("admin", _("Ir al Administrador")),
             ("amovildesk", _("Puede ver Informe Amovildesk")),
             ("reportes", _("Puede ver Reportes")),
+            ("reportes_bimbo", _("Puede ver Reportes Bimbo (Venta Cero, Ruteros)")),
             ("cargue_infoventas", _("Cargar Archivo Infoventas")),
             ("cargue_maestras", _("Cargar Tablas Maestras")),
         )

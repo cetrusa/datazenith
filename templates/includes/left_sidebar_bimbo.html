@@ -6,40 +6,14 @@
 <div class="col-auto col-md-3 col-xl-2 px-sm-2 px-0 bg-dark">
   <div class="d-flex flex-column align-items-center align-items-sm-start px-3 pt-2 text-white min-vh-100">
     <!-- Logo y Nombre de Usuario -->
-    <a href="{% url 'home_app:panel_cubo' %}"
+    <a href="{% url 'home_app:panel_bimbo' %}"
       class="d-flex align-items-center pb-3 mb-md-0 me-md-auto text-white text-decoration-none">
       <img src="{% static 'images/Logo-Blanco.png' %}" alt="Logo" width="30" height="30" class="rounded-circle">
       <span class="fs-5 ms-2 d-none d-sm-inline">{{ user.get_full_name }}</span>
     </a>
     <!-- Enlaces de Navegación -->
     <ul class="nav nav-pills flex-column mb-sm-auto mb-0 align-items-center align-items-sm-start">
-      {% if perms.permisos.cubo %}
-      <li class="nav-item">
-        <a class="nav-link text-white align-middle px-0" href="{% url 'home_app:cubo'%}">
-          <i class="fas fa-cube me-2"></i> <span class="ms-1 d-none d-sm-inline">Cubo de Ventas</span>
-        </a>
-      </li>
-      {% endif %}
-      {% if perms.permisos.proveedor %}
-      <li class="nav-item">
-        <a class="nav-link text-white align-middle px-0" href="{% url 'home_app:proveedor'%}">
-          <i class="fas fa-chart-bar me-2"></i> <span class="ms-1 d-none d-sm-inline">Inf. Proveedor</span>
-        </a>
-      </li>
-      {% endif %}
-      {% if perms.permisos.amovildesk %}
-      <li class="nav-item">
-        <a class="nav-link text-white align-middle px-0" href="{% url 'home_app:amovildesk'%}">
-          <i class="fas fa-tablet-alt me-2"></i> <span class="ms-1 d-none d-sm-inline">Inf. Amovildesk</span>
-        </a>
-      </li>
-      {% endif %}
-      {% if perms.permisos.reportes %}
-      <li class="nav-item">
-        <a class="nav-link text-white align-middle px-0" href="{% url 'home_app:reporteador' %}">
-          <i class="fas fa-file-alt me-2"></i> <span class="ms-1 d-none d-sm-inline">Reporteador</span>
-        </a>
-      </li>
+      {% if perms.permisos.reportes_bimbo %}
       <li class="nav-item">
         <a class="nav-link text-white align-middle px-0" href="{% url 'home_app:venta_cero' %}">
           <i class="fas fa-user-slash me-2"></i> <span class="ms-1 d-none d-sm-inline">Venta Cero</span>
@@ -48,13 +22,6 @@
       <li class="nav-item">
         <a class="nav-link text-white align-middle px-0" href="{% url 'home_app:rutero' %}">
           <i class="fas fa-route me-2"></i> <span class="ms-1 d-none d-sm-inline">Rutero</span>
-        </a>
-      </li>
-      {% endif %}
-      {% if perms.permisos.matrix %}
-      <li class="nav-item">
-        <a class="nav-link text-white align-middle px-0" href="{% url 'home_app:matrix' %}">
-          <i class="fas fa-file-alt me-2"></i> <span class="ms-1 d-none d-sm-inline">Matrix de Ventas</span>
         </a>
       </li>
       {% endif %}
@@ -79,8 +46,4 @@
     </div>
   </div>
 </div>
-
-
-
-
 <!-- {% endif %} -->

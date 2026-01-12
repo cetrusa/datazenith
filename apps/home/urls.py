@@ -13,6 +13,11 @@ urlpatterns = [
         name="panel_cubo",
     ),
     path(
+        "panel_bimbo/",
+        views.HomePanelBimboPage.as_view(),
+        name="panel_bimbo",
+    ),
+    path(
         "panel_bi/",
         views.HomePanelBiPage.as_view(),
         name="panel_bi",
@@ -110,6 +115,11 @@ urlpatterns = [
         "venta-cero/lookups/productos/",
         views.VentaCeroProductoLookup.as_view(),
         name="venta_cero_lookup_productos",
+    ),
+    path(
+        "rutero/",
+        views.RuteroPage.as_view(),
+        name="rutero",
     ),
     path(
         "clean_media/",
