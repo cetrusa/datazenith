@@ -37,6 +37,7 @@ from .tasks import (
     extrae_bi_task,
     venta_cero_task,
     rutero_task,
+    preventa_task,
 )
 from apps.users.models import UserPermission
 from django.views.decorators.cache import cache_page
@@ -275,8 +276,18 @@ class HomePanelBimboPage(HomePanelCuboPage):
     """
 
     template_name = "home/panel_bimbo.html"
-    # Se recomienda usar LoginRequiredMixin y permission_required en dispatch o similar, 
-    # pero aquí confiamos en que BaseView o los decoradores manejen permisos si se configuran.
+
+    @method_decorator(permission_required("permisos.reportes_bimbo", raise_exception=True))
+    def dispatch(self, request, *args, **kwargs):
+        return super().dispatch(request, *args, **kwargs)
+
+    def get(self, request, *args, **kwargs):
+        """
+        Sobrescribe el mÃ©todo get para evitar conflicto con la cachÃ© de PanelCuboPage.
+        Al llamar a super(HomePanelCuboPage, self), saltamos la implementaciÃ³n de 
+        cachÃ© de HomePanelCuboPage y usamos la de BaseView/TemplateView.
+        """
+        return super(HomePanelCuboPage, self).get(request, *args, **kwargs)
     
     def post(self, request, *args, **kwargs):
         """
@@ -1949,6 +1960,51 @@ class InterfacePage(ReporteGenericoPage):
         return super().dispatch(request, *args, **kwargs)
 
 
+class PreventaPage(RuteroPage):
+    """Página para el informe de Preventa (Fact Preventa Diaria)."""
+    template_name = "home/preventa.html"
+    form_url = "home_app:preventa"
+    
+    def post(self, request, *args, **kwargs):
+        # Manejo de cambio de base (heredado pero checkeamos si es el POST de reporte)
+        if request.POST.get("database_select") and not request.POST.get("ceves_code"):
+            return super().post(request, *args, **kwargs)
+
+        database_name = request.session.get("database_name")
+        ceves_code = request.POST.get("ceves_code")
+        IdtReporteIni = request.POST.get("IdtReporteIni")
+        IdtReporteFin = request.POST.get("IdtReporteFin")
+        batch_size = int(request.POST.get("batch_size", BATCH_SIZE_DEFAULT))
+        user_id = request.user.id
+
+        if not all([database_name, ceves_code, IdtReporteIni, IdtReporteFin]):
+            return JsonResponse(
+                {"success": False, "error_message": "Seleccione Agencia y rango de fechas."},
+                status=400,
+            )
+
+        job = preventa_task.delay(
+            database_name=database_name,
+            ceves_code=ceves_code,
+            IdtReporteIni=IdtReporteIni,
+            IdtReporteFin=IdtReporteFin,
+            user_id=user_id,
+            batch_size=batch_size,
+        )
+
+        return JsonResponse({"success": True, "job_id": job.id})
+
+class PlanosBimboPage(ReporteGenericoPage):
+    template_name = "home/planos_bimbo.html"
+    permiso = "permisos.reportes_bimbo"
+    id_reporte = 0
+    form_url = "home_app:planos_bimbo"
+    task_func = interface_task
+
+    @method_decorator(permission_required("permisos.reportes_bimbo", raise_exception=True))
+    def dispatch(self, request, *args, **kwargs):
+        return super().dispatch(request, *args, **kwargs)
+
 class InterfaceSiigoPage(ReporteGenericoPage):
     template_name = "home/interface_siigo.html"
     permiso = "permisos.interface_siigo"
@@ -2017,7 +2073,7 @@ class VentaCeroPage(BaseView):
     template_name = "home/venta_cero.html"
     login_url = reverse_lazy("users_app:user-login")
     form_url = "home_app:venta_cero"
-    required_permission = "permisos.reportes"
+    required_permission = "permisos.reportes_bimbo"
 
     # CatÃ¡logo de procedimientos permitidos (se puede sobreescribir vÃ­a settings)
     default_procedures = [
@@ -2194,7 +2250,7 @@ class VentaCeroPage(BaseView):
             )
         return False
 
-    @method_decorator(permission_required("permisos.reportes", raise_exception=True))
+    @method_decorator(permission_required("permisos.reportes_bimbo", raise_exception=True))
     def dispatch(self, request, *args, **kwargs):
         return super().dispatch(request, *args, **kwargs)
 
@@ -2623,7 +2679,11 @@ class RuteroPage(BaseView):
     template_name = "home/rutero.html"
     login_url = reverse_lazy("users_app:user-login")
     form_url = "home_app:rutero"
-    required_permission = "permisos.reportes"
+    required_permission = "permisos.reportes_bimbo"
+
+    @method_decorator(permission_required("permisos.reportes_bimbo", raise_exception=True))
+    def dispatch(self, request, *args, **kwargs):
+        return super().dispatch(request, *args, **kwargs)
 
     AGENCIAS_TABLE = "powerbi_bimbo.agencias_bimbo"
     LOOKUP_LIMIT = 300

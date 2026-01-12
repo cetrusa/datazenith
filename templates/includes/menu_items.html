@@ -25,6 +25,12 @@
           Actualización Datos</span></a>
     </li>
     {% endif %}
+    {% if perms.permisos.reportes_bimbo %}
+    <li class="nav-item">
+      <a class="nav-link text-white" href="{% url 'home_app:panel_bimbo'%}"><i class="fas fa-chart-line"></i><span>
+          Panel Bimbo</span></a>
+    </li>
+    {% endif %}
     {% if perms.permisos.admin %}
     <li class="nav-item">
       <a class="nav-link text-white" href="{% url 'admin:index' %}"><i class="fas fa-sliders-h"></i><span>

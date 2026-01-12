@@ -122,6 +122,16 @@ urlpatterns = [
         name="rutero",
     ),
     path(
+        "preventa/",
+        views.PreventaPage.as_view(),
+        name="preventa",
+    ),
+    path(
+        "planos-bimbo/",
+        views.PlanosBimboPage.as_view(),
+        name="planos_bimbo",
+    ),
+    path(
         "clean_media/",
         CleanMediaView.as_view(),
         name="clean_media",

@@ -42,6 +42,12 @@
                                 class="fas fa-sync-alt me-2"></i><span>Actualización de Información</span></a>
                     </li>
                     {% endif %}
+                    {% if perms.permisos.reportes_bimbo %}
+                    <li class="nav-item">
+                        <a class="nav-link text-white" href="{% url 'home_app:panel_bimbo' %}"><i
+                                class="fas fa-chart-line me-2"></i><span>Panel Bimbo</span></a>
+                    </li>
+                    {% endif %}
                     {% if perms.permisos.admin %}
                     <li class="nav-item">
                         <a href="{% url 'admin:index' %}" class="nav-link text-white align-middle px-0">

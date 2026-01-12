@@ -1,0 +1,275 @@
+{% extends 'black.html' %}
+{% load static %}
+
+{% block title %}
+Informe de Preventa
+{% endblock title %}
+{% block barra_lateral %}
+{% include 'includes/left_sidebar_bimbo.html' %}
+{% endblock barra_lateral %}
+{% block window %}
+<!-- Common JS (AJAX helpers etc) si hiciera falta, aunque aquí hacemos todo in-line -->
+<!-- {% include 'includes/common_js.html' %} -->
+
+<!-- Date picker -->
+{% include 'includes/datepicker_range.html' %}
+
+<br>
+<br>
+<div class="container">
+    {% if messages %}
+    <div class="alert alert-warning" role="alert">
+        {% for message in messages %}
+        <p>{{ message }}</p>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    <div class="card shadow-lg" style="width: 35rem; margin: auto;">
+        <div class="card-header bg-primary text-white text-center">
+            <h2 class="mb-0">Informe de Preventa</h2>
+        </div>
+        <div class="card-body">
+            <form id="FormPreventa" action="{% url form_url %}" method="post">
+                {% csrf_token %}
+                
+                <!-- Selección de Agencia (CEVE) -->
+                {% if ceves_catalog_error %}
+                <div class="alert alert-danger">
+                    Error cargando catálogo de Agencias: {{ ceves_catalog_error }}
+                </div>
+                {% endif %}
+                
+                <div class="form-group mb-3">
+                    <label for="ceves_code" class="form-label fw-bold">Agencia (CEVE):</label>
+                    <select class="form-select" id="ceves_code" name="ceves_code" required>
+                        <option value="" selected disabled>-- Seleccione una Agencia --</option>
+                        {% for item in ceves_catalog %}
+                        <option value="{{ item.id }}">{{ item.label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <!-- Selección de Fechas -->
+                <div class="form-group mb-3">
+                    <label class="form-label fw-bold">Rango de Fechas:</label>
+                    <div id="reportrange" style="background: #fff; cursor: pointer; padding: 5px 10px; border: 1px solid #ccc; width: 100%">
+                        <i class="fa fa-calendar"></i>&nbsp;
+                        <span></span> <i class="fa fa-caret-down"></i>
+                    </div>
+                </div>
+
+                <!-- Campos ocultos sincronizados con el datepicker -->
+                <input type="hidden" name="IdtReporteIni" id="IdtReporteIni">
+                <input type="hidden" name="IdtReporteFin" id="IdtReporteFin">
+
+                <!-- Batch Size (Opcional, oculto o visible) -->
+                <input type="hidden" name="batch_size" value="20000">
+
+                <!-- Botón de acción -->
+                <div class="d-grid gap-2 mt-4">
+                    <button id="submitBtnPreventa" type="submit" class="btn btn-primary btn-lg" data-submitted="false">
+                        <i class="fas fa-file-excel me-2"></i> Generar Reporte
+                    </button>
+                </div>
+            </form>
+            
+            <br>
+            <!-- Download Component -->
+            {% include 'includes/download_file.html' %}
+        </div>
+    </div>
+</div>
+
+<!-- Modal de Procesamiento -->
+<div class="modal" id="processingModal" tabindex="-1" role="dialog" aria-labelledby="processingModalLabel"
+    aria-hidden="true" style="display: none; background-color: rgba(0, 0, 0, 0.5);">
+    <div class="modal-dialog modal-dialog-centered" role="document">
+        <div class="modal-content bg-dark text-white">
+            <div class="modal-header border-bottom-0">
+                <h5 class="modal-title" id="processingModalLabel">
+                    <i class="fas fa-cog fa-spin me-2"></i> Procesando Preventa...
+                </h5>
+            </div>
+            <div class="modal-body">
+                <div id="progress-stage" class="mb-3 font-weight-bold">Iniciando...</div>
+                <div class="progress" style="height: 25px;">
+                    <div id="progressBar" class="progress-bar progress-bar-striped progress-bar-animated bg-success"
+                        role="progressbar" style="width: 0%;" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">0%
+                    </div>
+                </div>
+                <div id="detailedStatus" class="small text-muted mt-3 p-2 border-top border-secondary"></div>
+                <p id="time-info" class="mt-2 small text-muted text-end">Tiempo: 0s</p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock window %}
+
+{% block script %}
+<script>
+    // Inicialización
+    document.getElementById("processingModal").style.display = "none";
+    document.getElementById("download_file").className = 'd-none'; // Ocultar link descarga
+    
+    var csrf_token = document.getElementsByName("csrfmiddlewaretoken")[0].value;
+    var startTime = 0;
+    var progressInterval = null;
+    var progressBar = document.getElementById("progressBar");
+    
+    // --- Lógica del Botón ---
+    document.getElementById("submitBtnPreventa").addEventListener("click", function(event) {
+        event.preventDefault();
+        
+        // Validaciones
+        if (this.getAttribute("data-submitted") === "true") {
+            alert("Ya hay una tarea en curso.");
+            return;
+        }
+        var database = window.sessionStorage.getItem("database_name");
+        var ceves_code = document.getElementById("ceves_code").value;
+        var IdtReporteIni = document.getElementById("IdtReporteIni").value;
+        var IdtReporteFin = document.getElementById("IdtReporteFin").value;
+        
+        if (!database) {
+            alert("Seleccione una empresa primero (Barra lateral o superior).");
+            return;
+        }
+        if (!ceves_code) {
+            alert("Por favor seleccione una Agencia.");
+            return;
+        }
+        if (!IdtReporteIni || !IdtReporteFin) {
+            alert("Por favor seleccione un rango de fechas.");
+            return;
+        }
+
+        console.log("Iniciando Preventa Task...");
+        startMonitoringUI();
+
+        // Enviar Petición AJAX
+        var xhr = new XMLHttpRequest();
+        xhr.responseType = "json"; // Esperamos JSON
+        xhr.open("POST", "{% url form_url %}", true);
+        xhr.setRequestHeader("X-CSRFToken", csrf_token);
+        xhr.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
+        
+        xhr.onload = function() {
+            if (xhr.status === 200 && xhr.response.success) {
+                var taskId = xhr.response.job_id;
+                console.log("Task ID recibido:", taskId);
+                window.sessionStorage.setItem("preventa_task_id", taskId);
+                updateProgressBar(5, "Encolado en servidor...");
+                setTimeout(checkTaskStatus, 1000); // Polling starts
+            } else {
+                var msg = (xhr.response && xhr.response.error_message) ? xhr.response.error_message : "Error desconocido";
+                stopMonitoring("Error al iniciar: " + msg, 'bg-danger');
+            }
+        };
+        xhr.onerror = function() {
+            stopMonitoring("Error de red al intentar conectar.", 'bg-danger');
+        };
+
+        var formData = "database_select=" + encodeURIComponent(database) +
+                       "&ceves_code=" + encodeURIComponent(ceves_code) + 
+                       "&IdtReporteIni=" + encodeURIComponent(IdtReporteIni) + 
+                       "&IdtReporteFin=" + encodeURIComponent(IdtReporteFin);
+        xhr.send(formData);
+    });
+
+    // --- Polling de Estado ---
+    function checkTaskStatus() {
+        var taskId = window.sessionStorage.getItem("preventa_task_id");
+        if (!taskId) return;
+
+        var xhr = new XMLHttpRequest();
+        xhr.responseType = "json";
+        xhr.open("POST", "{% url 'home_app:check_task_status' %}", true);
+        xhr.setRequestHeader("X-CSRFToken", csrf_token);
+        xhr.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
+        
+        xhr.onload = function() {
+            if (xhr.status === 200) {
+                var response = xhr.response;
+                handleTaskStatus(response);
+            } else {
+                console.warn("Error chequeando status:", xhr.status);
+            }
+        };
+        xhr.send("task_id=" + encodeURIComponent(taskId));
+    }
+
+    function handleTaskStatus(response) {
+        if (!response || !response.status) return;
+
+        var status = response.status.toLowerCase();
+        var progress = response.progress || 0;
+        var stage = (response.meta && response.meta.stage) ? response.meta.stage : "Procesando...";
+        
+        updateProgressBar(progress, stage);
+        
+        // Info detallada
+        if(response.meta && response.meta.records_processed) {
+             document.getElementById("detailedStatus").innerText = "Registros: " + response.meta.records_processed.toLocaleString();
+        }
+
+        if (status === "finished" || status === "completed" || status === "success") {
+            updateProgressBar(100, "Completado!");
+            document.getElementById("download_file").className = 'd-flex'; // Mostrar botón descarga
+            
+            // Auto click en descarga simulado o dejar al usuario
+            stopMonitoring("Reporte Generado Exitosamente.", 'bg-success');
+            
+        } else if (status === "failed") {
+            var err = (response.result && response.result.error) ? response.result.error : "Error interno";
+            stopMonitoring("Falló el reporte: " + err, 'bg-danger');
+        } else {
+            // Continuar Polling
+            setTimeout(checkTaskStatus, 2000);
+        }
+    }
+
+    // --- UI Helpers ---
+    function startMonitoringUI() {
+        document.getElementById("submitBtnPreventa").setAttribute("data-submitted", "true");
+        document.getElementById("submitBtnPreventa").disabled = true;
+        document.getElementById("processingModal").style.display = "flex";
+        document.getElementById("download_file").className = 'd-none'; 
+        
+        startTime = new Date().getTime();
+        updateProgressBar(0, "Iniciando...");
+        
+        if (progressInterval) clearInterval(progressInterval);
+        progressInterval = setInterval(updateTime, 1000);
+    }
+
+    function stopMonitoring(msg, colorClass) {
+        if (progressInterval) clearInterval(progressInterval);
+        alert(msg);
+        
+        document.getElementById("processingModal").style.display = "none";
+        document.getElementById("submitBtnPreventa").setAttribute("data-submitted", "false");
+        document.getElementById("submitBtnPreventa").disabled = false;
+        window.sessionStorage.removeItem("preventa_task_id");
+    }
+
+    function updateProgressBar(val, text) {
+        progressBar.style.width = val + "%";
+        progressBar.textContent = val + "%";
+        document.getElementById("progress-stage").textContent = text;
+    }
+
+    function updateTime() {
+        var now = new Date().getTime();
+        var diff = Math.floor((now - startTime) / 1000);
+        document.getElementById("time-info").textContent = "Tiempo: " + diff + "s";
+    }
+
+    // Delete file logic (copiada del standard)
+    document.getElementById("download_file").addEventListener("click", function () {
+        setTimeout(function() {
+             // Request delete file...
+        }, 3000);
+    });
+</script>
+{% endblock script %}

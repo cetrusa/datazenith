@@ -732,6 +732,48 @@ def rutero_task(database_name, ceves_code, user_id, batch_size=DEFAULT_BATCH_SIZ
 
 @job("default", timeout=DEFAULT_TIMEOUT, result_ttl=3600)
 @task_handler
+def preventa_task(database_name, ceves_code, IdtReporteIni, IdtReporteFin, user_id, batch_size=DEFAULT_BATCH_SIZE):
+    """Tarea RQ para generar Preventa."""
+    from scripts.extrae_bi.preventa import PreventaReport
+    
+    try:
+        connection.close()
+    except Exception:
+        pass
+
+    job = get_current_job()
+    job_id = job.id if job else None
+
+    def rq_update_progress(stage, progress_percent, current_rec=None, total_rec=None, *_args):
+        meta = {"stage": stage}
+        if current_rec is not None:
+            meta["records_processed"] = current_rec
+        if total_rec is not None:
+            meta["total_records_estimate"] = total_rec
+        update_job_progress(job_id, int(progress_percent), status="processing", meta=meta)
+
+    report = PreventaReport(
+        database_name,
+        ceves_code,
+        IdtReporteIni,
+        IdtReporteFin,
+        user_id,
+        progress_callback=rq_update_progress,
+        chunk_size=batch_size,
+    )
+
+    result_data = report.execute()
+    
+    try:
+        connection.close()
+    except Exception:
+        pass
+
+    return result_data
+
+
+@job("default", timeout=DEFAULT_TIMEOUT, result_ttl=3600)
+@task_handler
 def plano_task(
     database_name,
     IdtReporteIni,
