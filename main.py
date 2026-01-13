@@ -261,8 +261,8 @@ class Inicio:
                 IdtReporteFin=self.IdtReporteFin,
             )
             time.sleep(5)
-            # actualizabi.run_datasetrefresh_solo_inicio()
-            actualizabi.run_datasetrefresh()
+            actualizabi.run_datasetrefresh_solo_inicio()
+            # actualizabi.run_datasetrefresh()
             logging.info("Proceso de actualización de Power BI completado")
         except Exception as e:
             error_message = "Error en el proceso de actualización de Power BI: " + str(e)
@@ -283,9 +283,9 @@ class Inicio:
         try:
             print(self.name)
             self.fetch_date_config(self.nmDt)
-            # self.extrae_bi()  # Llama al primer proceso
-            # self.actualiza_bi()  # Llama al segundo proceso
-            self.refresh_excel()  # Llama al tercer proceso
+            self.extrae_bi()  # Llama al primer proceso
+            self.actualiza_bi()  # Llama al segundo proceso
+            # self.refresh_excel()  # Llama al tercer proceso
             logging.info("Fin del proceso")
         except Exception as e:
             error_message = (

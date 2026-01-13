@@ -432,19 +432,25 @@ class ExtraeBiExtractor:
             VALUES ({placeholders})
             ON DUPLICATE KEY UPDATE {update_columns};
         """
-        with self.engine_mysql_bi.begin() as connection:
-            if total_rows > chunk_threshold:
-                logging.info(
-                    f"Más de {chunk_threshold} registros, usando inserciones en chunks de {chunk_size}."
-                )
-                for start_idx in range(0, total_rows, chunk_size):
-                    chunk = data_list[start_idx : start_idx + chunk_size]
-                    connection.execute(text(insert_query), chunk)
-                    logging.debug(
-                        f"Insertado chunk desde {start_idx} hasta {start_idx + len(chunk)} filas."
+        try:
+            with self.engine_mysql_bi.begin() as connection:
+                if total_rows > chunk_threshold:
+                    logging.info(
+                        f"Más de {chunk_threshold} registros, usando inserciones en chunks de {chunk_size}."
                     )
-            else:
-                connection.execute(text(insert_query), data_list)
+                    for start_idx in range(0, total_rows, chunk_size):
+                        chunk = data_list[start_idx : start_idx + chunk_size]
+                        connection.execute(text(insert_query), chunk)
+                        logging.debug(
+                            f"Insertado chunk desde {start_idx} hasta {start_idx + len(chunk)} filas."
+                        )
+                else:
+                    connection.execute(text(insert_query), data_list)
+        except Exception as e:
+            logging.warning(
+                f"Fallo INSERT ... ON DUPLICATE KEY en {self.txTabla}, aplicando fallback INSERT IGNORE: {e}"
+            )
+            self.insertar_con_ignore(df, chunk_threshold, chunk_size)
 
     def insertar_con_ignore(self, df, chunk_threshold, chunk_size):
         data_list = df.to_dict(orient="records")
