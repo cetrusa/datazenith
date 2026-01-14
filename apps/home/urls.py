@@ -127,6 +127,11 @@ urlpatterns = [
         name="preventa",
     ),
     path(
+        "faltantes/",
+        views.FaltantesPage.as_view(),
+        name="faltantes",
+    ),
+    path(
         "planos-bimbo/",
         views.PlanosBimboPage.as_view(),
         name="planos_bimbo",

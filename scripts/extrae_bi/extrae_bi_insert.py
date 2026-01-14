@@ -1,10 +1,12 @@
 import logging
-from typing import Optional, Callable
+from typing import Optional, Callable, Any
 import pandas as pd
 from sqlalchemy import text
 import time
 import ast
 import numpy as np
+import datetime
+import re
 from scripts.conexion import Conexion as con
 from scripts.config import ConfigBasic
 
@@ -82,6 +84,385 @@ class ExtraeBiExtractor:
         self.nmProcedure_in = None
         self.txSql = None
         self.txSqlExtrae = None
+        self._table_columns_cache = {}
+
+    def _get_table_columns(self, table_name: str) -> dict:
+        """Obtiene metadata de columnas desde information_schema.columns (cacheado).
+
+        Retorna dict: {col_name: {data_type, is_nullable(bool), column_default}}
+        """
+        schema = str(self.config.get("dbBi"))
+        cache_key = (schema, table_name)
+        cached = self._table_columns_cache.get(cache_key)
+        if cached is not None:
+            return cached
+
+        query = text(
+            """
+            SELECT COLUMN_NAME, DATA_TYPE, IS_NULLABLE, COLUMN_DEFAULT
+            FROM INFORMATION_SCHEMA.COLUMNS
+            WHERE TABLE_SCHEMA = :schema AND TABLE_NAME = :table
+            """
+        )
+        try:
+            with self.engine_mysql_bi.connect() as connection:
+                rows = connection.execute(query, {"schema": schema, "table": table_name}).fetchall()
+        except Exception as e:
+            logging.error(f"Error consultando INFORMATION_SCHEMA.COLUMNS para {schema}.{table_name}: {e}")
+            self._table_columns_cache[cache_key] = {}
+            return {}
+
+        cols = {}
+        for col_name, data_type, is_nullable, col_default in rows:
+            cols[str(col_name)] = {
+                "data_type": (str(data_type).lower() if data_type is not None else ""),
+                "is_nullable": (str(is_nullable).upper() == "YES"),
+                "column_default": col_default,
+            }
+
+        self._table_columns_cache[cache_key] = cols
+        return cols
+
+    @staticmethod
+    def _quote_ident(name: str) -> str:
+        # Backticks para MariaDB/MySQL. Escapa backticks dobles.
+        safe = name.replace("`", "``")
+        return f"`{safe}`"
+
+    @staticmethod
+    def _timedelta_to_time_str(value: Any) -> str:
+        """Convierte pandas/py timedelta a string compatible con MariaDB TIME."""
+        # pd.Timedelta / numpy timedelta64 / datetime.timedelta
+        if isinstance(value, pd.Timedelta):
+            total_seconds = int(value.total_seconds())
+        elif isinstance(value, np.timedelta64):
+            # Evita dependencias de overloads de pandas: convierte a segundos vía numpy
+            total_seconds = int(value / np.timedelta64(1, "s"))
+        elif isinstance(value, datetime.timedelta):
+            total_seconds = int(value.total_seconds())
+        else:
+            # fallback: mejor devolver string
+            return str(value)
+
+        sign = "-" if total_seconds < 0 else ""
+        total_seconds = abs(total_seconds)
+        hours = total_seconds // 3600
+        minutes = (total_seconds % 3600) // 60
+        seconds = total_seconds % 60
+        return f"{sign}{hours:02d}:{minutes:02d}:{seconds:02d}"
+
+    @staticmethod
+    def _default_for_type(data_type: str) -> Any:
+        dt = (data_type or "").lower()
+        if dt in {"time"}:
+            return "00:00:00"
+        if dt in {"datetime", "timestamp"}:
+            return "1970-01-01 00:00:00"
+        if dt in {"date"}:
+            return "1970-01-01"
+        if dt in {"int", "integer", "bigint", "smallint", "tinyint", "mediumint", "decimal", "numeric", "float", "double", "real"}:
+            return 0
+        if dt in {"bit", "bool", "boolean"}:
+            return 0
+        # varchar/text/enum/otros: por defecto string vacío
+        return ""
+
+    def _normalize_and_filter_records_for_table(self, table_name: str, records: list[dict]) -> tuple[list[dict], list[str]]:
+        """Filtra columnas inexistentes y normaliza valores incompatibles/NULL antes del INSERT."""
+        table_cols = self._get_table_columns(table_name)
+        if not table_cols:
+            # Sin metadata: no filtramos para no romper, pero sí intentamos normalizar Timedelta.
+            normalized = []
+            for rec in records:
+                out = {}
+                for k, v in rec.items():
+                    if isinstance(v, (pd.Timedelta, np.timedelta64, datetime.timedelta)):
+                        out[k] = self._timedelta_to_time_str(v)
+                        logging.warning(f"[WARN] Conversión Timedelta->TIME aplicada: {k}")
+                    else:
+                        out[k] = v
+                normalized.append(out)
+            return (normalized, list(records[0].keys())) if records else ([], [])
+
+        valid_columns = [c for c in records[0].keys() if c in table_cols]
+        for c in records[0].keys():
+            if c not in table_cols:
+                logging.warning(f"[WARN] Columna omitida del INSERT: {c} (NO EXISTE EN TABLA)")
+
+        # Requisito D: si una columna es NOT NULL y llega NULL (en TODO el payload), se omite del INSERT.
+        # Si viene mezclada (algunas filas NULL), se normaliza (requisito C) para no perder datos.
+        to_drop: list[str] = []
+        for col in list(valid_columns):
+            meta = table_cols[col]
+            if meta.get("is_nullable", True):
+                continue
+            all_null = True
+            for rec in records:
+                v = rec.get(col)
+                if v is None:
+                    continue
+                if isinstance(v, float) and np.isnan(v):
+                    continue
+                all_null = False
+                break
+            if all_null:
+                to_drop.append(col)
+
+        if to_drop:
+            for col in to_drop:
+                logging.warning(
+                    f"[WARN] Columna omitida del INSERT: {col} (NULL / NOT NULL)"
+                )
+                if col in valid_columns:
+                    valid_columns.remove(col)
+
+        normalized_records: list[dict] = []
+        for rec in records:
+            out: dict[str, Any] = {}
+            for col in valid_columns:
+                meta = table_cols[col]
+                v = rec.get(col)
+
+                if isinstance(v, (pd.Timedelta, np.timedelta64, datetime.timedelta)):
+                    v = self._timedelta_to_time_str(v)
+                    logging.warning(f"[WARN] Conversión Timedelta->TIME aplicada: {col}")
+
+                if v is None and not meta["is_nullable"]:
+                    default_v = self._default_for_type(meta.get("data_type", ""))
+                    v = default_v
+                    logging.warning(
+                        f"[WARN] Valor NULL normalizado por NOT NULL: {col} -> {default_v}"
+                    )
+
+                out[col] = v
+
+            normalized_records.append(out)
+
+        return normalized_records, valid_columns
+
+    @staticmethod
+    def _strip_sql_comments(sql: str) -> str:
+        # Remueve comentarios -- ... y /* ... */ para facilitar parsing liviano.
+        sql_no_block = re.sub(r"/\*.*?\*/", " ", sql, flags=re.S)
+        sql_no_line = re.sub(r"--.*?$", " ", sql_no_block, flags=re.M)
+        return sql_no_line
+
+    @staticmethod
+    def _find_keyword_at_depth(sql: str, keyword: str) -> int:
+        """Encuentra la primera ocurrencia de keyword (case-insensitive) a profundidad de paréntesis 0."""
+        kw = keyword.upper()
+        s = sql
+        depth = 0
+        i = 0
+        while i < len(s):
+            ch = s[i]
+            if ch == "'":
+                # Salta strings simples
+                i += 1
+                while i < len(s):
+                    if s[i] == "'" and s[i - 1] != "\\":
+                        i += 1
+                        break
+                    i += 1
+                continue
+            if ch == "\"":
+                # Salta strings dobles
+                i += 1
+                while i < len(s):
+                    if s[i] == "\"" and s[i - 1] != "\\":
+                        i += 1
+                        break
+                    i += 1
+                continue
+            if ch == "`":
+                # Salta identificadores entre backticks
+                i += 1
+                while i < len(s):
+                    if s[i] == "`":
+                        i += 1
+                        break
+                    i += 1
+                continue
+            if ch == "(":
+                depth += 1
+            elif ch == ")":
+                depth = max(0, depth - 1)
+
+            if depth == 0:
+                # match keyword como palabra completa
+                if s[i : i + len(kw)].upper() == kw:
+                    before_ok = (i == 0) or not (s[i - 1].isalnum() or s[i - 1] == "_")
+                    after_ok = (i + len(kw) >= len(s)) or not (
+                        s[i + len(kw)].isalnum() or s[i + len(kw)] == "_"
+                    )
+                    if before_ok and after_ok:
+                        return i
+            i += 1
+        return -1
+
+    @staticmethod
+    def _split_top_level_commas(segment: str) -> list[str]:
+        parts = []
+        depth = 0
+        current = []
+        i = 0
+        while i < len(segment):
+            ch = segment[i]
+            if ch == "'":
+                current.append(ch)
+                i += 1
+                while i < len(segment):
+                    current.append(segment[i])
+                    if segment[i] == "'" and segment[i - 1] != "\\":
+                        i += 1
+                        break
+                    i += 1
+                continue
+            if ch == "`":
+                current.append(ch)
+                i += 1
+                while i < len(segment):
+                    current.append(segment[i])
+                    if segment[i] == "`":
+                        i += 1
+                        break
+                    i += 1
+                continue
+            if ch == "(":
+                depth += 1
+            elif ch == ")":
+                depth = max(0, depth - 1)
+            if ch == "," and depth == 0:
+                parts.append("".join(current).strip())
+                current = []
+                i += 1
+                continue
+            current.append(ch)
+            i += 1
+        tail = "".join(current).strip()
+        if tail:
+            parts.append(tail)
+        return parts
+
+    @staticmethod
+    def _extract_select_alias(expr: str) -> Optional[str]:
+        e = expr.strip()
+        # expr AS alias
+        m = re.search(r"\s+AS\s+(`[^`]+`|[A-Za-z_][A-Za-z0-9_]*)\s*$", e, flags=re.I)
+        if m:
+            alias = m.group(1)
+            return alias.strip("`")
+        # expr alias
+        m = re.search(r"\s+(`[^`]+`|[A-Za-z_][A-Za-z0-9_]*)\s*$", e)
+        if m:
+            token = m.group(1)
+            # Si la expresión termina en ')' y no hay espacio, esto puede ser función sin alias
+            if token.startswith("`") and token.endswith("`"):
+                return token.strip("`")
+            if token.isidentifier():
+                # ojo: podría ser palabra reservada pero igual sirve como alias
+                return token
+        # fallback: último identificador tras punto
+        m = re.search(r"([A-Za-z_][A-Za-z0-9_]*)\s*$", e)
+        return m.group(1) if m else None
+
+    def _rewrite_select_on_duplicate_to_insert(self, sql: str, table_name: str) -> str:
+        """Convierte `SELECT ... ON DUPLICATE KEY UPDATE ...` a `INSERT INTO table (...) SELECT ... ON DUPLICATE ...`.
+
+        Solo aplica si la consulta inicia con SELECT y contiene ON DUPLICATE KEY UPDATE.
+        """
+        raw = sql.strip().lstrip("(")
+        raw_nocomments = self._strip_sql_comments(raw)
+        if not raw_nocomments.strip().upper().startswith("SELECT"):
+            return sql
+        if "ON DUPLICATE KEY UPDATE" not in raw_nocomments.upper():
+            return sql
+
+        from_pos = self._find_keyword_at_depth(raw_nocomments, "FROM")
+        if from_pos < 0:
+            return sql
+        select_prefix = raw_nocomments[:from_pos]
+        from_and_beyond = raw_nocomments[from_pos:]
+
+        # Quita el SELECT inicial
+        select_list_str = re.sub(r"^\s*SELECT\s+", "", select_prefix.strip(), flags=re.I)
+        select_items = self._split_top_level_commas(select_list_str)
+        if not select_items:
+            return sql
+
+        table_cols = self._get_table_columns(table_name)
+        if not table_cols:
+            # Sin metadata: no podemos filtrar, pero sí envolvemos con INSERT sin lista de columnas (más riesgoso).
+            logging.warning(
+                f"[WARN] No se pudo obtener metadata de {table_name}; reescribiendo a INSERT INTO sin lista de columnas."
+            )
+            return f"INSERT INTO {table_name} {raw_nocomments}"
+
+        kept_select_items: list[str] = []
+        kept_cols: list[str] = []
+
+        for item in select_items:
+            alias = self._extract_select_alias(item)
+            if not alias:
+                continue
+            if alias not in table_cols:
+                logging.warning(
+                    f"[WARN] Columna omitida del INSERT: {alias} (NO EXISTE EN TABLA)"
+                )
+                continue
+            kept_select_items.append(item)
+            kept_cols.append(alias)
+
+        if not kept_cols:
+            logging.error(
+                f"No se pudieron inferir columnas válidas para INSERT INTO {table_name} desde SELECT."
+            )
+            return sql
+
+        # Filtra assignments del ON DUPLICATE KEY UPDATE a columnas válidas
+        odku_pos = self._find_keyword_at_depth(from_and_beyond, "ON DUPLICATE KEY UPDATE")
+        if odku_pos >= 0:
+            before_odku = from_and_beyond[:odku_pos]
+            odku_tail = from_and_beyond[odku_pos:]
+            update_list_str = re.sub(
+                r"^\s*ON\s+DUPLICATE\s+KEY\s+UPDATE\s+",
+                "",
+                odku_tail.strip(),
+                flags=re.I,
+            )
+            # Quita ';' final si existe
+            update_list_str = update_list_str.rstrip().rstrip(";")
+            assignments = self._split_top_level_commas(update_list_str)
+            kept_assignments = []
+            for a in assignments:
+                m = re.match(r"\s*`?([A-Za-z_][A-Za-z0-9_]*)`?\s*=", a)
+                if not m:
+                    continue
+                col = m.group(1)
+                if col not in table_cols:
+                    logging.warning(
+                        f"[WARN] Columna omitida del INSERT: {col} (NO EXISTE EN TABLA)"
+                    )
+                    continue
+                kept_assignments.append(a)
+            if kept_assignments:
+                from_and_beyond = (
+                    before_odku.rstrip()
+                    + "\nON DUPLICATE KEY UPDATE\n    "
+                    + ",\n    ".join(kept_assignments)
+                    + ";"
+                )
+            else:
+                # Si no queda nada por actualizar, removemos el ODKU para evitar sintaxis rara
+                from_and_beyond = before_odku.rstrip() + ";"
+
+        cols_sql = ", ".join(self._quote_ident(c) for c in kept_cols)
+        select_sql = ", ".join(kept_select_items)
+        rewritten = f"INSERT INTO {table_name} ({cols_sql})\nSELECT\n    {select_sql}\n{from_and_beyond.lstrip()}"
+        logging.warning(
+            f"[WARN] Reescritura aplicada: SELECT ... ON DUPLICATE -> INSERT INTO {table_name} (...) SELECT ..."
+        )
+        return rewritten
 
     def run(self):
         """Método principal para ejecutar el proceso completo."""
@@ -230,13 +611,25 @@ class ExtraeBiExtractor:
                 with self.engine_mysql_bi.connect().execution_options(
                     isolation_level="AUTOCOMMIT"
                 ) as connection:
-                    sqldelete = text(self.txSql)
+                    sql_to_run = self.txSql
+                    # Corrección obligatoria: nunca permitir SELECT ... ON DUPLICATE (inválido).
+                    # Si llega un agregado en txSql, lo reescribimos a INSERT INTO ... SELECT ... ON DUPLICATE.
+                    if (
+                        isinstance(sql_to_run, str)
+                        and sql_to_run.strip().upper().startswith("SELECT")
+                        and "ON DUPLICATE KEY UPDATE" in sql_to_run.upper()
+                    ):
+                        sql_to_run = self._rewrite_select_on_duplicate_to_insert(
+                            sql_to_run, str(self.txTabla)
+                        )
+
+                    sqldelete = text(sql_to_run)
                     result = connection.execute(
                         sqldelete, {"fi": self.IdtReporteIni, "ff": self.IdtReporteFin}
                     )
                     rows_deleted = result.rowcount
                     logging.info(
-                        f"Datos borrados correctamente. Filas afectadas: {rows_deleted} {self.txSql}"
+                        f"Datos borrados correctamente. Filas afectadas: {rows_deleted} {sql_to_run}"
                     )
                     return rows_deleted
             except Exception as e:
@@ -415,23 +808,34 @@ class ExtraeBiExtractor:
             return []
 
     def insertar_con_on_duplicate_key(self, df, chunk_threshold, chunk_size):
-        data_list = df.to_dict(orient="records")
-        total_rows = len(data_list)
+        data_list_raw = df.to_dict(orient="records")
+        total_rows = len(data_list_raw)
         logging.info(
             f"Se preparan {total_rows} registros para insertar con ON DUPLICATE KEY en {self.txTabla}."
         )
-        if not data_list:
+        if not data_list_raw:
             logging.warning(f"No hay registros para insertar en {self.txTabla}")
             return
-        columnas = list(df.columns)
-        columnas_str = ", ".join(columnas)
+
+        data_list, columnas = self._normalize_and_filter_records_for_table(
+            str(self.txTabla), data_list_raw
+        )
+        if not columnas:
+            logging.error(
+                f"No quedaron columnas válidas para insertar en {self.txTabla}. Inserción cancelada."
+            )
+            return
+
+        columnas_str = ", ".join(self._quote_ident(c) for c in columnas)
         placeholders = ", ".join([f":{col}" for col in columnas])
-        update_columns = ", ".join([f"{col}=VALUES({col})" for col in columnas])
-        insert_query = f"""
-            INSERT INTO {self.txTabla} ({columnas_str})
-            VALUES ({placeholders})
-            ON DUPLICATE KEY UPDATE {update_columns};
-        """
+        update_columns = ", ".join(
+            [f"{self._quote_ident(col)}=VALUES({self._quote_ident(col)})" for col in columnas]
+        )
+        insert_query = (
+            f"INSERT INTO {self.txTabla} ({columnas_str})\n"
+            f"VALUES ({placeholders})\n"
+            f"ON DUPLICATE KEY UPDATE {update_columns};"
+        )
         try:
             with self.engine_mysql_bi.begin() as connection:
                 if total_rows > chunk_threshold:
@@ -453,21 +857,30 @@ class ExtraeBiExtractor:
             self.insertar_con_ignore(df, chunk_threshold, chunk_size)
 
     def insertar_con_ignore(self, df, chunk_threshold, chunk_size):
-        data_list = df.to_dict(orient="records")
-        total_rows = len(data_list)
+        data_list_raw = df.to_dict(orient="records")
+        total_rows = len(data_list_raw)
         logging.info(
             f"Se preparan {total_rows} registros para insertar con INSERT IGNORE en {self.txTabla}."
         )
-        if not data_list:
+        if not data_list_raw:
             logging.warning(f"No hay registros para insertar en {self.txTabla}")
             return
-        columnas = list(df.columns)
-        columnas_str = ", ".join(columnas)
+
+        data_list, columnas = self._normalize_and_filter_records_for_table(
+            str(self.txTabla), data_list_raw
+        )
+        if not columnas:
+            logging.error(
+                f"No quedaron columnas válidas para insertar en {self.txTabla}. Inserción cancelada."
+            )
+            return
+
+        columnas_str = ", ".join(self._quote_ident(c) for c in columnas)
         placeholders = ", ".join([f":{col}" for col in columnas])
-        insert_query = f"""
-            INSERT IGNORE INTO {self.txTabla} ({columnas_str})
-            VALUES ({placeholders});
-        """
+        insert_query = (
+            f"INSERT IGNORE INTO {self.txTabla} ({columnas_str})\n"
+            f"VALUES ({placeholders});"
+        )
         with self.engine_mysql_bi.begin() as connection:
             if total_rows > chunk_threshold:
                 logging.info(

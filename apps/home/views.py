@@ -38,6 +38,7 @@ from .tasks import (
     venta_cero_task,
     rutero_task,
     preventa_task,
+    faltantes_task,
 )
 from apps.users.models import UserPermission
 from django.views.decorators.cache import cache_page
@@ -60,6 +61,13 @@ CACHE_TIMEOUT_SHORT = 60 * 5  # 5 minutos
 CACHE_TIMEOUT_MEDIUM = 60 * 15  # 15 minutos
 CACHE_TIMEOUT_LONG = 60 * 60  # 1 hora
 BATCH_SIZE_DEFAULT = 50000  # TamaÃ±o por defecto para procesamiento por lotes
+FILTRO_TIPOS_VENTA_CERO = [
+    {"id": "producto", "nombre": "Producto"},
+    {"id": "proveedor", "nombre": "Proveedor"},
+    {"id": "categoria", "nombre": "Categoría"},
+    {"id": "subcategoria", "nombre": "Marca"},
+]
+BIMBO_PROVEEDOR_LABEL = "BIMBO"
 
 
 class HomePanelCuboPage(BaseView):
@@ -1960,6 +1968,139 @@ class InterfacePage(ReporteGenericoPage):
         return super().dispatch(request, *args, **kwargs)
 
 
+class RuteroPage(BaseView):
+    """Página SSR para el Informe de Rutero (Maestro Rutas + Clientes)."""
+
+    template_name = "home/rutero.html"
+    login_url = reverse_lazy("users_app:user-login")
+    form_url = "home_app:rutero"
+    required_permission = "permisos.reportes_bimbo"
+
+    @method_decorator(permission_required("permisos.reportes_bimbo", raise_exception=True))
+    def dispatch(self, request, *args, **kwargs):
+        return super().dispatch(request, *args, **kwargs)
+
+    AGENCIAS_TABLE = "powerbi_bimbo.agencias_bimbo"
+    LOOKUP_LIMIT = 300
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._ceves_catalog_error = None
+
+    def _get_engine(self, database_name: str, user_id: int):
+        config_basic = ConfigBasic(database_name, user_id)
+        config = config_basic.config
+        required_keys = ["nmUsrIn", "txPassIn", "hostServerIn", "portServerIn", "dbBi"]
+        if not all(config.get(key) for key in required_keys):
+            raise ValueError("Configuración de conexión incompleta para Rutero")
+        return Conexion.ConexionMariadb3(
+            str(config["nmUsrIn"]),
+            str(config["txPassIn"]),
+            str(config["hostServerIn"]),
+            int(config["portServerIn"]),
+            str(config["dbBi"]),
+        )
+
+    def _fetch_distinct(self, database_name: str, user_id: int, sql: str, params=None):
+        params = params or []
+        engine = self._get_engine(database_name, user_id)
+        query = text(f"{sql} LIMIT :limit")
+        bind_params = {"limit": int(self.LOOKUP_LIMIT)}
+        if params:
+            for idx, value in enumerate(params):
+                bind_params[f"p{idx}"] = value
+                sql = sql.replace("%s", f":p{idx}", 1)
+            query = text(f"{sql} LIMIT :limit")
+
+        with engine.connect() as conn:
+            result = conn.execute(query, bind_params)
+            rows = result.fetchall()
+        results = []
+        for row in rows:
+            ident = row[0]
+            label = row[1] if len(row) > 1 else row[0]
+            label_str = str(label) if label and str(ident) in str(label) else (f"{ident} - {label}" if label not in (None, "", ident) else str(ident))
+            results.append({"id": str(ident), "label": label_str})
+        return results
+
+    def _build_agent_catalog(self, database_name: str, user_id: int):
+        self._ceves_catalog_error = None
+        if not database_name:
+            return []
+        sql = (
+            f"SELECT CEVE AS id, CONCAT_WS(' - ', CEVE, Nombre, nmOficinaV) AS label "
+            f"FROM {self.AGENCIAS_TABLE} "
+            "WHERE CEVE IS NOT NULL AND CEVE <> '' ORDER BY CEVE"
+        )
+        try:
+            return self._fetch_distinct(database_name, user_id, sql)
+        except Exception as exc:
+            self._ceves_catalog_error = str(exc)
+            logger.exception("No se pudo cargar el catálogo de CEVES")
+            return []
+
+    def get(self, request, *args, **kwargs):
+        database_name = request.session.get("database_name")
+        if not database_name:
+            messages.warning(request, "Debe seleccionar una empresa antes de continuar.")
+            return redirect("home_app:panel_cubo")
+        return super().get(request, *args, **kwargs)
+
+    def post(self, request, *args, **kwargs):
+        # Manejo de cambio de base de datos via POST (sidebar)
+        if request.POST.get("database_select") and not request.POST.get("ceves_code"):
+            database_name = request.POST.get("database_select")
+            try:
+                is_valid = self._validate_database_name(database_name)
+            except Exception:
+                is_valid = True
+            if not database_name or not is_valid:
+                return JsonResponse({"success": False, "error_message": "Nombre de base inválido"}, status=400)
+            request.session["database_name"] = database_name
+            request.session.modified = True
+            request.session.save()
+            StaticPage.name = database_name
+            try:
+                from scripts.config import ConfigBasic
+                ConfigBasic.clear_cache(database_name=database_name, user_id=request.user.id)
+            except Exception:
+                pass
+            return JsonResponse({"success": True})
+
+        database_name = request.session.get("database_name")
+        ceves_code = request.POST.get("ceves_code")
+        batch_size = int(request.POST.get("batch_size", BATCH_SIZE_DEFAULT))
+        user_id = request.user.id
+
+        if not all([database_name, ceves_code]):
+            return JsonResponse(
+                {"success": False, "error_message": "Seleccione una Agencia (CEVE)."},
+                status=400,
+            )
+
+        print(f"[rutero][POST] Launching task for CEVE={ceves_code}", flush=True)
+
+        job = rutero_task.delay(
+            database_name=database_name,
+            ceves_code=ceves_code,
+            user_id=user_id,
+            batch_size=batch_size,
+        )
+
+        return JsonResponse({"success": True, "job_id": job.id})
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        database_name = self.request.session.get("database_name")
+        user_id = self.request.user.id
+        context["ceves_catalog"] = self._build_agent_catalog(database_name, user_id)
+        context["ceves_catalog_error"] = self._ceves_catalog_error
+        context["form_url"] = self.form_url
+        context["database_name"] = database_name
+        context["filter_types"] = self.filter_types
+        context["batch_size_default"] = BATCH_SIZE_DEFAULT
+        return context
+
 class PreventaPage(RuteroPage):
     """Página para el informe de Preventa (Fact Preventa Diaria)."""
     template_name = "home/preventa.html"
@@ -1989,6 +2130,81 @@ class PreventaPage(RuteroPage):
             IdtReporteIni=IdtReporteIni,
             IdtReporteFin=IdtReporteFin,
             user_id=user_id,
+            batch_size=batch_size,
+        )
+
+        return JsonResponse({"success": True, "job_id": job.id})
+
+class FaltantesPage(RuteroPage):
+    """Página para el informe de Faltantes."""
+
+    template_name = "home/faltantes.html"
+    form_url = "home_app:faltantes"
+    filter_types = FILTRO_TIPOS_VENTA_CERO
+
+    def post(self, request, *args, **kwargs):
+        if request.POST.get("database_select") and not request.POST.get("ceves_code"):
+            return super().post(request, *args, **kwargs)
+
+        database_name = request.session.get("database_name")
+        ceves_code = request.POST.get("ceves_code")
+        IdtReporteIni = request.POST.get("IdtReporteIni")
+        IdtReporteFin = request.POST.get("IdtReporteFin")
+        batch_size = int(request.POST.get("batch_size", BATCH_SIZE_DEFAULT))
+        user_id = request.user.id
+        filter_type = (request.POST.get("filter_type") or "proveedor").strip().lower()
+        filter_value = (request.POST.get("filter_value") or "").strip()
+
+        if filter_type == "proveedor":
+            filter_value = BIMBO_PROVEEDOR_LABEL
+
+        if not all([database_name, ceves_code, IdtReporteIni, IdtReporteFin]):
+            return JsonResponse(
+                {"success": False, "error_message": "Seleccione Agencia y rango de fechas."},
+                status=400,
+            )
+        if filter_type not in [ft["id"] for ft in self.filter_types]:
+            return JsonResponse(
+                {"success": False, "error_message": "Tipo de filtro no permitido."},
+                status=400,
+            )
+        if filter_type != "proveedor" and not filter_value:
+            return JsonResponse(
+                {"success": False, "error_message": "Seleccione un valor del catálogo."},
+                status=400,
+            )
+        if IdtReporteIni and IdtReporteFin and IdtReporteIni > IdtReporteFin:
+            return JsonResponse(
+                {
+                    "success": False,
+                    "error_message": "La fecha inicial no puede ser mayor que la final.",
+                },
+                status=400,
+            )
+
+        vc_page = VentaCeroPage()
+        if not vc_page._validate_ceve(database_name, user_id, ceves_code):
+            return JsonResponse(
+                {"success": False, "error_message": "El CEVES seleccionado no es válido."},
+                status=400,
+            )
+        if not vc_page._validate_filter_value(
+            database_name, user_id, filter_type, filter_value
+        ):
+            return JsonResponse(
+                {"success": False, "error_message": "El valor seleccionado no es válido para el catálogo."},
+                status=400,
+            )
+
+        job = faltantes_task.delay(
+            database_name=database_name,
+            ceves_code=ceves_code,
+            IdtReporteIni=IdtReporteIni,
+            IdtReporteFin=IdtReporteFin,
+            user_id=user_id,
+            filter_type=filter_type,
+            filter_value=filter_value,
+            extra_params={},
             batch_size=batch_size,
         )
 
@@ -2085,18 +2301,13 @@ class VentaCeroPage(BaseView):
         }
         for proc in VentaCeroReport.DEFAULT_PROCEDURES
     ]
-    filter_types = [
-        {"id": "producto", "nombre": "Producto"},
-        {"id": "proveedor", "nombre": "Proveedor"},
-        {"id": "categoria", "nombre": "CategorÃ­a"},
-        {"id": "subcategoria", "nombre": "Marca"},
-    ]
+    filter_types = FILTRO_TIPOS_VENTA_CERO
     LOOKUP_LIMIT = 300
     # Tablas maestras viven en el esquema powerbi_bimbo; se consultan con nombre totalmente calificado
     # usando la conexiÃ³n (alias) seleccionada por el usuario.
     PRODUCTOS_TABLE = "powerbi_bimbo.productos_bimbo"
     AGENCIAS_TABLE = "powerbi_bimbo.agencias_bimbo"
-    PROVEEDOR_BIMBO = "BIMBO"
+    PROVEEDOR_BIMBO = BIMBO_PROVEEDOR_LABEL
     DEFAULT_PROCEDURE_ID = "venta_cero"
     BIMBO_DB = "powerbi_bimbo"
 
@@ -2673,133 +2884,3 @@ class CleanMediaView(View):
 
 
 
-class RuteroPage(BaseView):
-    """Página SSR para el Informe de Rutero (Maestro Rutas + Clientes)."""
-
-    template_name = "home/rutero.html"
-    login_url = reverse_lazy("users_app:user-login")
-    form_url = "home_app:rutero"
-    required_permission = "permisos.reportes_bimbo"
-
-    @method_decorator(permission_required("permisos.reportes_bimbo", raise_exception=True))
-    def dispatch(self, request, *args, **kwargs):
-        return super().dispatch(request, *args, **kwargs)
-
-    AGENCIAS_TABLE = "powerbi_bimbo.agencias_bimbo"
-    LOOKUP_LIMIT = 300
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self._ceves_catalog_error = None
-
-    def _get_engine(self, database_name: str, user_id: int):
-        config_basic = ConfigBasic(database_name, user_id)
-        config = config_basic.config
-        required_keys = ["nmUsrIn", "txPassIn", "hostServerIn", "portServerIn", "dbBi"]
-        if not all(config.get(key) for key in required_keys):
-            raise ValueError("Configuración de conexión incompleta para Rutero")
-        return Conexion.ConexionMariadb3(
-            str(config["nmUsrIn"]),
-            str(config["txPassIn"]),
-            str(config["hostServerIn"]),
-            int(config["portServerIn"]),
-            str(config["dbBi"]),
-        )
-
-    def _fetch_distinct(self, database_name: str, user_id: int, sql: str, params=None):
-        params = params or []
-        engine = self._get_engine(database_name, user_id)
-        query = text(f"{sql} LIMIT :limit")
-        bind_params = {"limit": int(self.LOOKUP_LIMIT)}
-        if params:
-            for idx, value in enumerate(params):
-                bind_params[f"p{idx}"] = value
-                sql = sql.replace("%s", f":p{idx}", 1)
-            query = text(f"{sql} LIMIT :limit")
-
-        with engine.connect() as conn:
-            result = conn.execute(query, bind_params)
-            rows = result.fetchall()
-        results = []
-        for row in rows:
-            ident = row[0]
-            label = row[1] if len(row) > 1 else row[0]
-            label_str = str(label) if label and str(ident) in str(label) else (f"{ident} - {label}" if label not in (None, "", ident) else str(ident))
-            results.append({"id": str(ident), "label": label_str})
-        return results
-
-    def _build_agent_catalog(self, database_name: str, user_id: int):
-        self._ceves_catalog_error = None
-        if not database_name:
-            return []
-        sql = (
-            f"SELECT CEVE AS id, CONCAT_WS(' - ', CEVE, Nombre, nmOficinaV) AS label "
-            f"FROM {self.AGENCIAS_TABLE} "
-            "WHERE CEVE IS NOT NULL AND CEVE <> '' ORDER BY CEVE"
-        )
-        try:
-            return self._fetch_distinct(database_name, user_id, sql)
-        except Exception as exc:
-            self._ceves_catalog_error = str(exc)
-            logger.exception("No se pudo cargar el catálogo de CEVES")
-            return []
-
-    def get(self, request, *args, **kwargs):
-        database_name = request.session.get("database_name")
-        if not database_name:
-            messages.warning(request, "Debe seleccionar una empresa antes de continuar.")
-            return redirect("home_app:panel_cubo")
-        return super().get(request, *args, **kwargs)
-
-    def post(self, request, *args, **kwargs):
-        # Manejo de cambio de base de datos via POST (sidebar)
-        if request.POST.get("database_select") and not request.POST.get("ceves_code"):
-            database_name = request.POST.get("database_select")
-            try:
-                is_valid = self._validate_database_name(database_name)
-            except Exception:
-                is_valid = True
-            if not database_name or not is_valid:
-                return JsonResponse({"success": False, "error_message": "Nombre de base inválido"}, status=400)
-            request.session["database_name"] = database_name
-            request.session.modified = True
-            request.session.save()
-            StaticPage.name = database_name
-            try:
-                from scripts.config import ConfigBasic
-                ConfigBasic.clear_cache(database_name=database_name, user_id=request.user.id)
-            except Exception:
-                pass
-            return JsonResponse({"success": True})
-
-        database_name = request.session.get("database_name")
-        ceves_code = request.POST.get("ceves_code")
-        batch_size = int(request.POST.get("batch_size", BATCH_SIZE_DEFAULT))
-        user_id = request.user.id
-
-        if not all([database_name, ceves_code]):
-            return JsonResponse(
-                {"success": False, "error_message": "Seleccione una Agencia (CEVE)."},
-                status=400,
-            )
-
-        print(f"[rutero][POST] Launching task for CEVE={ceves_code}", flush=True)
-
-        job = rutero_task.delay(
-            database_name=database_name,
-            ceves_code=ceves_code,
-            user_id=user_id,
-            batch_size=batch_size,
-        )
-
-        return JsonResponse({"success": True, "job_id": job.id})
-
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        database_name = self.request.session.get("database_name")
-        user_id = self.request.user.id
-        context["ceves_catalog"] = self._build_agent_catalog(database_name, user_id)
-        context["ceves_catalog_error"] = self._ceves_catalog_error
-        context["form_url"] = self.form_url
-        context["database_name"] = database_name
-        return context

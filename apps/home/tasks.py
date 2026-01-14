@@ -774,6 +774,64 @@ def preventa_task(database_name, ceves_code, IdtReporteIni, IdtReporteFin, user_
 
 @job("default", timeout=DEFAULT_TIMEOUT, result_ttl=3600)
 @task_handler
+def faltantes_task(
+    database_name,
+    ceves_code,
+    IdtReporteIni,
+    IdtReporteFin,
+    user_id,
+    filter_type,
+    filter_value,
+    extra_params=None,
+    batch_size=DEFAULT_BATCH_SIZE,
+):
+    """Tarea RQ para generar Faltantes."""
+    from scripts.extrae_bi.faltantes import FaltantesReport
+    
+    try:
+        connection.close()
+    except Exception:
+        pass
+
+    job = get_current_job()
+    job_id = job.id if job else None
+
+    filter_type_norm = (filter_type or "").strip().lower()
+    if filter_type_norm == "proveedor" and not filter_value:
+        filter_value = "BIMBO DE COLOMBIA S.A"
+    def rq_update_progress(stage, progress_percent, current_rec=None, total_rec=None, *_args):
+        meta = {"stage": stage}
+        if current_rec is not None:
+            meta["records_processed"] = current_rec
+        if total_rec is not None:
+            meta["total_records_estimate"] = total_rec
+        update_job_progress(job_id, int(progress_percent), status="processing", meta=meta)
+
+    report = FaltantesReport(
+        database_name=database_name,
+        ceves_code=ceves_code,
+        fecha_ini=IdtReporteIni,
+        fecha_fin=IdtReporteFin,
+        filter_type=filter_type_norm or "proveedor",
+        filter_value=filter_value,
+        extra_params=extra_params or {},
+        user_id=user_id,
+        progress_callback=rq_update_progress,
+        chunk_size=batch_size,
+    )
+
+    result_data = report.execute()
+    
+    try:
+        connection.close()
+    except Exception:
+        pass
+
+    return result_data
+
+
+@job("default", timeout=DEFAULT_TIMEOUT, result_ttl=3600)
+@task_handler
 def plano_task(
     database_name,
     IdtReporteIni,

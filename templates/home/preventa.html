@@ -25,59 +25,150 @@ Informe de Preventa
     </div>
     {% endif %}
 
-    <div class="card shadow-lg" style="width: 35rem; margin: auto;">
-        <div class="card-header bg-primary text-white text-center">
-            <h2 class="mb-0">Informe de Preventa</h2>
+    <div class="card shadow-lg mb-4" style="width: 100%; max-width: 900px; margin: auto;">
+        <div class="card-header bg-white text-dark border-bottom-0 pt-4">
+            <h2 class="mb-0 text-center fw-bold" style="color: #E21F26;">Dashboard de Preventa</h2>
+            <p class="text-muted text-center">Informe Operativo - Ejecutivo Bimbo</p>
         </div>
         <div class="card-body">
             <form id="FormPreventa" action="{% url form_url %}" method="post">
                 {% csrf_token %}
                 
-                <!-- Selección de Agencia (CEVE) -->
-                {% if ceves_catalog_error %}
-                <div class="alert alert-danger">
-                    Error cargando catálogo de Agencias: {{ ceves_catalog_error }}
-                </div>
-                {% endif %}
-                
-                <div class="form-group mb-3">
-                    <label for="ceves_code" class="form-label fw-bold">Agencia (CEVE):</label>
-                    <select class="form-select" id="ceves_code" name="ceves_code" required>
-                        <option value="" selected disabled>-- Seleccione una Agencia --</option>
-                        {% for item in ceves_catalog %}
-                        <option value="{{ item.id }}">{{ item.label }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
+                <div class="row">
+                    <!-- Selección de Agencia (CEVE) -->
+                    <div class="col-md-6">
+                        <div class="form-group mb-3">
+                            <label for="ceves_code" class="form-label fw-bold">Agencia (CEVE):</label>
+                            <select class="form-select border-0 shadow-sm" id="ceves_code" name="ceves_code" required style="background-color: #f8f9fa;">
+                                <option value="" selected disabled>-- Seleccione una Agencia --</option>
+                                {% for item in ceves_catalog %}
+                                <option value="{{ item.id }}">{{ item.label }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
 
-                <!-- Selección de Fechas -->
-                <div class="form-group mb-3">
-                    <label class="form-label fw-bold">Rango de Fechas:</label>
-                    <div id="reportrange" style="background: #fff; cursor: pointer; padding: 5px 10px; border: 1px solid #ccc; width: 100%">
-                        <i class="fa fa-calendar"></i>&nbsp;
-                        <span></span> <i class="fa fa-caret-down"></i>
+                    <!-- Selección de Fechas -->
+                    <div class="col-md-6">
+                        <div class="form-group mb-3">
+                            <label class="form-label fw-bold">Rango de Fechas:</label>
+                            <div id="reportrange" class="form-control border-0 shadow-sm" style="background: #f8f9fa; cursor: pointer; padding: 7px 10px; width: 100%">
+                                <i class="fa fa-calendar text-danger"></i>&nbsp;
+                                <span></span> <i class="fa fa-caret-down float-end mt-1"></i>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
                 <!-- Campos ocultos sincronizados con el datepicker -->
                 <input type="hidden" name="IdtReporteIni" id="IdtReporteIni">
                 <input type="hidden" name="IdtReporteFin" id="IdtReporteFin">
-
-                <!-- Batch Size (Opcional, oculto o visible) -->
                 <input type="hidden" name="batch_size" value="20000">
 
-                <!-- Botón de acción -->
-                <div class="d-grid gap-2 mt-4">
-                    <button id="submitBtnPreventa" type="submit" class="btn btn-primary btn-lg" data-submitted="false">
-                        <i class="fas fa-file-excel me-2"></i> Generar Reporte
+                <div class="text-center mt-3">
+                    <button id="submitBtnPreventa" type="submit" class="btn btn-danger px-5 shadow-sm" style="background-color: #E21F26; border: none;">
+                        <i class="fas fa-sync-alt me-2"></i> Actualizar Dashboard
                     </button>
                 </div>
             </form>
-            
-            <br>
-            <!-- Download Component -->
-            {% include 'includes/download_file.html' %}
         </div>
+    </div>
+
+    <!-- Resultados del Dashboard (KPIs + Matriz) -->
+    <div id="dashboardResults" style="display: none;">
+        <!-- Fila de KPIs -->
+        <div class="row mb-4">
+            <div class="col-md-2 col-sm-4 mb-2">
+                <div class="card border-0 shadow-sm text-center h-100">
+                    <div class="card-body py-3">
+                        <h6 class="text-muted small text-uppercase">Total Pedidos</h6>
+                        <h3 class="mb-0 fw-bold" id="kpi-total-pedidos">0</h3>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-2 col-sm-4 mb-2">
+                <div class="card border-0 shadow-sm text-center h-100">
+                    <div class="card-body py-3">
+                        <h6 class="text-muted small text-uppercase">Clientes Atend.</h6>
+                        <h3 class="mb-0 fw-bold" id="kpi-clientes-atendidos">0</h3>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-2 col-sm-4 mb-2">
+                <div class="card border-0 shadow-sm text-center h-100">
+                    <div class="card-body py-3">
+                        <h6 class="text-muted small text-uppercase">Clientes Nuevos</h6>
+                        <h3 class="mb-0 fw-bold text-danger" id="kpi-clientes-nuevos">0</h3>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-2 col-sm-4 mb-2">
+                <div class="card border-0 shadow-sm text-center h-100">
+                    <div class="card-body py-3">
+                        <h6 class="text-muted small text-uppercase">Valor Total</h6>
+                        <h3 class="mb-0 fw-bold" id="kpi-valor-total">$0</h3>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-2 col-sm-4 mb-2">
+                <div class="card border-0 shadow-sm text-center h-100">
+                    <div class="card-body py-3">
+                        <h6 class="text-muted small text-uppercase">Valor Promed.</h6>
+                        <h3 class="mb-0 fw-bold" id="kpi-valor-promedio">$0</h3>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-2 col-sm-4 mb-2">
+                <div class="card border-0 shadow-sm text-center h-100">
+                    <div class="card-body py-3">
+                        <h6 class="text-muted small text-uppercase">Tiempo Prom.</h6>
+                        <h3 class="mb-0 fw-bold" id="kpi-tiempo-promedio">00:00</h3>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Matriz Avanzada -->
+        <div class="card border-0 shadow-sm">
+            <div class="card-header bg-white border-bottom py-3">
+                <h5 class="mb-0 fw-bold"><i class="fas fa-th me-2 text-danger"></i>Matriz de Desempeño por Zona</h5>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0" id="matrixTable">
+                        <thead class="table-light">
+                            <tr>
+                                <th class="ps-4">Zona</th>
+                                <th class="text-center">H. Inicio</th>
+                                <th class="text-center">H. Fin</th>
+                                <th class="text-center">T. Total</th>
+                                <th class="text-center">Programados</th>
+                                <th class="text-center">Atendidos</th>
+                                <th class="text-center">% Cobertura</th>
+                                <th class="text-center">Pedidos</th>
+                                <th class="text-center">Ticket Prom.</th>
+                                <th class="text-center">Valor Total</th>
+                                <th class="text-center">Valor Cambio</th>
+                                <th class="text-center">P. Ruta</th>
+                                <th class="text-center">P. Extra</th>
+                                <th class="text-center pe-4">Pendientes</th>
+                            </tr>
+                        </thead>
+                        <tbody id="matrixBody">
+                            <!-- Datos inyectados vía JS -->
+                        </tbody>
+                        <tfoot class="table-light fw-bold" id="matrixFooter">
+                            <!-- Totales inyectados vía JS -->
+                        </tfoot>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="mt-4">
+        <!-- Download Component -->
+        {% include 'includes/download_file.html' %}
     </div>
 </div>
 
@@ -107,150 +198,256 @@ Informe de Preventa
 {% endblock window %}
 
 {% block script %}
+<!-- Moment.js y DateRangePicker -->
+<script type="text/javascript" src="https://cdn.jsdelivr.net/momentjs/latest/moment.min.js"></script>
+<script type="text/javascript" src="https://cdn.jsdelivr.net/npm/daterangepicker/daterangepicker.min.js"></script>
+<link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/daterangepicker/daterangepicker.css" />
+
 <script>
-    // Inicialización
-    document.getElementById("processingModal").style.display = "none";
-    document.getElementById("download_file").className = 'd-none'; // Ocultar link descarga
-    
-    var csrf_token = document.getElementsByName("csrfmiddlewaretoken")[0].value;
+    // --- Inicialización de Date Range Picker ---
+    $(function() {
+        var start = moment().subtract(1, 'days');
+        var end = moment();
+
+        function cb(start, end) {
+            $('#reportrange span').html(start.format('MMMM D, YYYY') + ' - ' + end.format('MMMM D, YYYY'));
+            $('#IdtReporteIni').val(start.format('YYYY-MM-DD'));
+            $('#IdtReporteFin').val(end.format('YYYY-MM-DD'));
+        }
+
+        $('#reportrange').daterangepicker({
+            startDate: start,
+            endDate: end,
+            ranges: {
+               'Hoy': [moment(), moment()],
+               'Ayer': [moment().subtract(1, 'days'), moment().subtract(1, 'days')],
+               'Últimos 7 Días': [moment().subtract(6, 'days'), moment()],
+               'Este Mes': [moment().startOf('month'), moment().endOf('month')],
+               'Mes Pasado': [moment().subtract(1, 'month').startOf('month'), moment().subtract(1, 'month').endOf('month')]
+            },
+            locale: {
+                format: 'YYYY-MM-DD',
+                applyLabel: 'Aplicar',
+                cancelLabel: 'Cancelar',
+                customRangeLabel: 'Personalizado',
+                daysOfWeek: ['Do', 'Lu', 'Ma', 'Mi', 'Ju', 'Vi', 'Sa'],
+                monthNames: ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'],
+                firstDay: 1
+            }
+        }, cb);
+
+        cb(start, end);
+    });
+
+    // --- Lógica del Dashboard ---
+    var csrf_token = "{{ csrf_token }}";
     var startTime = 0;
     var progressInterval = null;
     var progressBar = document.getElementById("progressBar");
     
-    // --- Lógica del Botón ---
     document.getElementById("submitBtnPreventa").addEventListener("click", function(event) {
         event.preventDefault();
         
-        // Validaciones
-        if (this.getAttribute("data-submitted") === "true") {
-            alert("Ya hay una tarea en curso.");
-            return;
-        }
         var database = window.sessionStorage.getItem("database_name");
         var ceves_code = document.getElementById("ceves_code").value;
         var IdtReporteIni = document.getElementById("IdtReporteIni").value;
         var IdtReporteFin = document.getElementById("IdtReporteFin").value;
         
-        if (!database) {
-            alert("Seleccione una empresa primero (Barra lateral o superior).");
-            return;
-        }
-        if (!ceves_code) {
-            alert("Por favor seleccione una Agencia.");
-            return;
-        }
-        if (!IdtReporteIni || !IdtReporteFin) {
-            alert("Por favor seleccione un rango de fechas.");
+        if (!database || !ceves_code || !IdtReporteIni || !IdtReporteFin) {
+            alert("Por favor complete todos los filtros.");
             return;
         }
 
-        console.log("Iniciando Preventa Task...");
         startMonitoringUI();
 
-        // Enviar Petición AJAX
-        var xhr = new XMLHttpRequest();
-        xhr.responseType = "json"; // Esperamos JSON
-        xhr.open("POST", "{% url form_url %}", true);
-        xhr.setRequestHeader("X-CSRFToken", csrf_token);
-        xhr.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
-        
-        xhr.onload = function() {
-            if (xhr.status === 200 && xhr.response.success) {
-                var taskId = xhr.response.job_id;
-                console.log("Task ID recibido:", taskId);
-                window.sessionStorage.setItem("preventa_task_id", taskId);
-                updateProgressBar(5, "Encolado en servidor...");
-                setTimeout(checkTaskStatus, 1000); // Polling starts
+        fetch("{% url form_url %}", {
+            method: "POST",
+            headers: {
+                "X-CSRFToken": csrf_token,
+                "Content-Type": "application/x-www-form-urlencoded"
+            },
+            body: new URLSearchParams({
+                "database_select": database,
+                "ceves_code": ceves_code,
+                "IdtReporteIni": IdtReporteIni,
+                "IdtReporteFin": IdtReporteFin,
+                "batch_size": document.querySelector('input[name="batch_size"]').value || 20000
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                window.sessionStorage.setItem("preventa_task_id", data.job_id);
+                updateProgressBar(5, "Encolado...");
+                setTimeout(checkTaskStatus, 1000);
             } else {
-                var msg = (xhr.response && xhr.response.error_message) ? xhr.response.error_message : "Error desconocido";
-                stopMonitoring("Error al iniciar: " + msg, 'bg-danger');
+                stopMonitoring("Error: " + data.error_message);
             }
-        };
-        xhr.onerror = function() {
-            stopMonitoring("Error de red al intentar conectar.", 'bg-danger');
-        };
-
-        var formData = "database_select=" + encodeURIComponent(database) +
-                       "&ceves_code=" + encodeURIComponent(ceves_code) + 
-                       "&IdtReporteIni=" + encodeURIComponent(IdtReporteIni) + 
-                       "&IdtReporteFin=" + encodeURIComponent(IdtReporteFin);
-        xhr.send(formData);
+        })
+        .catch(err => stopMonitoring("Error de red: " + err));
     });
 
-    // --- Polling de Estado ---
     function checkTaskStatus() {
         var taskId = window.sessionStorage.getItem("preventa_task_id");
         if (!taskId) return;
 
-        var xhr = new XMLHttpRequest();
-        xhr.responseType = "json";
-        xhr.open("POST", "{% url 'home_app:check_task_status' %}", true);
-        xhr.setRequestHeader("X-CSRFToken", csrf_token);
-        xhr.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
-        
-        xhr.onload = function() {
-            if (xhr.status === 200) {
-                var response = xhr.response;
-                handleTaskStatus(response);
-            } else {
-                console.warn("Error chequeando status:", xhr.status);
-            }
-        };
-        xhr.send("task_id=" + encodeURIComponent(taskId));
+        fetch("{% url 'home_app:check_task_status' %}", {
+            method: "POST",
+            headers: {
+                "X-CSRFToken": csrf_token,
+                "Content-Type": "application/x-www-form-urlencoded"
+            },
+            body: new URLSearchParams({"task_id": taskId})
+        })
+        .then(response => response.json())
+        .then(data => handleTaskStatus(data))
+        .catch(err => console.warn("Error polling:", err));
     }
 
     function handleTaskStatus(response) {
         if (!response || !response.status) return;
-
         var status = response.status.toLowerCase();
+        
         var progress = response.progress || 0;
         var stage = (response.meta && response.meta.stage) ? response.meta.stage : "Procesando...";
-        
         updateProgressBar(progress, stage);
-        
-        // Info detallada
-        if(response.meta && response.meta.records_processed) {
-             document.getElementById("detailedStatus").innerText = "Registros: " + response.meta.records_processed.toLocaleString();
-        }
 
-        if (status === "finished" || status === "completed" || status === "success") {
-            updateProgressBar(100, "Completado!");
-            document.getElementById("download_file").className = 'd-flex'; // Mostrar botón descarga
-            
-            // Auto click en descarga simulado o dejar al usuario
-            stopMonitoring("Reporte Generado Exitosamente.", 'bg-success');
-            
+        if (status === "finished" || status === "completed" || (status === "success" && response.result)) {
+            renderDashboard(response.result);
+            stopMonitoring(null);
         } else if (status === "failed") {
-            var err = (response.result && response.result.error) ? response.result.error : "Error interno";
-            stopMonitoring("Falló el reporte: " + err, 'bg-danger');
+            stopMonitoring("Error: " + (response.result ? response.result.error : "Falla interna"));
         } else {
-            // Continuar Polling
             setTimeout(checkTaskStatus, 2000);
         }
     }
 
-    // --- UI Helpers ---
+    function renderDashboard(result) {
+        if (!result || !result.dashboard) return;
+        var data = result.dashboard;
+        var kpis = data.kpis;
+        var matrix = data.matrix;
+
+        // Mostrar contenedor
+        document.getElementById("dashboardResults").style.display = "block";
+
+        // Actualizar KPIs con animación simple o directa
+        document.getElementById("kpi-total-pedidos").innerText = kpis.total_pedidos.toLocaleString();
+        document.getElementById("kpi-clientes-atendidos").innerText = kpis.clientes_atendidos.toLocaleString();
+        document.getElementById("kpi-clientes-nuevos").innerText = kpis.clientes_nuevos.toLocaleString();
+        document.getElementById("kpi-valor-total").innerText = formatCurrency(kpis.valor_total);
+        document.getElementById("kpi-valor-promedio").innerText = formatCurrency(kpis.valor_promedio);
+        document.getElementById("kpi-tiempo-promedio").innerText = kpis.tiempo_promedio;
+
+        // Renderizar Matriz
+        var tbody = document.getElementById("matrixBody");
+        tbody.innerHTML = "";
+        
+        var totals = { prog: 0, aten: 0, ped: 0, vto: 0, vca: 0, pru: 0, pex: 0, pen: 0 };
+        var totalRows = 0;
+        var lastDate = "";
+
+        matrix.forEach(row => {
+            totalRows++;
+            // Seguridad nulos
+            var hIni = row['Hora Inicio'] || '-';
+            var hFin = row['Hora Fin'] || '-';
+            var prog = row.Programados || 0;
+            var aten = row.Atendidos || 0;
+            var cobertura = row.Cobertura || 0;
+            var ticket = row.TicketPromedio || 0;
+            var currentFecha = row.FechaDisplay || "General";
+
+            // Insertar separador de día
+            if (currentFecha !== lastDate) {
+                var trHeader = document.createElement("tr");
+                // Estilo distintivo para el separador
+                trHeader.innerHTML = `
+                    <td colspan="14" class="fw-bold ps-4 text-start bg-secondary text-white border-top border-bottom py-2">
+                       📅 ${currentFecha}
+                    </td>
+                `;
+                tbody.appendChild(trHeader);
+                lastDate = currentFecha;
+            }
+            
+            var tr = document.createElement("tr");
+            tr.innerHTML = `
+                <td class="ps-4 fw-bold text-nowrap">${row.Zona}</td>
+                <td class="text-center small">${hIni}</td>
+                <td class="text-center small">${hFin}</td>
+                <td class="text-center small fw-bold">${row['Tiempo Total'] || '-'}</td>
+                <td class="text-center">${prog}</td>
+                <td class="text-center">${aten}</td>
+                <td class="text-center">${cobertura.toFixed(1)}%</td>
+                <td class="text-center fw-bold">${row.Pedidos || 0}</td>
+                <td class="text-center text-muted">${formatCurrency(ticket)}</td>
+                <td class="text-center">${formatCurrency(row['Valor Total'] || 0)}</td>
+                <td class="text-center text-danger">${formatCurrency(row['Valor Cambio'] || 0)}</td>
+                <td class="text-center">${row['Pedidos Ruta'] || 0}</td>
+                <td class="text-center font-weight-bold text-primary">${row['P. Extra Ruta'] || 0}</td>
+                <td class="text-center pe-4">${row.Pendientes || 0}</td>
+            `;
+            tbody.appendChild(tr);
+
+            totals.prog += (parseFloat(prog) || 0);
+            totals.aten += (parseFloat(aten) || 0);
+            totals.ped += (parseFloat(row.Pedidos) || 0);
+            totals.vto += (parseFloat(row['Valor Total']) || 0);
+            totals.vca += (parseFloat(row['Valor Cambio']) || 0);
+            totals.pru += (parseFloat(row['Pedidos Ruta']) || 0);
+            totals.pex += (parseFloat(row['P. Extra Ruta']) || 0);
+            totals.pen += (parseFloat(row.Pendientes) || 0);
+        });
+
+        // Totales Footer
+        var totalCobertura = totals.prog > 0 ? (totals.aten / totals.prog * 100) : 0;
+        var totalTicket = totals.ped > 0 ? (totals.vto / totals.ped) : 0;
+
+        document.getElementById("matrixFooter").innerHTML = `
+            <tr>
+                <td class="ps-4">TOTALES (${totalRows})</td>
+                <td class="text-center">-</td>
+                <td class="text-center">-</td>
+                <td class="text-center">-</td>
+                <td class="text-center">${totals.prog.toLocaleString()}</td>
+                <td class="text-center">${totals.aten.toLocaleString()}</td>
+                <td class="text-center fw-bold">${totalCobertura.toFixed(1)}%</td>
+                <td class="text-center">${totals.ped.toLocaleString()}</td>
+                <td class="text-center">${formatCurrency(totalTicket)}</td>
+                <td class="text-center">${formatCurrency(totals.vto)}</td>
+                <td class="text-center">${formatCurrency(totals.vca)}</td>
+                <td class="text-center">${totals.pru.toLocaleString()}</td>
+                <td class="text-center">${totals.pex.toLocaleString()}</td>
+                <td class="text-center pe-4">${totals.pen.toLocaleString()}</td>
+            </tr>
+        `;
+
+        // Mostrar botón descarga si hay archivo
+        if (result.file_name) {
+            document.getElementById("download_file").className = 'd-flex mt-3';
+            var link = document.querySelector("#download_file a");
+            if(link) link.href = "/media/" + result.file_name;
+        }
+    }
+
+    function formatCurrency(val) {
+        return new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(val);
+    }
+
     function startMonitoringUI() {
-        document.getElementById("submitBtnPreventa").setAttribute("data-submitted", "true");
         document.getElementById("submitBtnPreventa").disabled = true;
         document.getElementById("processingModal").style.display = "flex";
-        document.getElementById("download_file").className = 'd-none'; 
-        
         startTime = new Date().getTime();
-        updateProgressBar(0, "Iniciando...");
-        
         if (progressInterval) clearInterval(progressInterval);
         progressInterval = setInterval(updateTime, 1000);
     }
 
-    function stopMonitoring(msg, colorClass) {
+    function stopMonitoring(errorMsg) {
         if (progressInterval) clearInterval(progressInterval);
-        alert(msg);
-        
         document.getElementById("processingModal").style.display = "none";
-        document.getElementById("submitBtnPreventa").setAttribute("data-submitted", "false");
         document.getElementById("submitBtnPreventa").disabled = false;
-        window.sessionStorage.removeItem("preventa_task_id");
+        if (errorMsg) alert(errorMsg);
     }
 
     function updateProgressBar(val, text) {
@@ -260,16 +457,8 @@ Informe de Preventa
     }
 
     function updateTime() {
-        var now = new Date().getTime();
-        var diff = Math.floor((now - startTime) / 1000);
+        var diff = Math.floor((new Date().getTime() - startTime) / 1000);
         document.getElementById("time-info").textContent = "Tiempo: " + diff + "s";
     }
-
-    // Delete file logic (copiada del standard)
-    document.getElementById("download_file").addEventListener("click", function () {
-        setTimeout(function() {
-             // Request delete file...
-        }, 3000);
-    });
 </script>
 {% endblock script %}

@@ -89,7 +89,147 @@ class PreventaReport:
             pass
         return text(call_sql)
 
-    def _run_to_excel(self, query: TextClause) -> None:
+    def _calculate_dashboard_data(self, df: pd.DataFrame) -> Dict[str, Any]:
+        """Calcula KPIs y Matriz para el Dashboard usando columnas del SP."""
+        if df.empty:
+            return {
+                "kpis": {
+                    "total_pedidos": 0,
+                    "clientes_atendidos": 0,
+                    "clientes_nuevos": 0,
+                    "valor_total": 0,
+                    "valor_promedio": 0,
+                    "tiempo_promedio": "00:00"
+                },
+                "matrix": []
+            }
+
+        # Mapeo de columnas según sp_reporte_preventa_diaria
+        # Columnas: fecha, zona_id, zona_nm, clientescom, totalpedidos, pedidos_ruta, pedidos_extraruta, totalpendientes, horai, horaf, tiempo_prom, TotalCLi, ValorT, ValorC, pednuevo
+        
+        # Totales Globales
+        total_pedidos = df['totalpedidos'].sum() if 'totalpedidos' in df.columns else 0
+        clientes_atendidos = df['TotalCLi'].sum() if 'TotalCLi' in df.columns else (df['clientescom'].sum() if 'clientescom' in df.columns else 0)
+        clientes_nuevos = df['pednuevo'].sum() if 'pednuevo' in df.columns else 0
+        valor_total = df['ValorT'].sum() if 'ValorT' in df.columns else 0
+        valor_promedio = valor_total / total_pedidos if total_pedidos > 0 else 0
+        
+        # Tiempo promedio (asumiendo que tiempo_prom está en algún formato manejable o segundos)
+        tiempo_promedio_str = "00:00"
+        if 'tiempo_prom' in df.columns:
+            try:
+                # Si es numérico (segundos)
+                if pd.api.types.is_numeric_dtype(df['tiempo_prom']):
+                    avg_seconds = df['tiempo_prom'].mean()
+                    mins, secs = divmod(int(avg_seconds), 60)
+                    tiempo_promedio_str = f"{mins:02d}:{secs:02d}"
+                else:
+                    # Si ya viene como string o timedelta
+                    tiempo_promedio_str = str(df['tiempo_prom'].iloc[0])[:5] 
+            except:
+                pass
+
+        # Matriz por Zona (zona_nm)
+        # Queremos Zona (ID - Nombre), Clientes Programados, Atendidos, Cobertura, Pedidos (Ruta, Extra), Valor Total, Promedio, Cambio, Horas
+        
+        # Preparar columnas compuestas
+        # "que la zona tenga el código del vendedor" => Usar codigo_agente si existe
+        if 'zona_nm' in df.columns:
+            code_col = 'codigo_agente' if 'codigo_agente' in df.columns else ('zona_id' if 'zona_id' in df.columns else None)
+            
+            if code_col:
+                df['ZonaLabel'] = df[code_col].astype(str) + " - " + df['zona_nm'].astype(str)
+                col_zona = 'ZonaLabel'
+            else:
+                col_zona = 'zona_nm'
+        else:
+            col_zona = 'zona_id' if 'zona_id' in df.columns else 'fecha'
+
+        # Preparar etiqueta de Fecha para agrupación visual
+        if 'fecha' in df.columns:
+             # Formato string seguro
+             df['FechaStr'] = df['fecha'].astype(str)
+             if 'dia_semana' in df.columns:
+                 df['FechaDisplay'] = df['FechaStr'] + " (" + df['dia_semana'].astype(str) + ")"
+             else:
+                 df['FechaDisplay'] = df['FechaStr']
+        else:
+             df['FechaDisplay'] = 'General'
+
+        # Helper para agregación de tiempos (min/max)
+        # El usuario solicita NO AGRUPAR/ACUMULAR cuando se seleccionan varios días.
+        # "Mantener la estructura de la tabla". Por lo tanto, usamos el DF tal cual viene del SP.
+        
+        matrix_df = df.copy()
+
+        # Cálculos derivados en la matriz (fila a fila)
+        matrix_df['Cobertura'] = 0.0
+        if 'TotalCLi' in matrix_df.columns and 'clientescom' in matrix_df.columns:
+            matrix_df['Cobertura'] = matrix_df.apply(lambda x: (x['TotalCLi'] / x['clientescom'] * 100) if x['clientescom'] > 0 else 0, axis=1)
+
+        matrix_df['TicketPromedio'] = 0.0
+        if 'ValorT' in matrix_df.columns and 'totalpedidos' in matrix_df.columns:
+             matrix_df['TicketPromedio'] = matrix_df.apply(lambda x: (x['ValorT'] / x['totalpedidos']) if x['totalpedidos'] > 0 else 0, axis=1)
+
+        # Calcular Tiempo Total
+        # Convertimos las columnas horai/horaf a timedelta para restar
+        matrix_df['Tiempo Total'] = '-'
+        if 'horai' in matrix_df.columns and 'horaf' in matrix_df.columns:
+            try:
+                # Convertir a cadena y luego a timedelta
+                # Nota: si vienen nulos o NaT, to_timedelta con errors='coerce' devuelve NaT
+                start_deltas = pd.to_timedelta(matrix_df['horai'].astype(str), errors='coerce')
+                end_deltas = pd.to_timedelta(matrix_df['horaf'].astype(str), errors='coerce')
+                
+                diffs = end_deltas - start_deltas
+                
+                # Convertir a string HH:MM:SS (eliminando '0 days ' si aparece)
+                # components devuelve dataframe con days, hours, minutes, seconds...
+                # Una forma rápida es usar str accesors después de astype(str)
+                matrix_df['Tiempo Total'] = diffs.astype(str).str.replace('0 days ', '').str.split('.').str[0]
+                matrix_df['Tiempo Total'] = matrix_df['Tiempo Total'].replace({'NaT': '-', 'nan': '-'})
+            except Exception:
+                pass
+
+
+        # Renombrar para JS
+        rename_map = {
+            col_zona: 'Zona',
+            'clientescom': 'Programados',
+            'TotalCLi': 'Atendidos',
+            'totalpedidos': 'Pedidos',
+            'pednuevo': 'Cl. Nuevos',
+            'ValorT': 'Valor Total',
+            'ValorC': 'Valor Cambio',
+            'pedidos_ruta': 'Pedidos Ruta',
+            'pedidos_extraruta': 'P. Extra Ruta',
+            'totalpendientes': 'Pendientes',
+            'horai': 'Hora Inicio',
+            'horaf': 'Hora Fin'
+        }
+        matrix_df.rename(columns=rename_map, inplace=True)
+        
+        # Formateo de Tiempos (timedelta a str si es necesario)
+        for col in ['Hora Inicio', 'Hora Fin']:
+            if col in matrix_df.columns:
+                matrix_df[col] = matrix_df[col].astype(str).str.replace('0 days ', '').str[:8] # Simple cleanup
+
+        matrix_df = matrix_df.where(pd.notnull(matrix_df), 0)
+        matrix_data = matrix_df.to_dict(orient='records')
+
+        return {
+            "kpis": {
+                "total_pedidos": int(total_pedidos),
+                "clientes_atendidos": int(clientes_atendidos),
+                "clientes_nuevos": int(clientes_nuevos),
+                "valor_total": float(valor_total),
+                "valor_promedio": float(valor_promedio),
+                "tiempo_promedio": tiempo_promedio_str
+            },
+            "matrix": matrix_data
+        }
+
+    def _run_to_excel(self, query: TextClause) -> pd.DataFrame:
         assert self.engine_mysql is not None
         os.makedirs("media", exist_ok=True)
         date_str = pd.Timestamp.now().strftime("%Y%m%d_%H%M%S")
@@ -104,35 +244,27 @@ class PreventaReport:
 
         self._update_progress("Ejecutando consulta en base de datos...", 10)
 
-        # Usamos pandas con chunks si soporta multiples result sets (StoredProcedures pueden ser tricky en pandas)
-        # SQLAlchemy con MariaDB/MySQL stored procedures a veces requiere manejo especial (multi=True en raw driver).
-        # Sin embargo, pandas read_sql a menudo funciona si el SP devuelve 1 result set.
         try:
             with self.engine_mysql.connect() as conn:
-                # Pandas read_sql con SQLAlchemy connection
-                # Nota: read_sql_query a veces falla con CALL. 
-                # Ejecutamos con execute y convertimos.
                 result = conn.execute(query, params)
-                # Fetchall
                 rows = result.fetchall()
                 if not rows:
                      self._update_progress("No se encontraron registros", 100)
-                     # Crear excel vacio con headers? O error?
-                     # Mejor dataframe vacio
                      df = pd.DataFrame()
                 else:
                     self.total_records = len(rows)
                     self._update_progress(f"Procesando {self.total_records} registros...", 30)
                     df = pd.DataFrame(rows, columns=result.keys())
                 
-                self._update_progress("Generando archivo Excel...", 70)
-                df.to_excel(self.file_path, index=False)
+                if not df.empty:
+                    self._update_progress("Generando archivo Excel...", 70)
+                    df.to_excel(self.file_path, index=False)
+                
+                return df
                 
         except Exception as e:
             logger.error(f"Error ejecutando SP Preventa: {e}")
             raise
-
-        self._update_progress("Completado", 100)
 
     def execute(self) -> Dict[str, Any]:
         """Orquesta la ejecución completa."""
@@ -142,12 +274,16 @@ class PreventaReport:
             self._configure_connection()
             
             query = self._build_call()
-            self._run_to_excel(query)
+            df = self._run_to_excel(query)
+
+            # Calcular datos del Dashboard
+            dashboard_data = self._calculate_dashboard_data(df)
 
             return {
                 "success": True,
                 "file_name": self.file_name,
                 "file_path": self.file_path,
+                "dashboard": dashboard_data,
                 "metadata": {
                     "execution_time": time.time() - self.start_time,
                     "total_records": self.total_records
